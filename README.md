@@ -2,21 +2,67 @@
 
 Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max+ 395, Radeon 8060S (`gfx1151`), and 128 GiB shared memory under CachyOS.
 
-This repository currently contains research and the deployment plan. No engine has been installed or benchmarked on this host yet.
+Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Halogen has passed local generation and lifecycle checks. Gufo's GPU diagnostics pass, with full model validation pending its weight download. Neither engine starts automatically at login.
 
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
+- [Local validation results and limitations](docs/validation.md).
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 
-## Deployment decisions
+## First run
+
+Requirements: Linux with accessible `/dev/kfd` and `/dev/dri`, rootless Podman, Bash, curl, Python 3, coreutils and `flock`. Model downloads need approximately 216 GiB in total, plus images, partial downloads and prompt caches. Existing model files are never deliberately overwritten. Halogen is a proprietary binary engine with a [free-use EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md). Model licenses apply separately.
+
+Run from this checkout. Pull and diagnose each engine before downloading:
+
+```bash
+bin/run.sh pull halogen
+bin/run.sh diagnose halogen
+bin/run.sh pull gufo
+bin/run.sh diagnose gufo
+```
+
+The pinned images are Halogen 0.17.5 and Gufo 0.11.0. `config/pins.env` records immutable image digests and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
+
+```bash
+bin/models.sh download halogen
+bin/models.sh download gufo
+```
+
+Downloads can take a long time. Repeating the command verifies existing final files and resumes incomplete files. A size or checksum mismatch fails without replacing the existing file. `bin/models.sh verify ENGINE` performs a full hash check. Launches use `check`, a fast presence and size check, rather than reading hundreds of gigabytes before every start.
+
+Start one engine, wait for its readiness endpoint, then test and stop it:
+
+```bash
+bin/run.sh start halogen
+bin/run.sh logs halogen
+bin/run.sh status halogen
+bin/run.sh smoke halogen
+python tests/live.py halogen
+bin/run.sh stop halogen
+
+env SPECULATIVE=off bin/run.sh start gufo
+bin/run.sh logs gufo
+bin/run.sh status gufo
+bin/run.sh smoke gufo
+python tests/live.py gufo
+bin/run.sh stop gufo
+```
+
+`start` launches a detached container, not a readiness guarantee. `status` returns nonzero until the service is ready. Check logs after failure. Gufo uses `/ready`, not just its liveness endpoint. A running managed engine blocks another start. `stop` allows 60 seconds for shutdown and prints host memory afterward. Containers are removed on exit, while model files and prompt caches remain.
+
+The baseline is one active request with 32,768-token capacity. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=65536` to change capacity. Context must be between 1,024 and 262,144 tokens. Higher capacity can consume substantially more memory. Vision is not enabled in this initial setup.
+
+## Container boundaries
 
 - Separate rootless Podman containers, using upstream images where practical.
-- Pin image digests and model revisions after verifying compatible releases. Do not build around moving `latest` tags or unqualified review builds.
+- Images and model revisions are pinned in versioned configuration. No moving `latest` tags or review builds are used.
 - Start with manual launches. Add user-level systemd Quadlets after both engines work reliably. Do not enable both at login.
 - Run only one engine at a time. Separate containers do not create additional GPU memory, and both engines need most of the host's shared memory.
 - Publish Halogen at `127.0.0.1:8731` and Gufo at `127.0.0.1:8080`, subject to checking for existing listeners. Do not expose internal engine ports.
-- Pass `/dev/kfd` and `/dev/dri`, preserve the user's GPU groups, and grant only documented permissions. Avoid privileged containers and broad host mounts.
+- Pass `/dev/kfd` and `/dev/dri`. With `crun`, preserve supplementary GPU groups. This host's `runc` path was verified with directly accessible GPU devices. If devices require group-based access and the container cannot access them, use `crun` rather than changing device permissions.
+- Halogen uses its documented host IPC setting. Both launchers request unlimited container memlock, but rootless Podman can silently clamp this to the host user's hard limit. On this host it remains 8 MiB. The GPU-backed weight allocation still worked. Optional Halogen `mlock` and NPU features are not enabled. No seccomp disablement, privileged mode or writable host control mount is used.
 - Keep existing BIOS, kernel and IOMMU settings for the first baseline. Investigate any required host tuning explicitly rather than applying it silently.
 
 ## Model storage
@@ -35,19 +81,22 @@ Use the existing publisher/model directory convention:
   unsloth/Qwen3.8-Flash-Next-GGUF/       # Gufo target, shared MTP head, optional projector
 ```
 
-Download into those directories before launching inference. If using an engine's automatic downloader, temporarily mount only its destination subdirectory writable and point its model path there. Return to read-only mounts afterward. Record exact revisions, filenames and verification results in the repository, not the weight files themselves. Do not modify model files from another engine.
+Downloads happen on the host before inference. The inference containers receive no automatic-download setting and mount the entire central directory read-only. Download locks are per model repository, so separate package downloads can run independently without two writers touching the same files. Override the host root with `MODELS_DIR` only when deliberately using another central store.
 
-Keep generated prompt caches separately under `/home/bogdan/.cache/strix-halo-inference/halogen` and `/home/bogdan/.cache/strix-halo-inference/gufo`. Bind mount each engine's cache at its documented cache path. These caches contain conversation state and must not be committed or shared between engines.
+Generated prompt caches live under `$HOME/.cache/strix-halo-inference/halogen` and `$HOME/.cache/strix-halo-inference/gufo`, each mounted writable at `/cache`. Override their parent with `CACHE_ROOT`. Disk caches are capped at 16 GiB per engine for the active configuration. Gufo additionally caps retained RAM snapshots and disk staging at 2 GiB each. These caches contain conversation state and must not be committed or shared between engines.
 
-On October 10, `/home/bogdan/models` contained empty model directories and four small `.ini` files, totaling approximately 32 KiB. No weight files were present. Existing contents are left untouched.
+Pre-existing empty directories and four `.ini` files under `/home/bogdan/models` are untouched. Only the two selected model repositories receive downloads.
 
-## Next steps
+## Checks and remaining work
 
-1. **Check container prerequisites.** Verify rootless Podman with `crun`, GPU device access, user groups, memory limits, free disk space and available ports. Review Halogen's proprietary engine license before pulling its image.
-2. **Choose and download the weights.** Use Halogen's native v2 package for its recommended configuration. For Gufo, use the documented Unsloth UD-Q4_K_XL shards and matching shared Q8 MTP head. Leave vision out of the initial smoke test. Allow roughly 250 GiB of free space for both packages and download overhead, then refine against the selected file manifests.
-3. **Bring up Halogen.** Add a minimal pinned launch configuration. Verify health, text generation, thinking controls, tool calls and multi-turn cache reuse. Start with one active request. Confirm how the chosen release sizes its context pool before reserving memory. Stop it and confirm memory is released.
-4. **Bring up Gufo.** Repeat with a qualified release, one session and 32K context. Verify autoregressive output before enabling MTP. Check cancellation and multi-turn reuse, then stop it and confirm memory is released.
-5. **Compare real workloads.** Use identical prompts, sampling, thinking settings and power profile. Measure cold prompt processing, follow-up latency, generation rate and memory at 8K and 32K, then 64K if comfortable. Record image digests, model revisions and output quality. Different native quantizations make this a practical setup comparison, not a pure engine benchmark.
-6. **Keep the preferred configurations.** Add manual-start Quadlets with clear stop instructions. Increase context or concurrency only after checking desktop responsiveness and memory pressure. Add no proxy or dashboard until needed.
+```bash
+bash -n bin/*.sh tests/*.sh
+shellcheck -x -P SCRIPTDIR bin/*.sh tests/*.sh
+tests/models.sh
+```
+
+The offline test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.
+
+Finish Gufo's download and its autoregressive and MTP validation first. Then compare matched prompts at 8K and 32K using the same power profile, sampling and thinking settings. Record generation quality, cold prompt processing, follow-up latency and memory. Different weight formats make this a practical setup comparison, not a pure engine benchmark. Restart-safe disk restoration, larger contexts and multi-request serving still need validation before adding Quadlets.
 
 Large models can leave little memory for the desktop and other applications. Do not treat successful startup as proof that full context or multiple sessions will fit safely.
