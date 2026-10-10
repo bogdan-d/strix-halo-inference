@@ -77,6 +77,12 @@ Status uses actual Podman container configuration and inherited OCI labels, not 
 
 No new services, dependencies, image pins, model revisions, live Pi defaults or host settings were changed. Grafana and the thinking-effort comparison remain deferred.
 
+## Routine coding thinking-effort comparison
+
+The [thinking comparison](thinking-comparison.md) completed 16 measured Pi tool-loop trials across both engines, two synthetic tasks, medium and xhigh effort, and two repeats with reversed order. All passed independent unchanged checks, without timeout or assistant truncation. Medium finished faster in each paired comparison. The report records timing, tool calls, intermediate tool errors, output tokens and cache conditions, while limiting its recommendation to small, well-specified edits. It does not establish equivalent quality for substantial coding work.
+
+The original live Pi models and settings were preserved byte for byte. Checked-in profiles, image and model pins, host power settings and normal engine caches were unchanged. Both engines were stopped after the comparison, matching the initial state. Temporary workspaces, Pi configuration and isolated engine caches were removed. Grafana remains deferred.
+
 ## Remaining work
 
 Neither restart-safe disk restoration nor long-context performance has been tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy, image-build CI or dashboard was added.
