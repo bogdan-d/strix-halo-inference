@@ -5,6 +5,7 @@ Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max
 This repository currently contains research and the deployment plan. No engine has been installed or benchmarked on this host yet.
 
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
+- [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 

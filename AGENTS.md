@@ -1,0 +1,13 @@
+- Before changing deployment behavior, read `README.md` for model storage, container boundaries and the rollout sequence.
+- Before adding container builds or launch helpers, read `docs/podman-reference.md`. Borrow the user's toolbox patterns selectively, not its llama.cpp runtime policy.
+- Treat `/var/mnt/xdata/code/strix-halo/amd-strix-halo-toolboxes` as a read-only reference. It contains local work. Changes there require a separate request.
+- Write Markdown paragraphs and list items on single physical lines. Preserve deliberate line breaks in code blocks and tables.
+- Keep host helpers minimal and engine-specific configuration explicit. Start from upstream images, adding local builds only for a verified gap.
+- Commit reproducible image and model pins in non-secret configuration. Keep credentials in ignored local files and forward only engine-required environment variables into containers.
+- Keep weights in `/home/bogdan/models`, bind mounted read-only at `/models` during inference. Put writable prompt state in separate per-engine cache directories outside Git.
+- Keep Halogen and Gufo independently startable, but run one at a time during initial validation. Stop the active engine and verify memory release before switching.
+- Keep endpoints localhost-only by default. Review engine-specific permission requirements before relaxing container security or mounting host control paths.
+- Preserve existing host kernel, BIOS and IOMMU settings unless the user explicitly approves a change.
+- When selecting an engine release, quantization or MTP head, consult `docs/qwen3.8-engine-research.md` and recheck current upstream compatibility. Historical measurements are not local test results.
+- Verify launch changes with the selected engine's health check and a real generation request. Verify stop and cancellation behavior before adding persistent services. Record anything not exercised on this host.
+- Update the matching user-facing docs with operational changes. Keep weight files, credentials, conversation caches and raw private prompts out of this public repository.
