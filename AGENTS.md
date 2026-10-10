@@ -11,3 +11,17 @@
 - When selecting an engine release, quantization or MTP head, consult `docs/qwen3.8-engine-research.md` and recheck current upstream compatibility. Historical measurements are not local test results.
 - Verify launch changes with the selected engine's health check and a real generation request. Verify stop and cancellation behavior before adding persistent services. Record anything not exercised on this host.
 - Update the matching user-facing docs with operational changes. Keep weight files, credentials, conversation caches and raw private prompts out of this public repository.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local Markdown under `.scratch/<feature>/`. Before reading or publishing tickets, read `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage roles. Before triaging tickets, read `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a single-context layout with root `GLOSSARY.md` and `docs/adr/`. Before exploring domain terminology or decisions, read `docs/agents/domain.md`.
