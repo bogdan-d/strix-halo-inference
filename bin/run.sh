@@ -4,13 +4,21 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=../config/pins.env
 source "$ROOT/config/pins.env"
 
-ACTION="${1:-}"
-ENGINE="${2:-}"
-case "$ACTION" in pull|diagnose|start|stop|logs|status|smoke) ;; *) echo 'Usage: bin/run.sh pull|diagnose|start|stop|logs|status|smoke halogen|gufo' >&2; exit 2 ;; esac
+usage() {
+  echo 'Usage: bin/run.sh halogen|gufo pull|diagnose|start|stop|logs|status|smoke' >&2
+  exit 2
+}
+ENGINE="${1:-}"
+ACTION="${2:-}"
+case "$ENGINE" in
+  pull|diagnose|start|stop|logs|status|smoke) echo "Engine comes first. Use: bin/run.sh halogen|gufo $ENGINE" >&2; usage ;;
+esac
+[[ $# == 2 ]] || usage
+case "$ACTION" in pull|diagnose|start|stop|logs|status|smoke) ;; *) usage ;; esac
 case "$ENGINE" in
   halogen) IMAGE="$HALOGEN_IMAGE"; PORT=8731; REPO="$HALOGEN_REPO"; HEALTH=/health ;;
   gufo) IMAGE="$GUFO_IMAGE"; PORT=8080; REPO="$GUFO_REPO"; HEALTH=/ready ;;
-  *) echo 'Choose halogen or gufo.' >&2; exit 2 ;;
+  *) echo 'Choose halogen or gufo.' >&2; usage ;;
 esac
 NAME="strix-halo-$ENGINE"
 MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
@@ -80,4 +88,4 @@ fi
 printf 'Starting %s:' "$ENGINE"; printf ' %q' "${ARGS[@]}"; echo
 # Keep the startup lock in this shell, not the detached container monitor.
 "${ARGS[@]}" 9>&-
-echo "Container started, not yet ready. Check bin/run.sh status $ENGINE and bin/run.sh logs $ENGINE"
+echo "Container started, not yet ready. Check bin/run.sh $ENGINE status and bin/run.sh $ENGINE logs"

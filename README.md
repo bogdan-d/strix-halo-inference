@@ -15,13 +15,13 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 
 Requirements: Linux with accessible `/dev/kfd` and `/dev/dri`, rootless Podman, Bash, curl, Python 3, coreutils and `flock`. Model downloads need approximately 216 GiB in total, plus images, partial downloads and prompt caches. Existing model files are never deliberately overwritten. Halogen is a proprietary binary engine with a [free-use EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md). Model licenses apply separately.
 
-Run from this checkout. Pull and diagnose each engine before downloading:
+Run from this checkout. Launcher commands take the engine first, then the action. Old action-first commands are rejected with a migration hint. Pull and diagnose each engine before downloading:
 
 ```bash
-bin/run.sh pull halogen
-bin/run.sh diagnose halogen
-bin/run.sh pull gufo
-bin/run.sh diagnose gufo
+bin/run.sh halogen pull
+bin/run.sh halogen diagnose
+bin/run.sh gufo pull
+bin/run.sh gufo diagnose
 ```
 
 The initially validated images are Halogen 0.17.5 and Gufo 0.11.0. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
@@ -36,19 +36,19 @@ Downloads can take a long time. Repeating the command verifies existing final fi
 Start one engine, wait for its readiness endpoint, then test and stop it:
 
 ```bash
-bin/run.sh start halogen
-bin/run.sh logs halogen
-bin/run.sh status halogen
-bin/run.sh smoke halogen
+bin/run.sh halogen start
+bin/run.sh halogen logs
+bin/run.sh halogen status
+bin/run.sh halogen smoke
 python tests/live.py halogen
-bin/run.sh stop halogen
+bin/run.sh halogen stop
 
-env SPECULATIVE=off bin/run.sh start gufo
-bin/run.sh logs gufo
-bin/run.sh status gufo
-bin/run.sh smoke gufo
+env SPECULATIVE=off bin/run.sh gufo start
+bin/run.sh gufo logs
+bin/run.sh gufo status
+bin/run.sh gufo smoke
 python tests/live.py gufo
-bin/run.sh stop gufo
+bin/run.sh gufo stop
 ```
 
 `start` launches a detached container, not a readiness guarantee. `status` returns nonzero until the service is ready. Check logs after failure. Gufo uses `/ready`, not just its liveness endpoint. A running managed engine blocks another start. `stop` allows 60 seconds for shutdown and prints host memory afterward. Containers are removed on exit, while model files and prompt caches remain.
@@ -72,10 +72,10 @@ This tracks published stable images, not every commit on `main` or the `edge` ta
 To use an updated pin, finish the current request, then explicitly restart one engine and verify it:
 
 ```bash
-bin/run.sh stop halogen
-bin/run.sh start halogen
-bin/run.sh status halogen
-bin/run.sh smoke halogen
+bin/run.sh halogen stop
+bin/run.sh halogen start
+bin/run.sh halogen status
+bin/run.sh halogen smoke
 ```
 
 Use `gufo` instead for that engine. An image update leaves the currently running container on its existing image until you restart it. Repeat `status` until ready. Run `python tests/live.py ENGINE` after a release change to verify conversation, tools and cancellation before relying on it for coding.
@@ -124,6 +124,7 @@ bash -n bin/*.sh tests/*.sh
 shellcheck -x -P SCRIPTDIR bin/*.sh tests/*.sh
 tests/models.sh
 tests/update.sh
+python tests/run.py
 ```
 
 The offline model test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. The offline update test checks all-or-nothing pin changes on pull failure, correct release-section selection, refusal to rotate caches with an active engine, archive preservation and version-downgrade refusal. Its CLI stubs test project policy, not external provider compatibility. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.

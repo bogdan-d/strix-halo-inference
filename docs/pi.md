@@ -56,8 +56,8 @@ You should see `halogen/halogen-qwen3.8-flash-next` and `gufo/qwen3.8-flash-next
 Start the engine from this checkout, unless it is already running. Repeat the status check until it succeeds:
 
 ```bash
-bin/run.sh start halogen
-bin/run.sh status halogen
+bin/run.sh halogen start
+bin/run.sh halogen status
 ```
 
 Then change to the project you want Pi to work on and launch it there:
@@ -85,9 +85,9 @@ The limited tool selection above is for that check, not ordinary coding. Normal 
 Finish or cancel the current Pi request before switching. Stop Halogen from this checkout, start Gufo and wait for readiness:
 
 ```bash
-bin/run.sh stop halogen
-bin/run.sh start gufo
-bin/run.sh status gufo
+bin/run.sh halogen stop
+bin/run.sh gufo start
+bin/run.sh gufo status
 ```
 
 From the target project:
@@ -130,7 +130,7 @@ If you override the launcher with a smaller `CONTEXT`, reduce the matching insta
 
 ## Troubleshooting
 
-- **Connection refused:** the selected container is stopped, crashed or listening on the other engine's port. Check `bin/run.sh status ENGINE` and `bin/run.sh logs ENGINE` from this checkout.
+- **Connection refused:** the selected container is stopped, crashed or listening on the other engine's port. Check `bin/run.sh ENGINE status` and `bin/run.sh ENGINE logs` from this checkout.
 - **Provider missing:** check the actual agent directory and the merge result. Open `/model` to reload providers, or restart Pi. There is no `/login` step for these local endpoints.
 - **Empty answer or length limit:** reasoning may have consumed the completion budget. Try a fresh session with a lower effort, inspect server logs and avoid assuming Gufo supports a separate thinking cap.
 - **Context overflow:** use `/compact` or a new session and verify Pi's context metadata matches the launcher. Switching from a much larger remote-model session can bring too much history into the local model.
