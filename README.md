@@ -2,7 +2,7 @@
 
 Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max+ 395, Radeon 8060S (`gfx1151`), and 128 GiB shared memory under CachyOS.
 
-Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Halogen has passed local generation and lifecycle checks. Gufo's GPU diagnostics pass, with full model validation pending its weight download. Neither engine starts automatically at login.
+Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Both engines have passed local generation and lifecycle checks at 32K context. All 13 selected model files passed a full post-download integrity check. Neither engine starts automatically at login.
 
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
@@ -97,6 +97,6 @@ tests/models.sh
 
 The offline test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.
 
-Finish Gufo's download and its autoregressive and MTP validation first. Then compare matched prompts at 8K and 32K using the same power profile, sampling and thinking settings. Record generation quality, cold prompt processing, follow-up latency and memory. Different weight formats make this a practical setup comparison, not a pure engine benchmark. Restart-safe disk restoration, larger contexts and multi-request serving still need validation before adding Quadlets.
+Both packages are downloaded and fully hash-verified. Gufo passed autoregressive and MTP validation, with identical greedy text on two comparison prompts. Next, compare matched prompts at 8K and 32K using the same power profile, sampling and thinking settings. Record generation quality, cold prompt processing, follow-up latency and memory. Different weight formats make this a practical setup comparison, not a pure engine benchmark. Restart-safe disk restoration, larger contexts and multi-request serving still need validation before adding Quadlets.
 
 Large models can leave little memory for the desktop and other applications. Do not treat successful startup as proof that full context or multiple sessions will fit safely.
