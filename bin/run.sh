@@ -78,5 +78,6 @@ else
   fi
 fi
 printf 'Starting %s:' "$ENGINE"; printf ' %q' "${ARGS[@]}"; echo
-"${ARGS[@]}"
+# Keep the startup lock in this shell, not the detached container monitor.
+"${ARGS[@]}" 9>&-
 echo "Container started, not yet ready. Check bin/run.sh status $ENGINE and bin/run.sh logs $ENGINE"
