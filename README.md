@@ -7,6 +7,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Local validation results and limitations](docs/validation.md).
+- [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 32K compaction settings.
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 

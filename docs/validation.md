@@ -39,6 +39,12 @@ Gufo's package totals 114,121,223,040 bytes, approximately 106.3 GiB. Together t
 
 The download and verification used one-off transient user services, not enabled inference services. Their logs remain under `/home/bogdan/.cache/strix-halo-inference`. One resumed downloader logged a trailing shell parsing error after its final file was promoted because the script was edited while that process was running. The current script passes shell syntax checks, and the independent final-file verification completed successfully for every file afterward. The error did not indicate a failed or corrupted weight transfer.
 
+## Pi coding-agent integration
+
+The [Pi profiles](pi.md) were checked with Pi 1.1.0 using the pinned engines, MTP enabled, 32K context and the recommended sampled `xhigh` coding settings. In an isolated temporary workspace, each engine successfully used Pi's `read` tool to inspect a broken addition function and its checks, used `edit` to fix subtraction to addition, then used `bash` to run the unchanged checks. Both assertions passed and Pi returned a final success summary. Neither stream reported an error or length truncation. Both produced thinking blocks and follow-up cached-token usage. This is an end-to-end provider and tool-loop check, not a coding-quality benchmark.
+
+Both models appear in Pi's available-model list with the intended context and output limits. The documented merge command was used to install the fragments in the host's existing agent directory. Backups were created, and unrelated providers, default model selection and settings were verified unchanged. The tool-loop checks disabled user extensions, skills and context files to isolate provider behavior. The user's complete extension stack, automatic compaction and large coding tasks were not exercised by these checks. Halogen was restored to a ready running state after testing Gufo because it was running before this work.
+
 ## Remaining work
 
 Neither restart-safe disk restoration nor long-context performance has been tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy, image-build CI or dashboard was added.
