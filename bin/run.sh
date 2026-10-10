@@ -44,7 +44,7 @@ case "$ACTION" in
   logs)
     podman container exists "$NAME" || { echo "No container logs available for $NAME. It may be stopped and auto-removed." >&2; exit 1; }
     exec podman logs --tail 100 "${FOLLOW[@]}" "$NAME" ;;
-  status) podman ps -a --filter "name=^$NAME$"; curl --fail --silent --show-error --max-time 5 "$BASE$HEALTH"; echo; exit ;;
+  status) exec python "$ROOT/bin/status.py" "$ENGINE" "$NAME" "$BASE$HEALTH" ;;
   smoke)
     curl --fail --silent --show-error --max-time 10 "$BASE$HEALTH" >/dev/null
     MODEL="$(curl --fail --silent --show-error --max-time 10 "$BASE/v1/models" | python -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')"

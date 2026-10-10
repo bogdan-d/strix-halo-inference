@@ -67,6 +67,16 @@ The updater's real registry check resolves Halogen `latest` to the existing 0.17
 
 The updater does not change model pins or live Pi configuration and does not restart containers. Cache rotation is optional and requires stopped engines. Future image versions remain unvalidated on this host until the launcher and live checks pass after an explicit restart.
 
+## Launcher optimization tickets 01 through 04
+
+Engine-first dispatch, live log following, optional readiness waiting and the operational status summary were validated against the existing pinned images with 256K capacity and MTP enabled. Both engines passed readiness and real smoke generation. Both also passed the conversation, tool-call, disconnect cancellation and generation-after-cancellation checks after the launcher changes. Neither engine was active at the beginning of this work, and both were stopped afterward. Host available memory returned to approximately 119 GiB. Existing swap was not flushed.
+
+The offline launcher checks reject old, invalid and extra arguments before Podman effects, exercise missing-container log handling, and cover readiness success, timeout, early container exit and release of the startup lock before probing. Both live engines continued generating after the log viewer received an interrupt. Following also ended when Halogen stopped, and auto-removed logs were reported as unavailable. No foreground-start option was added.
+
+Status uses actual Podman container configuration and inherited OCI labels, not current pins or shell overrides. Offline checks protect that distinction and the nonzero exit contract for stopped, loading, unreachable and missing engines. Both live engines showed their actual 262,144-token configuration, cache limits, readiness and measured startup allocations. Those allocation figures are explicitly startup snapshots, not current usage. Disk usage covers the entire mounted directory, and unverified cache RAM usage remains unavailable. Kernel GTT and host accounting stay separate and carry the Halogen pinned-memory warning.
+
+No new services, dependencies, image pins, model revisions, live Pi defaults or host settings were changed. Grafana and the thinking-effort comparison remain deferred.
+
 ## Remaining work
 
 Neither restart-safe disk restoration nor long-context performance has been tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy, image-build CI or dashboard was added.
