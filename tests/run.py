@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check launcher policy with CLI stubs, not engine compatibility."""
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -17,6 +18,8 @@ with tempfile.TemporaryDirectory(prefix="strix-halo-run-") as directory:
 import json, os, sys
 with open(os.environ["CALLS"], "a") as output:
     output.write(json.dumps(sys.argv[1:]) + "\\n")
+if sys.argv[1:3] == ["container", "exists"] and os.environ.get("MISSING"):
+    sys.exit(1)
 ''')
     podman.chmod(0o755)
     env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls))
@@ -36,4 +39,15 @@ with open(os.environ["CALLS"], "a") as output:
         assert result.returncode == 0, result
         assert engine in calls.read_text(), calls.read_text()
         calls.unlink()
+    assert run("halogen", "logs", "--follow", "extra").returncode == 2
+    assert not calls.exists()
+    for options in ((), ("--follow",)):
+        assert run("gufo", "logs", *options).returncode == 0
+        recorded = [json.loads(line) for line in calls.read_text().splitlines()]
+        assert recorded[-1] == ["logs", "--tail", "100", *options, "strix-halo-gufo"]
+        assert not any(call[0] in ("start", "stop", "run") for call in recorded)
+        calls.unlink()
+    result = run("halogen", "logs", "--follow", MISSING="1")
+    assert result.returncode == 1 and "No container logs available" in result.stderr
+    assert all(json.loads(line)[0] != "logs" for line in calls.read_text().splitlines())
 print("Launcher argument validation and dispatch passed.")

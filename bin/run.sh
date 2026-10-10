@@ -6,6 +6,7 @@ source "$ROOT/config/pins.env"
 
 usage() {
   echo 'Usage: bin/run.sh halogen|gufo pull|diagnose|start|stop|logs|status|smoke' >&2
+  echo '       bin/run.sh halogen|gufo logs --follow' >&2
   exit 2
 }
 ENGINE="${1:-}"
@@ -13,7 +14,12 @@ ACTION="${2:-}"
 case "$ENGINE" in
   pull|diagnose|start|stop|logs|status|smoke) echo "Engine comes first. Use: bin/run.sh halogen|gufo $ENGINE" >&2; usage ;;
 esac
-[[ $# == 2 ]] || usage
+FOLLOW=()
+if [[ $# == 3 && "$ACTION" == logs && "$3" == --follow ]]; then
+  FOLLOW=(--follow)
+else
+  [[ $# == 2 ]] || usage
+fi
 case "$ACTION" in pull|diagnose|start|stop|logs|status|smoke) ;; *) usage ;; esac
 case "$ENGINE" in
   halogen) IMAGE="$HALOGEN_IMAGE"; PORT=8731; REPO="$HALOGEN_REPO"; HEALTH=/health ;;
@@ -27,7 +33,9 @@ BASE="http://127.0.0.1:$PORT"
 case "$ACTION" in
   pull) exec podman pull "$IMAGE" ;;
   stop) podman stop --time 60 "$NAME"; free -h; exit ;;
-  logs) exec podman logs --tail 100 "$NAME" ;;
+  logs)
+    podman container exists "$NAME" || { echo "No container logs available for $NAME. It may be stopped and auto-removed." >&2; exit 1; }
+    exec podman logs --tail 100 "${FOLLOW[@]}" "$NAME" ;;
   status) podman ps -a --filter "name=^$NAME$"; curl --fail --silent --show-error --max-time 5 "$BASE$HEALTH"; echo; exit ;;
   smoke)
     curl --fail --silent --show-error --max-time 10 "$BASE$HEALTH" >/dev/null
