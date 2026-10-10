@@ -61,6 +61,12 @@ Kernel counters were read from `/sys/class/drm/card1/device/mem_info_gtt_total` 
 
 This verifies capacity configuration, allocation and a prompt beyond 32K. It does not verify nearly full 256K prompts, peak memory under that workload or long-context retrieval quality. Halogen is left running and ready at 256K after Gufo testing. No live Pi configuration, host GTT allocation, kernel setting or BIOS setting was changed for this context increase. The older installed Pi profiles need the explicit update described in [the Pi setup guide](pi.md).
 
+## Published-image updater
+
+The updater's real registry check resolves Halogen `latest` to the existing 0.17.5 digest and Gufo `latest` to the existing 0.11.0 digest. Selected-version notes are fetched from Gufo's GitHub Release and Halogen's tagged changelog because Halogen's Releases API has no matching release. The offline update test exercises pin-transaction failure, cache rotation guards and preservation, selected release sections and downgrade refusal. The registry and notes checks exercise the real endpoints rather than relying on those CLI stubs for compatibility evidence.
+
+The updater does not change model pins or live Pi configuration and does not restart containers. Cache rotation is optional and requires stopped engines. Future image versions remain unvalidated on this host until the launcher and live checks pass after an explicit restart.
+
 ## Remaining work
 
 Neither restart-safe disk restoration nor long-context performance has been tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy, image-build CI or dashboard was added.

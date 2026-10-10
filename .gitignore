@@ -6,3 +6,5 @@
 /cache/
 /results/
 /models/
+/config/.update.lock
+/config/.pins.env.*

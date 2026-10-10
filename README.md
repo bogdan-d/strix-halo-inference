@@ -24,7 +24,7 @@ bin/run.sh pull gufo
 bin/run.sh diagnose gufo
 ```
 
-The pinned images are Halogen 0.17.5 and Gufo 0.11.0. `config/pins.env` records immutable image digests and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
+The initially validated images are Halogen 0.17.5 and Gufo 0.11.0. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
 
 ```bash
 bin/models.sh download halogen
@@ -54,6 +54,35 @@ bin/run.sh stop gufo
 `start` launches a detached container, not a readiness guarantee. `status` returns nonzero until the service is ready. Check logs after failure. Gufo uses `/ready`, not just its liveness endpoint. A running managed engine blocks another start. `stop` allows 60 seconds for shutdown and prints host memory afterward. Containers are removed on exit, while model files and prompt caches remain.
 
 The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client. Vision is not enabled in this initial setup.
+
+## Update engine images
+
+`bin/update.sh` checks both publishers' `latest` image tags, validates stable release versions and Linux AMD64 metadata, pulls changed images by their resolved digests, then atomically updates the image and version pins in `config/pins.env`. It refuses version downgrades and commits neither pin if either pull fails. Previously pulled images remain available. Updating requires Skopeo in addition to the ordinary launcher requirements. Skopeo is already installed on the validated host.
+
+```bash
+bin/update.sh --check   # Inspect available images and release notes without changing anything
+bin/update.sh           # Pull changed images and update both pins
+bin/update.sh --pull    # Pull both resolved images even if their pins are already current
+```
+
+The output shows versions, digests, advertised image revisions and the selected versions' release notes with source links. Gufo uses its GitHub Releases page. Halogen currently publishes no GitHub Releases, so the updater explicitly uses the matching version section from its tagged `CHANGELOG.md`. Notes are shown even when the pins are current. Missing notes are reported without substituting a different release. GitHub rate-limit or other HTTP failures abort the update before pulls and pin changes.
+
+This tracks published stable images, not every commit on `main` or the `edge` tag. Release notes are publisher claims, not local validation results. Review them for model-format and runtime compatibility before restarting. The script does not rebuild source, execute the new images, upgrade model revisions, download weights, alter Pi settings or restart an active container. There is no `--build` flag because these are prebuilt upstream images. Content-addressed layers do not need a global cache prune to fetch a newer image.
+
+To use an updated pin, finish the current request, then explicitly restart one engine and verify it:
+
+```bash
+bin/run.sh stop halogen
+bin/run.sh start halogen
+bin/run.sh status halogen
+bin/run.sh smoke halogen
+```
+
+Use `gufo` instead for that engine. An image update leaves the currently running container on its existing image until you restart it. Repeat `status` until ready. Run `python tests/live.py ENGINE` after a release change to verify conversation, tools and cancellation before relying on it for coding.
+
+For a deliberately fresh prompt cache, stop all managed engines first and run `bin/update.sh --fresh-cache`. This archives only the `halogen` and `gufo` cache directories under the launcher's `CACHE_ROOT`, normally `$HOME/.cache/strix-halo-inference`, into a timestamped sibling archive. The next start creates an empty engine cache. A shared startup lock prevents a managed engine from starting during rotation. Old data is preserved, not deleted, so archives still consume disk space and may contain private conversation state. No weights, unrelated Podman caches or host page caches are cleared. `--check` cannot be combined with `--pull` or `--fresh-cache`.
+
+Review updates with `git diff -- config/pins.env`. To roll back, restore the previous image and version assignments together, then explicitly restart the selected engine. Do not restore the entire file if it contains unrelated model-pin edits you want to keep.
 
 ## Container boundaries
 
@@ -94,9 +123,10 @@ Pre-existing empty directories and four `.ini` files under `/home/bogdan/models`
 bash -n bin/*.sh tests/*.sh
 shellcheck -x -P SCRIPTDIR bin/*.sh tests/*.sh
 tests/models.sh
+tests/update.sh
 ```
 
-The offline test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.
+The offline model test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. The offline update test checks all-or-nothing pin changes on pull failure, correct release-section selection, refusal to rotate caches with an active engine, archive preservation and version-downgrade refusal. Its CLI stubs test project policy, not external provider compatibility. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.
 
 Both packages are downloaded and fully hash-verified. Gufo passed autoregressive and MTP validation, with identical greedy text on two comparison prompts. Both engines pass readiness, generation and lifecycle checks at the default 256K allocation. Next, compare matched prompts using the same power profile, sampling and thinking settings, including near-capacity prompts. Record generation quality, cold prompt processing, follow-up latency and memory pressure. Different weight formats make this a practical setup comparison, not a pure engine benchmark. Restart-safe disk restoration, near-capacity workloads and multi-request serving still need validation before adding Quadlets.
 
