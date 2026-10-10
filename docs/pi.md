@@ -53,10 +53,10 @@ You should see `halogen/halogen-qwen3.8-flash-next` and `gufo/qwen3.8-flash-next
 
 ## Start coding with Halogen
 
-Start the engine from this checkout, unless it is already running. Repeat the status check until it succeeds:
+Start the engine from this checkout, unless it is already running. Waited startup returns when ready:
 
 ```bash
-bin/run.sh halogen start
+bin/run.sh halogen start --wait
 bin/run.sh halogen status
 ```
 
@@ -86,7 +86,7 @@ Finish or cancel the current Pi request before switching. Stop Halogen from this
 
 ```bash
 bin/run.sh halogen stop
-bin/run.sh gufo start
+bin/run.sh gufo start --wait
 bin/run.sh gufo status
 ```
 

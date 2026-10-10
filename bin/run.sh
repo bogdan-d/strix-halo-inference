@@ -7,6 +7,7 @@ source "$ROOT/config/pins.env"
 usage() {
   echo 'Usage: bin/run.sh halogen|gufo pull|diagnose|start|stop|logs|status|smoke' >&2
   echo '       bin/run.sh halogen|gufo logs --follow' >&2
+  echo '       bin/run.sh halogen|gufo start --wait (START_TIMEOUT=300 seconds)' >&2
   exit 2
 }
 ENGINE="${1:-}"
@@ -15,8 +16,11 @@ case "$ENGINE" in
   pull|diagnose|start|stop|logs|status|smoke) echo "Engine comes first. Use: bin/run.sh halogen|gufo $ENGINE" >&2; usage ;;
 esac
 FOLLOW=()
+WAIT=false
 if [[ $# == 3 && "$ACTION" == logs && "$3" == --follow ]]; then
   FOLLOW=(--follow)
+elif [[ $# == 3 && "$ACTION" == start && "$3" == --wait ]]; then
+  WAIT=true
 else
   [[ $# == 2 ]] || usage
 fi
@@ -30,6 +34,10 @@ NAME="strix-halo-$ENGINE"
 MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
 CACHE_ROOT="${CACHE_ROOT:-$HOME/.cache/strix-halo-inference}"
 BASE="http://127.0.0.1:$PORT"
+if [[ "$WAIT" == true ]]; then
+  START_TIMEOUT="${START_TIMEOUT:-300}"
+  [[ "$START_TIMEOUT" =~ ^[1-9][0-9]{0,3}$ && "$START_TIMEOUT" -le 3600 ]] || { echo 'START_TIMEOUT must be 1..3600 seconds.' >&2; exit 2; }
+fi
 case "$ACTION" in
   pull) exec podman pull "$IMAGE" ;;
   stop) podman stop --time 60 "$NAME"; free -h; exit ;;
@@ -95,5 +103,28 @@ else
 fi
 printf 'Starting %s:' "$ENGINE"; printf ' %q' "${ARGS[@]}"; echo
 # Keep the startup lock in this shell, not the detached container monitor.
-"${ARGS[@]}" 9>&-
+CID="$("${ARGS[@]}" 9>&-)"
+echo "$CID"
+exec 9>&-
 echo "Container started, not yet ready. Check bin/run.sh $ENGINE status and bin/run.sh $ENGINE logs"
+if [[ "$WAIT" == true ]]; then
+  trap 'echo "Stopped waiting. Container was not stopped. Inspect its status or logs." >&2; exit 130' INT
+  trap 'echo "Stopped waiting. Container was not stopped. Inspect its status or logs." >&2; exit 143' TERM
+  DEADLINE=$((SECONDS + START_TIMEOUT))
+  while (( SECONDS < DEADLINE )); do
+    RUNNING="$(timeout 5 podman inspect --format '{{.State.Running}}' "$CID")" || { echo "Cannot inspect startup container $CID. Check bin/run.sh $ENGINE logs." >&2; exit 1; }
+    [[ "$RUNNING" == true ]] || { echo "Container exited before readiness. Check bin/run.sh $ENGINE logs." >&2; exit 1; }
+    REMAINING=$((DEADLINE - SECONDS))
+    (( REMAINING > 0 )) || break
+    PROBE=$((REMAINING < 5 ? REMAINING : 5))
+    if curl --fail --silent --max-time "$PROBE" "$BASE$HEALTH" >/dev/null; then
+      echo "$ENGINE ready at $BASE/v1"
+      if [[ "$ENGINE" == halogen ]]; then MODEL=halogen-qwen3.8-flash-next; else MODEL=qwen3.8-flash-next; fi
+      echo "From your coding project: pi --provider $ENGINE --model $MODEL --thinking xhigh"
+      exit
+    fi
+    sleep 1
+  done
+  echo "Startup timeout after ${START_TIMEOUT}s: engine is not ready. Container was not stopped. Inspect bin/run.sh $ENGINE logs or use bin/run.sh $ENGINE stop." >&2
+  exit 1
+fi
