@@ -50,7 +50,7 @@ exec 9>"$CACHE_ROOT/start.lock"
 flock -n 9 || { echo 'Another engine start is in progress.' >&2; exit 1; }
 ACTIVE="$(podman ps --filter label=io.strix-halo-inference.managed=true --format '{{.Names}}')"
 [[ -z "$ACTIVE" ]] || { echo "Stop the active engine first: $ACTIVE" >&2; exit 1; }
-CONTEXT="${CONTEXT:-32768}"
+CONTEXT="${CONTEXT:-262144}"
 [[ "$CONTEXT" =~ ^[0-9]+$ && "$CONTEXT" -ge 1024 && "$CONTEXT" -le 262144 ]] || { echo 'CONTEXT must be 1024..262144.' >&2; exit 2; }
 SPECULATIVE="${SPECULATIVE:-on}"
 case "$SPECULATIVE" in on|off) ;; *) echo 'SPECULATIVE must be on or off.' >&2; exit 2 ;; esac

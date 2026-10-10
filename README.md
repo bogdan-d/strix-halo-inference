@@ -2,12 +2,12 @@
 
 Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max+ 395, Radeon 8060S (`gfx1151`), and 128 GiB shared memory under CachyOS.
 
-Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Both engines have passed local generation and lifecycle checks at 32K context. All 13 selected model files passed a full post-download integrity check. Neither engine starts automatically at login.
+Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Both engines have passed local generation and lifecycle checks with the full native 256K context configured, plus a 40,030-token prompt that exceeds the old 32K limit. Near-capacity prompts remain untested. All 13 selected model files passed a full post-download integrity check. Neither engine starts automatically at login.
 
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Local validation results and limitations](docs/validation.md).
-- [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 32K compaction settings.
+- [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 
@@ -53,7 +53,7 @@ bin/run.sh stop gufo
 
 `start` launches a detached container, not a readiness guarantee. `status` returns nonzero until the service is ready. Check logs after failure. Gufo uses `/ready`, not just its liveness endpoint. A running managed engine blocks another start. `stop` allows 60 seconds for shutdown and prints host memory afterward. Containers are removed on exit, while model files and prompt caches remain.
 
-The baseline is one active request with 32,768-token capacity. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=65536` to change capacity. Context must be between 1,024 and 262,144 tokens. Higher capacity can consume substantially more memory. Vision is not enabled in this initial setup.
+The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client. Vision is not enabled in this initial setup.
 
 ## Container boundaries
 
@@ -98,6 +98,6 @@ tests/models.sh
 
 The offline test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.
 
-Both packages are downloaded and fully hash-verified. Gufo passed autoregressive and MTP validation, with identical greedy text on two comparison prompts. Next, compare matched prompts at 8K and 32K using the same power profile, sampling and thinking settings. Record generation quality, cold prompt processing, follow-up latency and memory. Different weight formats make this a practical setup comparison, not a pure engine benchmark. Restart-safe disk restoration, larger contexts and multi-request serving still need validation before adding Quadlets.
+Both packages are downloaded and fully hash-verified. Gufo passed autoregressive and MTP validation, with identical greedy text on two comparison prompts. Both engines pass readiness, generation and lifecycle checks at the default 256K allocation. Next, compare matched prompts using the same power profile, sampling and thinking settings, including near-capacity prompts. Record generation quality, cold prompt processing, follow-up latency and memory pressure. Different weight formats make this a practical setup comparison, not a pure engine benchmark. Restart-safe disk restoration, near-capacity workloads and multi-request serving still need validation before adding Quadlets.
 
 Large models can leave little memory for the desktop and other applications. Do not treat successful startup as proof that full context or multiple sessions will fit safely.

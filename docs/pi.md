@@ -4,7 +4,7 @@ Use Pi on the host with either engine's local OpenAI Chat Completions endpoint. 
 
 ## Install the configs
 
-The checked-in [models.json](../config/pi/models.json) registers both providers. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. A project `.pi/models.json` is not a supported alternative.
+The checked-in [models.json](../config/pi/models.json) registers both providers at the full native 262,144-token context. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. Updating this repository does not modify that live directory. A project `.pi/models.json` is not a supported alternative.
 
 Run the following from this checkout in Bash. If your shell is Fish, enter `bash` first. Existing files are backed up before changes. Matching Halogen and Gufo entries are updated to the checked-in profile, while unrelated entries are preserved. Set `PI_CODING_AGENT_DIR` first if you use a different agent directory.
 
@@ -122,9 +122,11 @@ Keep `xhigh` for substantial coding tasks. Use `--thinking medium` or `--thinkin
 
 The 16,384-token completion limit is an operational starting point for reasoning plus tool calls or final text. It is not 16K of reasoning followed by another 16K of output. Halogen reserves answer room when closing an overlong reasoning block. Gufo has no separate numeric thinking budget or guaranteed answer-room transition, so an unusually long reasoning phase can hit the total limit without an answer. Do not configure a Halogen-style thinking-budget field for Gufo. These profiles do not impose a separate numeric thinking cap on either engine.
 
-Both models advertise `contextWindow: 32768`, matching the actual container allocation rather than Qwen's larger native limit. The compaction overrides reserve 16,384 tokens and retain approximately 8,192 recent tokens. At 32K, this starts compaction when estimated context exceeds 16K, leaving room for the configured completion. Pi's ordinary 20K retained-history default is too large for this particular response reserve. Large tool results, system instructions and skill catalogs also consume context. Start with focused tasks and use `/compact` when needed.
+Both models advertise `contextWindow: 262144`, matching the launcher's full native 256K allocation. The compaction overrides reserve 16,384 tokens and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 245,760 tokens, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 16K completion cap limits one response, not the conversation's context capacity.
 
-If you later launch an engine with a larger `CONTEXT`, update the matching installed model's `contextWindow` too. Do not advertise more context in Pi than the server actually allocated. Larger contexts remain unbenchmarked on this host. Leave vision disabled and input set to text until a vision tower is explicitly configured.
+If you previously installed the 32K profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
+
+If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. Leave vision disabled and input set to text until a vision tower is explicitly configured.
 
 ## Troubleshooting
 

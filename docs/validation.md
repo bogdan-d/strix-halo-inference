@@ -45,6 +45,22 @@ The [Pi profiles](pi.md) were checked with Pi 1.1.0 using the pinned engines, MT
 
 Both models appear in Pi's available-model list with the intended context and output limits. The documented merge command was used to install the fragments in the host's existing agent directory. Backups were created, and unrelated providers, default model selection and settings were verified unchanged. The tool-loop checks disabled user extensions, skills and context files to isolate provider behavior. The user's complete extension stack, automatic compaction and large coding tasks were not exercised by these checks. Halogen was restored to a ready running state after testing Gufo because it was running before this work.
 
+## Full native context, 256K
+
+The launcher and checked-in Pi profiles now default to 262,144 tokens, with one active slot and MTP enabled. Both pinned engines start successfully at that capacity. Halogen's health endpoint confirms a 262,144-token request limit, slot context and KV pool. Gufo's model endpoint confirms `context_length: 262144`. Both pass the smoke request and the conversation, tool-call, cancellation and generation-after-cancellation checks in `tests/live.py` at this allocation.
+
+Each engine also processes the same synthetic 40,030-token padding prompt and returns the requested `ready` response, demonstrating operation beyond the former 32K limit. The observed request durations were 23.2 seconds for Halogen and 25.1 seconds for Gufo. Repetitive padding is not representative coding text, and these single requests are not a throughput or quality comparison.
+
+| Measurement with 256K configured | Halogen | Gufo |
+|---|---|---|
+| Engine startup memory report | 62.1 GiB weights + 7.2 GiB KV + 12.1 GiB working memory = 81.4 GiB | 90,605 MiB GPU allocation, approximately 88.5 GiB |
+| Kernel GTT used after the 40,030-token request | approximately 20.0 GiB | approximately 89.7 GiB |
+| GTT remaining against the 105.5 GiB limit | approximately 85.5 GiB | approximately 15.8 GiB |
+
+Kernel counters were read from `/sys/class/drm/card1/device/mem_info_gtt_total` and `mem_info_gtt_used`. The exact GTT limit is 113,246,208,000 bytes, or 105.46875 GiB. These readings include other GPU users and are post-request snapshots, not peak measurements. The engines allocate weights differently, so Halogen's total resident weight memory must not be equated with its GTT charge. Its separate 47.7 GiB lookup table remains demand-paged, and pinned weights still make ordinary `MemAvailable` misleading.
+
+This verifies capacity configuration, allocation and a prompt beyond 32K. It does not verify nearly full 256K prompts, peak memory under that workload or long-context retrieval quality. Halogen is left running and ready at 256K after Gufo testing. No live Pi configuration, host GTT allocation, kernel setting or BIOS setting was changed for this context increase. The older installed Pi profiles need the explicit update described in [the Pi setup guide](pi.md).
+
 ## Remaining work
 
 Neither restart-safe disk restoration nor long-context performance has been tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy, image-build CI or dashboard was added.
