@@ -1,12 +1,12 @@
 # Use Qwen3.8 Flash Next with Pi
 
-Use Pi on the host with either engine's local OpenAI Chat Completions endpoint. No chat UI, proxy, provider extension or new Pi package is needed. The configs were checked with Pi 1.1.0, Halogen 0.17.5 and Gufo 0.11.0.
+Use Pi on the host with any engine's local OpenAI Chat Completions endpoint. No chat UI, proxy, provider extension or new Pi package is needed. The configs were checked with Pi 1.1.0, Halogen 0.17.5, Gufo 0.11.0 and Strixite 0.2.3. Strixite's remaining long-context and unrestricted real-project validation limits are in [the trial guide](strixite.md).
 
 ## Install the configs
 
-The checked-in [models.json](../config/pi/models.json) registers both providers at the full native 262,144-token context. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. Updating this repository does not modify that live directory. A project `.pi/models.json` is not a supported alternative.
+The checked-in [models.json](../config/pi/models.json) registers all three providers at the full native 262,144-token context. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. Updating this repository does not modify that live directory. A project `.pi/models.json` is not a supported alternative.
 
-Run the following from this checkout in Bash. If your shell is Fish, enter `bash` first. Existing files are backed up before changes. Matching Halogen and Gufo entries are updated to the checked-in profile, while unrelated entries are preserved. Set `PI_CODING_AGENT_DIR` first if you use a different agent directory.
+Run the following from this checkout in Bash. If your shell is Fish, enter `bash` first. Existing files are backed up before changes. Matching Halogen, Gufo and Strixite entries are updated to the checked-in profile, while unrelated entries are preserved. Set `PI_CODING_AGENT_DIR` first if you use a different agent directory.
 
 ```bash
 python - <<'PY'
@@ -41,7 +41,7 @@ for name in ("models.json", "settings.json"):
 PY
 ```
 
-The merge command accepts ordinary JSON. If your existing files contain comments, merge the fragments manually instead. Backups stay in your private agent directory, not this public repository. To undo the installation, restore the printed backups, or remove only the two providers and their matching per-model settings.
+The merge command accepts ordinary JSON. If your existing files contain comments, merge the fragments manually instead. Backups stay in your private agent directory, not this public repository. To undo the installation, restore the printed backups, or remove only the local providers and their matching per-model settings.
 
 Check registration without starting an inference engine:
 
@@ -49,7 +49,7 @@ Check registration without starting an inference engine:
 pi --offline --list-models qwen3.8
 ```
 
-You should see `halogen/halogen-qwen3.8-flash-next` and `gufo/qwen3.8-flash-next`. The literal API key `local` is a non-secret placeholder that makes these providers selectable. Neither endpoint requires authentication.
+You should see `halogen/halogen-qwen3.8-flash-next`, `gufo/qwen3.8-flash-next` and `strixite/qwen3.8-flash-next`. The literal API key `local` is a non-secret placeholder that makes these providers selectable. None of these endpoints requires authentication.
 
 ## Start coding with Halogen
 
@@ -96,7 +96,21 @@ From the target project:
 pi --provider gufo --model qwen3.8-flash-next --thinking xhigh
 ```
 
-Do not run the engines together. The launchers enforce this restriction. Both use one active inference slot with MTP enabled. Do not launch parallel coding agents against the same engine for the initial comparison. Pi does not start or stop the containers for you.
+Do not run the engines together. The launchers enforce this restriction. Each uses one active inference slot with MTP enabled. Do not launch parallel coding agents against the same engine for the initial comparison. Pi does not start or stop the containers for you.
+
+## Select Strixite
+
+Stop the active engine and verify memory release first, then start Strixite:
+
+```bash
+bin/run.sh gufo stop
+bin/run.sh strixite start --wait
+bin/run.sh strixite status
+```
+
+Use `bin/run.sh halogen stop` instead if Halogen is active. The installed provider is `strixite`, model `qwen3.8-flash-next`, at localhost:5300. Select it with `/model`, or use `pi --provider strixite --model qwen3.8-flash-next --thinking xhigh`. The per-model default is xhigh, with the same 256K context and compaction budgets as the existing engines. Ordinary Pi tools still have host user permissions. Installing this profile does not install the test-only strict JSON guard or Bubblewrap. Use [the guarded synthetic runner](strixite.md#api-tools-cancellation-and-guarded-pi-results) to verify coding tools without exposing real projects.
+
+Strixite supports automatic tool selection but rejects named or required tool choice. It also rejects nonzero presence and frequency penalties and repetition penalties other than 1. Its off profile therefore uses presence penalty 0, unlike the Halogen/Gufo model-card preset. No other provider's sampling is changed.
 
 ## Model settings and their limits
 
@@ -108,7 +122,7 @@ This is the model publisher's recommended coding profile, not a locally benchmar
 | Top-p | `0.95` | `0.8` |
 | Top-k | `20` | `20` |
 | Min-p | `0.0` | `0.0` |
-| Presence penalty | `0.0` | `1.5` |
+| Presence penalty | `0.0` | `1.5` for Halogen/Gufo, `0.0` for Strixite |
 | Repetition penalty | `1.0` | `1.0` |
 | Frequency penalty | `0.0`, neutral engine default | `0.0`, neutral engine default |
 | Preserve thinking | `true` | `true` |
@@ -124,7 +138,7 @@ In the [local routine-coding comparison](thinking-comparison.md), `medium` was f
 
 The 16,384-token completion limit is an operational starting point for reasoning plus tool calls or final text. It is not 16K of reasoning followed by another 16K of output. Halogen reserves answer room when closing an overlong reasoning block. Gufo has no separate numeric thinking budget or guaranteed answer-room transition, so an unusually long reasoning phase can hit the total limit without an answer. Do not configure a Halogen-style thinking-budget field for Gufo. These profiles do not impose a separate numeric thinking cap on either engine.
 
-Both models advertise `contextWindow: 262144`, matching the launcher's full native 256K allocation. The compaction overrides reserve 16,384 tokens and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 245,760 tokens, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 16K completion cap limits one response, not the conversation's context capacity.
+All three models advertise `contextWindow: 262144`, matching the launcher's full native 256K allocation. The compaction overrides reserve 16,384 tokens and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 245,760 tokens, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 16K completion cap limits one response, not the conversation's context capacity.
 
 If you previously installed the 32K profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
 

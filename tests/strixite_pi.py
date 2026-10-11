@@ -44,12 +44,7 @@ def main():
     assert health["status"] == "ok" and health["context_length"] == 262144 and not health.get("degraded"), health
     original = fingerprints()
     # Reuse only the public model profile, never the live agent's configuration.
-    provider = json.loads((ROOT / "config/pi/models.json").read_text())["providers"]["halogen"]
-    provider["baseUrl"] = "http://127.0.0.1:5300/v1"
-    model = provider["models"][0]
-    model["id"] = "qwen3.8-flash-next"
-    model["name"] = "Qwen3.8 Flash Next (Strixite isolated check)"
-    model["samplingParamsByThinkingLevel"]["off"]["presence_penalty"] = 0.0
+    provider = json.loads((ROOT / "config/pi/models.json").read_text())["providers"]["strixite"]
     results = []
     try:
         with tempfile.TemporaryDirectory(prefix="strixite-pi-") as directory:

@@ -6,7 +6,6 @@ Run --smoke first. Summary JSONL contains no conversations or generated source.
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 import hashlib
 import json
 import os
@@ -126,10 +125,6 @@ def main() -> None:
     originals = {name: (live / name).read_bytes() if (live / name).exists() else None
                  for name in ("models.json", "settings.json")}
     profile = json.loads((ROOT / "config/pi/models.json").read_text())
-    strixite = deepcopy(profile["providers"]["halogen"])
-    strixite["baseUrl"] = "http://127.0.0.1:5300/v1"
-    strixite["models"][0].update(id="qwen3.8-flash-next", name="Qwen3.8 Flash Next (Strixite comparison)")
-    profile["providers"]["strixite"] = strixite
     for provider in profile["providers"].values():
         provider["models"][0]["samplingParamsByThinkingLevel"]["off"]["presence_penalty"] = 0.0
     results = ROOT / "results"

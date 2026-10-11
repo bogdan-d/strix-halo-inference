@@ -135,12 +135,9 @@ if [[ "$WAIT" == true ]]; then
     PROBE=$((REMAINING < 5 ? REMAINING : 5))
     if curl --fail --silent --max-time "$PROBE" "$BASE$HEALTH" >/dev/null; then
       echo "$ENGINE ready at $BASE/v1"
-      if [[ "$ENGINE" == strixite ]]; then
-        echo 'Strixite Pi provider is not configured. Validate with an isolated client before real project use. See docs/strixite.md.'
-      else
-        if [[ "$ENGINE" == halogen ]]; then MODEL=halogen-qwen3.8-flash-next; else MODEL=qwen3.8-flash-next; fi
-        echo "From your coding project: pi --provider $ENGINE --model $MODEL --thinking xhigh"
-      fi
+      if [[ "$ENGINE" == halogen ]]; then MODEL=halogen-qwen3.8-flash-next; else MODEL=qwen3.8-flash-next; fi
+      echo "With the installed Pi profile: pi --provider $ENGINE --model $MODEL --thinking xhigh"
+      [[ "$ENGINE" != strixite ]] || echo 'Normal Pi tools are not sandboxed. See docs/strixite.md for the guarded coding-test boundary.'
       exit
     fi
     sleep 1

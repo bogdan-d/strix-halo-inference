@@ -99,7 +99,8 @@ else:
     calls.unlink()
     result = run("strixite", "start", "--wait", UNRELATED_SECRET="never-forward")
     assert result.returncode == 0 and "strixite ready at http://127.0.0.1:5300/v1" in result.stdout, result
-    assert "provider is not configured" in result.stdout and "pi --provider strixite" not in result.stdout
+    assert "pi --provider strixite --model qwen3.8-flash-next" in result.stdout
+    assert "Normal Pi tools are not sandboxed" in result.stdout
     recorded = [json.loads(line) for line in calls.read_text().splitlines()]
     launch = next(call for call in recorded if call[0] == "run")
     for flag, value in (("--publish", "127.0.0.1:5300:5300"), ("--label", "io.strix-halo-inference.managed=true"),
