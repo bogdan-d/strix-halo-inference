@@ -1,11 +1,11 @@
 # Strix Halo inference
 
-Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max+ 395, Radeon 8060S (`gfx1151`), and 128 GiB shared memory under CachyOS. Strixite has a third-engine trial launcher, but has not been provisioned or runtime-validated.
+Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max+ 395, Radeon 8060S (`gfx1151`), and 128 GiB shared memory under CachyOS. Strixite is a provisioned third-engine trial with native-256K startup and short generation validated, but Pi tools, cancellation and long-context workloads remain untested.
 
 Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Halogen and Gufo have passed local generation and lifecycle checks with the full native 256K context configured, plus a 40,030-token prompt that exceeds the old 32K limit. Near-capacity prompts remain untested. All 13 selected Halogen and Gufo model files passed a full post-download integrity check. No engine starts automatically at login.
 
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
-- [Strixite third-engine assessment](docs/strixite-research.md), with container compatibility, 256K memory estimates and performance evidence. See the [trial operations and validation gates](docs/strixite.md) for the integrated but unprovisioned launcher.
+- [Strixite third-engine assessment](docs/strixite-research.md), with container compatibility, 256K memory estimates and performance evidence. See the [trial operations, local allocation results and remaining validation gates](docs/strixite.md).
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Local validation results and limitations](docs/validation.md).
 - [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
@@ -58,7 +58,7 @@ bin/run.sh gufo stop
 
 `start` launches a detached container, not a readiness guarantee. `status` returns nonzero until the service is ready. Check logs after failure. Gufo uses `/ready`, not just its liveness endpoint. A running managed engine blocks another start. `stop` allows 60 seconds for shutdown and prints host memory afterward. Containers are removed on exit, while model files and prompt caches remain.
 
-Strixite uses the same engine-first CLI, for example `bin/run.sh strixite start --wait`, with `/health` at localhost:5300 and a 90-second stop timeout. Its baseline explicitly selects native 262144 capacity, YaRN factor 1, MTP on, thinking nudge off, fail-on-low-memory behavior and a separate cache. Image pulls, its additional approximately 114.1 GiB model download and runtime validation are deferred pending approval. Follow [the trial guide](docs/strixite.md), not the existing engines' forced-tool live test. No Strixite Pi provider or dashboard is installed.
+Strixite uses the same engine-first CLI, for example `bin/run.sh strixite start --wait`, with `/health` at localhost:5300 and a 90-second stop timeout. Its baseline explicitly selects native 262144 capacity, YaRN factor 1, MTP on, thinking nudge off, fail-on-low-memory behavior and a separate cache. The pinned image is pulled and all six files in its approximately 114.1 GiB package are fully hash-verified. Initial startup reported 84.6 GiB GPU buffers and 29.3 GiB post-load MemAvailable, with successful readiness, a bounded `ready` reply and shutdown with memory release. Follow [the trial guide](docs/strixite.md), not the existing engines' forced-tool live test. No Strixite Pi provider or dashboard is installed, and this short check does not validate coding use or near-capacity workloads.
 
 Use `bin/run.sh halogen start --wait` to wait for readiness and print the endpoint and Pi launch command. Replace `halogen` with `gufo` for that engine. Waiting defaults to 300 seconds, adjustable with `START_TIMEOUT=1..3600`. Individual readiness probes are capped at five seconds. Container exit or timeout fails visibly. Timeout or interruption stops only the wait, leaving any running container available for inspection. Check logs or explicitly stop it before retrying. The startup lock is released after container creation, before waiting.
 
@@ -136,7 +136,7 @@ Use the existing publisher/model directory convention:
 /home/bogdan/models/
   peonist-ai/halogen-qwen3.8-flash-next/  # Halogen native checkpoint and lookup table
   unsloth/Qwen3.8-Flash-Next-GGUF/       # Gufo target, shared MTP head, optional projector
-  wemoh/Qwen3.8-Flash-Next-strixw/       # Strixite trial package, not downloaded yet
+  wemoh/Qwen3.8-Flash-Next-strixw/       # Strixite trial weights, n-gram table and tokenizer
 ```
 
 Downloads happen on the host before inference. The inference containers receive no automatic-download setting and mount the entire central directory read-only. Download locks are per model repository, so separate package downloads can run independently without two writers touching the same files. Override the host root with `MODELS_DIR` only when deliberately using another central store.
@@ -145,7 +145,7 @@ Generated prompt caches live under `$HOME/.cache/strix-halo-inference/halogen` a
 
 Strixite creates its own `$HOME/.cache/strix-halo-inference/strixite` on first start, with a 16 GiB disk cap and an 8 GiB MemAvailable margin for retained RAM state. That margin is not a RAM-cache cap or a memory reservation. Its model store remains read-only, with all prompt state directed to `/cache`.
 
-Pre-existing empty directories and four `.ini` files under `/home/bogdan/models` are untouched. So far, only the selected Halogen and Gufo repositories have received downloads. Strixite provisioning is deferred.
+Pre-existing empty directories and four `.ini` files under `/home/bogdan/models` are untouched. Only the selected Halogen, Gufo and Strixite repositories have received downloads.
 
 ## Checks and remaining work
 

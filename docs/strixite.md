@@ -1,8 +1,8 @@
 # Strixite third-engine trial
 
-Strixite is integrated into the manual launcher and model downloader, but has not been pulled, provisioned or run on this host. Halogen and Gufo remain the validated engines. This is a controlled third-engine trial, not a replacement or a demonstrated performance upgrade. Read the [suitability assessment](strixite-research.md) and [performance evidence](strixite-performance-research.md) for the remaining risks.
+Strixite is provisioned and has passed native-256K startup, readiness, bounded generation and shutdown on this host. Pi tools, cancellation, restart-cache restoration and long-context workloads remain unvalidated. Halogen and Gufo remain the coding-validated engines. This is a controlled third-engine trial, not a replacement or a demonstrated performance upgrade. Read the [suitability assessment](strixite-research.md) and [performance evidence](strixite-performance-research.md) for the remaining risks.
 
-Stage 1 added repository configuration, launch support and offline policy checks only. Image pulls, model downloads and runtime validation require separate approval. No host settings, existing weights or live Pi configuration were changed.
+Stage 1 added repository configuration, launch support and offline policy checks. Subsequent approval covered provisioning and the initial allocation and smoke gate, completed October 11, 2026. No host settings, existing Halogen or Gufo weights or live Pi configuration were changed. Strixite was stopped after the check, with no other containers running.
 
 ## Pinned inputs and defaults
 
@@ -29,9 +29,9 @@ The upstream image entrypoint reads its bundled configuration. Launcher flags ov
 
 `MODELS_DIR` and `CACHE_ROOT` use the same host overrides as the existing engines. `CONTEXT` can reduce Strixite capacity within 4096..262144; YaRN stays at factor 1. Changing context or speculation requires stopping and restarting, and client context must be set independently. Changes to weights, MTP or YaRN can invalidate saved states.
 
-## Provision and launch after approval
+## Provision and launch
 
-Recheck upstream compatibility and host free disk space before provisioning. These commands pull or execute an upstream image and download new weights. They are not part of the completed offline integration:
+Recheck upstream compatibility and host free disk space before provisioning on another host or selecting new inputs. The pinned package is already downloaded and fully hash-verified on this host. These commands pull or execute an upstream image and download or verify weights:
 
 ```bash
 bin/run.sh strixite pull
@@ -60,11 +60,36 @@ bin/run.sh strixite stop
 
 The launcher passes the existing GPU devices and requests unlimited memlock, which rootless Podman may clamp. On this host, runc receives no `keep-groups`. No privileged mode, host IPC, unconfined seccomp, label disablement or writable host control mount is added for Strixite. If ordinary device access fails, investigate and obtain approval before changing permissions, security or host boot settings. Keep the current GTT limit and `iommu=pt`.
 
-## Runtime acceptance gates
+## Local allocation and smoke results
 
-Successful 256K allocation is only the first gate. Record actual GPU allocation, MemAvailable, GTT, swap and memory pressure through generation, cache export and shutdown. The approximately 88.6 GiB GPU estimate and approximately 14.8 GiB required post-load MemAvailable are derived from publisher measurements, not local results. Stop on GPU errors or unsafe memory pressure rather than tuning the host automatically.
+Measured October 11, 2026 using the pinned release and model revision above. The six selected files passed download-time SHA-256 checks and a separate full final-file verification. The image's `--help` and inference ran under rootless runc with ordinary GPU device access. No security, device permission, kernel, BIOS or IOMMU changes were needed. The endpoint was published only at `127.0.0.1:5300`.
 
-- Verify health, expected model and native context, then bounded generation. Inspect any degraded settings and confirm the intended startup flags in logs.
+| Observation | Local result |
+|---|---|
+| Capacity and serving flags | 262144 tokens, YaRN factor 1, MTP on, thinking nudge off, low-memory fail |
+| Launcher to readiness | 14.75 seconds, including container creation and readiness polling |
+| Weight load | 65.9 GiB in 12.5 seconds, reported by startup log |
+| GPU buffers | 84.6 GiB in 69 buffer kinds, reported by startup log |
+| CPU n-gram row cache | 3.0 GiB, reported by startup log |
+| Startup memory check | 29.3 GiB MemAvailable after loading, above the reported 14.8 GiB requirement |
+| Health | `status: ok`, expected model, `context_length: 262144`, no degradation field |
+| Bounded generation | Reply `ready`, 17 prompt tokens, 2 completion tokens, zero reasoning tokens, `finish_reason: stop` |
+| Request timing | 0.21 seconds server total, approximately 0.16 seconds to first token; launcher smoke command 0.264 seconds |
+| Short cache export | 116 MB state exported to RAM in 22 ms, reported by request log |
+| Managed stop | 0.754 seconds, within the 90-second allowance; container auto-removed |
+| Host MemAvailable | 117.90 GiB before, sampled minimum 28.37 GiB, 117.75 GiB two seconds after stop |
+| Kernel GTT usage | 0.852 GiB before, sampled maximum 85.82 GiB, 0.854 GiB two seconds after stop; limit unchanged at 105.46875 GiB |
+| Host swap usage | 7.18 MiB before, sampled maximum and after 7.43 MiB |
+
+Host memory and GTT were sampled roughly once per second through startup, smoke and stop, with 20 observations. Shorter peaks may have been missed. Memory-pressure cumulative counters increased by approximately 0.207 seconds for both some and full stall time over the trial; these host-wide readings do not isolate Strixite from desktop activity. GPU-buffer accounting in the engine log and kernel GTT usage are different views, not interchangeable or additive quantities. The observed 84.6 GiB buffer report is below the earlier publisher-derived 88.6 GiB estimate, but does not establish deep-context peak memory.
+
+The model files had just been read for full integrity verification, so startup timing is not a cold-storage benchmark. A two-token response does not establish throughput or MTP quality; its one draft was rejected. Thinking was disabled explicitly for the request, while the server's default remains on. The post-response health probe still reported busy, followed by a completed request log with the RAM cache export; slot-release latency was not measured. The one-shot cache entry was logged as RAM-only and the cache directory remained empty after stop. Disk flush, restart restoration and full-capacity saved states were not exercised.
+
+## Remaining runtime acceptance gates
+
+Successful 256K allocation is only the first gate. Extend memory measurements through realistic generation, deep cache export and shutdown. The initial local startup log confirms a 14.8 GiB post-load requirement at this configuration, but neither that check nor the short trial guarantees safe near-capacity operation. Stop on GPU errors or unsafe memory pressure rather than tuning the host automatically.
+
+- Repeat health, expected model, native context and bounded generation after any image or model change. Inspect degraded settings and confirm startup flags in logs. This gate passed for the current pins.
 - Test automatic tool selection, streamed argument integrity, multi-turn recall and an isolated Pi read, edit and bash loop. Include literal model tags and truncated tool arguments. Do not permit repaired partial JSON to execute commands.
 - Measure disconnect cancellation and generation afterward at increasing prompt depth. The inherited 16384-token chunk can delay cancellation to a chunk boundary, reportedly around 25 seconds at depth. Record latency rather than silently relaxing the existing engines' 20-second check.
 - Compare MTP and plain greedy output on uncached prompts, then validate clean stop, restart-cache restoration and compatibility after configuration changes.
@@ -78,4 +103,4 @@ Strixite accepts ordinary `tool_choice: auto` but rejects named-tool selection a
 
 `bin/update.sh` still updates only Halogen and Gufo and `--fresh-cache` archives only their cache directories. It preserves the Strixite pins and cache. Its active-engine guard also refuses rotation while managed Strixite is running. Until retention is justified, review and change Strixite image and version pins together manually, never changing its model revision implicitly. There is no Strixite Grafana dashboard, persistent service, chat UI, authentication or vision integration.
 
-Offline checks cover launcher isolation, explicit arguments, stop timing, bounded smoke payload, running-container status and refusal to overwrite corrupt model files. They do not establish upstream image, GPU or Pi compatibility. No runtime acceptance gate has been exercised on this host yet.
+Offline checks cover launcher isolation, explicit arguments, stop timing, bounded smoke payload, running-container status and refusal to overwrite corrupt model files. Local runtime checks establish only the initial allocation, health, short generation and stop gate. They do not establish Pi compatibility, cancellation safety, long-context quality, MTP consistency, restart-cache integrity or superiority over the existing engines. No persistent service is enabled.
