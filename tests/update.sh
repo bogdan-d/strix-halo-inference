@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP="$(mktemp -d)"
 trap 'rm --preserve-root=all --one-file-system -r -- "$TEMP"' EXIT
-mkdir -p -- "$TEMP/bin" "$TEMP/config" "$TEMP/commands" "$TEMP/cache/halogen" "$TEMP/cache/gufo"
+mkdir -p -- "$TEMP/bin" "$TEMP/config" "$TEMP/commands" "$TEMP/cache/halogen" "$TEMP/cache/gufo" "$TEMP/cache/strixite"
 cp -- "$ROOT/bin/update.sh" "$TEMP/bin/update.sh"
 cp -- "$ROOT/config/pins.env" "$TEMP/config/pins.env"
 cp -- "$ROOT/config/pins.env" "$TEMP/expected.env"
@@ -67,7 +67,8 @@ python - "$TEMP/config/pins.env" <<'PY'
 import re,sys
 from pathlib import Path
 p=Path(sys.argv[1])
-p.write_text(re.sub(r'@sha256:[0-9a-f]{64}', '@sha256:'+'0'*64, p.read_text()))
+p.write_text(re.sub(r'^(HALOGEN_IMAGE|GUFO_IMAGE)=(.*?)@sha256:[0-9a-f]{64}',
+                    lambda m: m[1]+'='+m[2]+'@sha256:'+'0'*64, p.read_text(), flags=re.M))
 PY
 cp -- "$TEMP/config/pins.env" "$TEMP/before.env"
 if FAIL_PULL=1 "$TEMP/bin/update.sh" > "$TEMP/output" 2>&1; then
@@ -76,17 +77,21 @@ fi
 cmp -- "$TEMP/config/pins.env" "$TEMP/before.env"
 
 printf 'preserve me\n' > "$TEMP/cache/halogen/marker"
-if ACTIVE=strix-halo-halogen "$TEMP/bin/update.sh" --fresh-cache > "$TEMP/output" 2>&1; then
-  echo 'Active engine allowed cache rotation' >&2; exit 1
-fi
-grep -q 'Stop the active engine' "$TEMP/output"
-cmp -- "$TEMP/config/pins.env" "$TEMP/before.env"
-[[ -f "$TEMP/cache/halogen/marker" ]]
+printf 'trial cache\n' > "$TEMP/cache/strixite/marker"
+for ENGINE in halogen strixite; do
+  if ACTIVE="strix-halo-$ENGINE" "$TEMP/bin/update.sh" --fresh-cache > "$TEMP/output" 2>&1; then
+    echo 'Active engine allowed cache rotation' >&2; exit 1
+  fi
+  grep -q 'Stop the active engine' "$TEMP/output"
+  cmp -- "$TEMP/config/pins.env" "$TEMP/before.env"
+  [[ -f "$TEMP/cache/halogen/marker" && -f "$TEMP/cache/strixite/marker" ]]
+done
 
 "$TEMP/bin/update.sh" --fresh-cache > "$TEMP/output"
 cmp -- "$TEMP/config/pins.env" "$TEMP/expected.env"
 [[ ! -e "$TEMP/cache/halogen" && ! -e "$TEMP/cache/gufo" ]]
 [[ "$(find "$TEMP/cache" -path '*/halogen/marker' -type f | wc -l)" == 1 ]]
+[[ "$(cat "$TEMP/cache/strixite/marker")" == 'trial cache' ]]
 grep -q 'Running containers are unchanged' "$TEMP/output"
 
 python - "$TEMP/config/pins.env" <<'PY'

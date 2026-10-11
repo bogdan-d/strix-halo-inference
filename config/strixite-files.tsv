@@ -1,0 +1,6 @@
+e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e	202	Qwen3.8-Flash-Next/generation_config.json
+889658f2508e8c61d409b02e70e0d78d8d4452ec65aaafbe129805d213d2e74b	4745	Qwen3.8-Flash-Next/config.json
+a0dc422560841fd68e06d974907f8b4c709bca44a67daad2b528437bdf676c08	3235	Qwen3.8-Flash-Next/LICENSE
+0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3	12809320	Qwen3.8-Flash-Next/tokenizer.json
+2d166ca51dbeeb428ff2eb2c00e53f82b1919afaa7ee1275406f55caa46476cb	70714568704	converted/Qwen3.8-Flash-Next.U-gdn_in-g128/weights.strixw
+462ed3040b8b022b2977e7429a042f2a1d5e02f09c47cc6006cb1b71372bd313	51840252928	converted/Qwen3.8-Flash-Next.ngram-q8/ngram.table

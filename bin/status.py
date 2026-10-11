@@ -42,12 +42,23 @@ def show_configuration(engine: str, container: dict) -> None:
         disk = env.get("HALOGEN_CACHE_DISK_GIB")
         disk_limit = f"{disk} GiB" if disk is not None else "unavailable"
         ram_limit = staging = None
-    else:
+    elif engine == "gufo":
         context = setting(args, "--context")
         mtp = setting(args, "--speculative") or "unavailable"
         disk_limit = gib(setting(args, "--cache-disk-bytes"))
         ram_limit = setting(args, "--cache-ram-bytes")
         staging = setting(args, "--cache-disk-staging-bytes")
+    else:
+        context = setting(args, "--capacity")
+        mtp = setting(args, "--mtp") or "unavailable"
+        disk = setting(args, "--prompt-cache-gib")
+        disk_limit = f"{disk} GiB" if disk is not None else "unavailable"
+        ram_limit = staging = None
+        print(f"Configured YaRN factor: {setting(args, '--rope-yarn-factor') or 'unavailable'}")
+        print(f"Configured thinking nudge: {setting(args, '--think-nudge') or 'unavailable'}")
+        margin = setting(args, "--prompt-cache-ram-margin-gib")
+        print(f"Cache RAM margin (not a reservation): {margin + ' GiB' if margin is not None else 'unavailable'}")
+        print(f"Startup low-memory policy: {setting(args, '--low-memory') or 'unavailable'}")
     print(f"Configured context: {context or 'unavailable'} tokens")
     print(f"Configured speculation: {mtp}")
     print(f"Cache disk limit: {disk_limit}")
@@ -73,7 +84,7 @@ def show_allocations(engine: str, name: str) -> None:
                 weights, kv, working, total = match.groups()
                 print(f"Engine allocation (startup log, not live): {total} GiB total; weights {weights}, KV {kv}, working {working} GiB")
                 return
-        else:
+        elif engine == "gufo":
             match = re.search(r"event=load_completed[^\n]*gpu_device_used_mib=(\d+)", logs)
             if match:
                 print(f"Engine GPU allocation (startup log, not live): {gib(int(match[1]) * 2**20)}")
@@ -123,10 +134,13 @@ def main(engine: str, name: str, health: str) -> int:
                 status = json.load(response)
             if not isinstance(status, dict):
                 raise ValueError("invalid readiness response")
-            ready = status.get("status") == ("ok" if engine == "halogen" else "ready")
+            ready = status.get("status") == ("ready" if engine == "gufo" else "ok")
             print(f"Readiness ({health}): {'ready' if ready else 'not ready'}")
             if engine == "halogen":
                 print(f"Active drafter (health): {status.get('drafter_default', 'unavailable')}")
+            elif engine == "strixite":
+                print(f"Active context (health): {status.get('context_length', 'unavailable')} tokens")
+                print(f"Degraded settings (health): {status.get('degraded') or 'none reported'}")
         except (URLError, TimeoutError, OSError, ValueError) as error:
             print(f"Readiness: unavailable ({error})")
         show_allocations(engine, name)

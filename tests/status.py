@@ -57,6 +57,16 @@ with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on"):
     assert result == 1 and "not ready" in output
     result, output = check("gufo", error=URLError("unreachable"))
     assert result == 1 and "Readiness: unavailable" in output
+    container["Config"]["Cmd"] = ["--capacity", "65536", "--mtp", "off", "--rope-yarn-factor", "1",
+                                  "--prompt-cache-gib", "16", "--prompt-cache-ram-margin-gib", "8",
+                                  "--think-nudge", "off", "--low-memory", "fail"]
+    result, output = check("strixite", {"status": "ok", "context_length": 65536, "degraded": "cache reduced"})
+    assert result == 0 and "Configured context: 65536" in output and "262144" not in output, output
+    assert "Configured speculation: off" in output and "Configured YaRN factor: 1" in output
+    assert "Cache disk limit: 16 GiB" in output and "Cache RAM margin (not a reservation): 8 GiB" in output
+    assert "Degraded settings (health): cache reduced" in output
+    result, output = check("strixite", {"status": "error"})
+    assert result == 1 and "not ready" in output
     container["State"] = {"Status": "exited", "Running": False}
     result, output = check("gufo", error=AssertionError("Stopped engine must not be probed"))
     assert result == 1 and "engine not active" in output

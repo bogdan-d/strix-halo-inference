@@ -6,11 +6,12 @@ source "$ROOT/config/pins.env"
 
 ACTION="${1:-}"
 ENGINE="${2:-}"
-case "$ACTION" in download|verify|check) ;; *) echo 'Usage: bin/models.sh download|verify|check halogen|gufo' >&2; exit 2 ;; esac
+case "$ACTION" in download|verify|check) ;; *) echo 'Usage: bin/models.sh download|verify|check halogen|gufo|strixite' >&2; exit 2 ;; esac
 case "$ENGINE" in
   halogen) REPO="$HALOGEN_REPO"; REVISION="$HALOGEN_REVISION" ;;
   gufo) REPO="$GUFO_REPO"; REVISION="$GUFO_REVISION" ;;
-  *) echo 'Choose halogen or gufo.' >&2; exit 2 ;;
+  strixite) REPO="$STRIXITE_REPO"; REVISION="$STRIXITE_REVISION" ;;
+  *) echo 'Choose halogen, gufo or strixite.' >&2; exit 2 ;;
 esac
 MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
 DEST="$MODELS_DIR/$REPO"
