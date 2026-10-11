@@ -5,6 +5,7 @@ Run and compare Qwen3.8-Flash-Next with Halogen Flash and Gufo on a Ryzen AI Max
 Separate rootless Podman launchers with digest-pinned upstream images and revision-pinned, SHA-256-verified model downloads. Both engines have passed local generation and lifecycle checks with the full native 256K context configured, plus a 40,030-token prompt that exceeds the old 32K limit. Near-capacity prompts remain untested. All 13 selected model files passed a full post-download integrity check. Neither engine starts automatically at login.
 
 - [Engine research and sources](docs/qwen3.8-engine-research.md), checked October 10, 2026.
+- [Strixite third-engine assessment](docs/strixite-research.md), with container compatibility, 256K memory estimates and performance evidence. Research only, not integrated yet.
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Local validation results and limitations](docs/validation.md).
 - [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
