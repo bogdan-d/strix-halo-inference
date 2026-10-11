@@ -22,6 +22,40 @@ scrape_configs:
       - action: labelkeep
         regex: '__name__|job|instance'
 
+  - job_name: strixite
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:5300']
+    sample_limit: 100
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        action: keep
+        regex: 'strix_(requests_total|prompt_tokens_total|prompt_tokens_cached_total|prefill_tokens_total|generated_tokens_total|cache_hits_total|cache_misses_total|mtp_drafted_tokens_total|mtp_accepted_tokens_total|last_prefill_tokens_per_second|last_decode_tokens_per_second|queue_depth|busy|live_tokens|context_length|ngram_rows_unique_total|ngram_rows_cached_total|ngram_rows_read_total|ngram_rows_prefetched_total|ple_wait_seconds_total|ple_wait_max_seconds|prompt_cache_entries|prompt_cache_bytes|prompt_cache_ram_entries|prompt_cache_ram_bytes|prompt_cache_spare_bytes|prompt_cache_ram_evicted_total|prompt_cache_ram_only_dropped_total|prompt_cache_room_refused_total|prompt_cache_writes_total|prompt_cache_bytes_written_total|prompt_cache_rejected_total|prompt_cache_loads_total)'
+      # Preserve only reviewed, bounded dimensions. Do not collapse labeled counters.
+      - source_labels: [__name__, outcome]
+        action: keep
+        regex: 'strix_requests_total;(ok|error|cancelled)|strix_[^;]+;'
+      - source_labels: [__name__, reason]
+        action: keep
+        regex: 'strix_prompt_cache_rejected_total;(space|budget|queue)|strix_[^;]+;'
+      - action: labelkeep
+        regex: '__name__|job|instance|outcome|reason'
+
+  - job_name: strixite-ready
+    metrics_path: /probe
+    params:
+      module: [strixite_ready]
+      target: ['http://127.0.0.1:5300/health']
+    static_configs:
+      - targets: ['127.0.0.1:9115']
+    sample_limit: 10
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        action: keep
+        regex: 'probe_success|probe_duration_seconds|probe_http_status_code'
+      - action: labelkeep
+        regex: '__name__|job|instance'
+
   - job_name: gufo
     metrics_path: /metrics
     static_configs:

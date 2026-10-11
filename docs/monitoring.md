@@ -10,7 +10,7 @@ bin/monitor.sh status
 
 Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). No login is required. Anonymous access is read-only, and dashboard changes belong in the checked-in configuration. Nothing starts automatically at login. An inference engine does not require monitoring to be running.
 
-The same stack also provides separate [Halogen inference telemetry](halogen-monitoring.md) and [Gufo inference telemetry](gufo-monitoring.md) dashboards. When upgrading an existing setup, stop monitoring, run `pull` to install the new readiness-probe image, then restart monitoring to load the scrape configuration. Starting monitoring does not start an engine.
+The same stack also provides separate [Halogen inference telemetry](halogen-monitoring.md), [Gufo inference telemetry](gufo-monitoring.md) and [Strixite inference telemetry](strixite-monitoring.md) dashboards. Strixite reuses the existing readiness-probe container and needs no new image. Stop and restart monitoring to load new scrape/probe configuration; run `pull` first only when pinned images are missing or changed. Starting monitoring does not start an engine.
 
 ```bash
 bin/monitor.sh grafana logs
@@ -46,7 +46,7 @@ Only node-exporter gets additional host mounts, all read-only:
 - `/proc/pressure` for pressure-stall information.
 - `/sys` for DRM and hwmon sensors, including their symlink targets under the device tree.
 
-There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen and Gufo aggregate metrics over their existing loopback endpoints. The readiness probe receives only its read-only configuration and probes Gufo's `/ready`, without recording response bodies. Its local probe endpoint accepts caller-supplied targets, another reason not to expose this host-network service beyond loopback.
+There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen, Gufo and Strixite aggregate metrics over their existing loopback endpoints. The readiness probe receives only its read-only configuration and probes Gufo's `/ready` and Strixite's `/health`, without recording response bodies. Its local probe endpoint accepts caller-supplied targets, another reason not to expose this host-network service beyond loopback.
 
 Grafana uses built-in panels and its built-in Prometheus data source. No additional plugins are installed. Plugin preinstallation, update checks, analytics reporting and the unused alerting subsystem are disabled.
 
