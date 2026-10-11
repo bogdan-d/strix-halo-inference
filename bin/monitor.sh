@@ -5,24 +5,24 @@ CONFIG="$ROOT/config/monitoring"
 # shellcheck source=../config/monitoring/pins.env
 source "$CONFIG/pins.env"
 LABEL=io.strix-halo-inference.monitoring
-COMPONENTS=(exporter probe prometheus grafana)
+COMPONENTS=(exporter probe prometheus)
+DASHBOARD="file://$CONFIG/dashboard.html"
 select_component() {
   NAME="strix-halo-monitor-$1"
   case "$1" in
     exporter) IMAGE="$EXPORTER_IMAGE"; URL=http://127.0.0.1:9100/metrics ;;
     probe) IMAGE="$PROBE_IMAGE"; URL=http://127.0.0.1:9115/metrics ;;
     prometheus) IMAGE="$PROMETHEUS_IMAGE"; URL=http://127.0.0.1:9090/-/ready ;;
-    grafana) IMAGE="$GRAFANA_IMAGE"; URL=http://127.0.0.1:3000/api/health ;;
   esac
 }
 usage() {
   echo 'Usage: bin/monitor.sh pull|start|stop|status' >&2
-  echo '       bin/monitor.sh exporter|probe|prometheus|grafana logs [--follow]' >&2
+  echo '       bin/monitor.sh exporter|probe|prometheus logs [--follow]' >&2
   exit 2
 }
 ACTION="${1:-}"
 case "$ACTION" in
-  exporter|probe|prometheus|grafana)
+  exporter|probe|prometheus)
     [[ $# == 2 || ( $# == 3 && "$3" == --follow ) ]] || usage
     [[ "$2" == logs ]] || usage
     NAME="strix-halo-monitor-$ACTION"
@@ -62,14 +62,14 @@ if [[ "$ACTION" == status ]]; then
       echo "$component: unavailable"; FAILED=1
     fi
   done
-  echo 'Dashboard: http://127.0.0.1:3000/d/strix-halo-host'
+  echo "Dashboard: $DASHBOARD"
   exit "$FAILED"
 fi
 exec 9>"$CONFIG/.lock"
 flock -n 9 || { echo 'Another monitoring start or stop is in progress.' >&2; exit 1; }
 if [[ "$ACTION" == stop ]]; then
   FAILED=0
-  for component in grafana prometheus probe exporter; do
+  for component in prometheus probe exporter; do
     NAME="strix-halo-monitor-$component"
     if podman container exists "$NAME"; then
       if owned container "$NAME"; then
@@ -89,11 +89,9 @@ for component in "${COMPONENTS[@]}"; do
   fi
   podman image exists "$IMAGE" || { echo 'Missing monitoring image. Run bin/monitor.sh pull first.' >&2; exit 1; }
 done
-for component in prometheus grafana; do
-  NAME="strix-halo-monitor-$component"
-  if podman volume exists "$NAME"; then owned volume "$NAME"
-  else podman volume create --label "$LABEL=true" "$NAME" >/dev/null; fi
-done
+NAME=strix-halo-monitor-prometheus
+if podman volume exists "$NAME"; then owned volume "$NAME"
+else podman volume create --label "$LABEL=true" "$NAME" >/dev/null; fi
 
 STARTED=()
 READY=false
@@ -136,21 +134,6 @@ CID=$(podman run "${COMMON[@]}" --name strix-halo-monitor-prometheus \
   --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=7d \
   --storage.tsdb.retention.size=2GB --web.listen-address=127.0.0.1:9090 9>&-)
 STARTED+=("$CID")
-CID=$(podman run "${COMMON[@]}" --name strix-halo-monitor-grafana \
-  --userns=keep-id:uid=472,gid=472 \
-  -v strix-halo-monitor-grafana:/var/lib/grafana \
-  -v "$CONFIG/provisioning:/etc/grafana/provisioning:ro" \
-  -v "$CONFIG/dashboards:/etc/grafana/dashboards:ro" \
-  -e GF_SERVER_HTTP_ADDR=127.0.0.1 -e GF_SERVER_HTTP_PORT=3000 \
-  -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
-  -e GF_AUTH_BASIC_ENABLED=false -e GF_AUTH_DISABLE_LOGIN_FORM=true \
-  -e GF_USERS_ALLOW_SIGN_UP=false -e GF_SECURITY_ADMIN_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
-  -e GF_ANALYTICS_REPORTING_ENABLED=false -e GF_ANALYTICS_CHECK_FOR_UPDATES=false \
-  -e GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false -e GF_PLUGINS_PREINSTALL_DISABLED=true \
-  -e GF_UNIFIED_ALERTING_ENABLED=false \
-  -e GF_PATHS_LOGS=/tmp/grafana -e GF_USERS_DEFAULT_THEME=dark \
-  "$GRAFANA_IMAGE" 9>&-)
-STARTED+=("$CID")
 DEADLINE=$((SECONDS + 60))
 for component in "${COMPONENTS[@]}"; do
   select_component "$component"
@@ -168,4 +151,4 @@ for cid in "${STARTED[@]}"; do
   [[ "$(podman container inspect --format '{{.State.Running}}' "$cid")" == true ]] || exit 1
 done
 READY=true
-echo 'Monitoring ready. Dashboard: http://127.0.0.1:3000/d/strix-halo-host'
+echo "Monitoring ready. Dashboard: $DASHBOARD"

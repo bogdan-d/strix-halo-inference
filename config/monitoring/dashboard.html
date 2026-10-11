@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strix Halo</title>
+<style>
+:root {
+  --bg: #0b0d11; --card: #141820; --line: #232a36; --text: #e8eaee; --muted: #8791a1;
+  --ok: #4fd1a5; --bad: #ff6b6b; --na: #5b6473; --accent: #5ad1c5;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .02em; }
+#error { color: var(--bad); }
+.controls { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); }
+.controls label { display: flex; align-items: center; gap: 6px; }
+select { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
+main { padding: 4px 20px 24px; max-width: 2200px; margin: 0 auto; }
+section { margin-top: 18px; }
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
+h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.note { margin: 0 0 10px; color: var(--muted); font-size: 12px; max-width: 150ch; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--na); }
+.chip.ok::before { background: var(--ok); }
+.chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.chip.bad::before { background: var(--bad); }
+.grid { display: grid; gap: 10px; margin-bottom: 10px; }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.charts { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.extras { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.title { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { display: block; font-size: 11px; opacity: .75; overflow: hidden; text-overflow: ellipsis; }
+.values { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 4px; }
+.values:not(.multi) .value { flex: 1; }
+.num { font-size: 30px; font-weight: 620; line-height: 1.15; letter-spacing: -.01em; }
+.unit { margin-left: 3px; color: var(--muted); font-size: 13px; }
+.label { display: block; color: var(--muted); font-size: 11px; }
+.tile.small .num, .multi .num { font-size: 19px; }
+.bar { height: 3px; margin-top: 6px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.plot { position: relative; height: 110px; margin-top: 6px; }
+.plot svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.plot path { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.plot line { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.plot .max, .plot .at { position: absolute; top: -2px; font-size: 10px; color: var(--muted); pointer-events: none; }
+.plot .max { left: 0; }
+.plot .at { right: 0; }
+.plot .cursor { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--muted); pointer-events: none; display: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 8px; height: 2px; border-radius: 1px; }
+.legend b { color: var(--text); font-weight: 550; }
+.idle { margin-top: 18px; padding: 18px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
+code { color: var(--text); }
+body.stale main { opacity: .45; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Strix Halo</h1>
+  <span id="error"></span>
+  <div class="controls">
+    <span id="updated"></span>
+    <label>Range <select id="range"></select></label>
+    <label>Refresh <select id="refresh"></select></label>
+  </div>
+</header>
+<main id="main"></main>
+
+<!--
+Panel definitions, also read by tests/dashboard_panels.py. Every query is "(expr) gate", where the gate is the
+section's entry named by the series, else by the panel, else "live". "none" means ungated. $__rate_interval is
+replaced by the panel's window, else by a window derived from the scrape interval and chart step.
+-->
+<script type="application/json" id="panels">
+{
+  "host": {
+    "name": "Host",
+    "job": "host",
+    "note": "Kernel counters are separate accounting views, not additive and not guaranteed application headroom. Halogen's pinned weights can appear reclaimable in MemAvailable, and GTT excludes some resident engine memory.",
+    "gates": {
+      "live": "and on(job, instance) (up{job='host'} == 1)"
+    },
+    "status": [
+      {"title": "Host scrape", "unit": "flag", "gate": "none", "note": "Collection health only, not engine readiness.",
+       "series": [{"label": "", "expr": "up{job='host'}"}]},
+      {"title": "Collectors", "unit": "flag", "note": "One status per enabled collector. A successful collector does not guarantee every sensor exists.",
+       "series": [{"label": "{{collector}}", "expr": "node_scrape_collector_success{job='host'}"}]}
+    ],
+    "tiles": [
+      {"title": "CPU busy", "unit": "percent", "note": "Non-idle share across logical CPUs, including I/O wait. Requires several scrapes.",
+       "series": [{"label": "", "expr": "100 * (1 - avg by(job, instance) (rate(node_cpu_seconds_total{job='host',mode='idle'}[$__rate_interval])))"}]},
+      {"title": "GPU busy", "unit": "percent", "note": "AMDGPU driver busy percentage. Includes all GPU users.",
+       "series": [{"label": "{{card}}", "expr": "node_drm_gpu_busy_percent{job='host'}"}]},
+      {"title": "GTT used", "sub": "kernel charge, all GPU users", "unit": "bytes", "note": "Kernel GTT charge, not all Halogen resident weights or engine allocations. Free GTT does not establish physical RAM availability.",
+       "series": [{"label": "{{card}}", "expr": "node_drm_memory_gtt_used_bytes{job='host'}", "of": "node_drm_memory_gtt_size_bytes{job='host'}"}]},
+      {"title": "MemAvailable", "sub": "kernel estimate", "unit": "bytes", "note": "Not guaranteed application headroom. Pinned Halogen weights can still appear reclaimable.",
+       "series": [{"label": "", "expr": "node_memory_MemAvailable_bytes{job='host'}", "of": "node_memory_MemTotal_bytes{job='host'}"}]},
+      {"title": "Swap used", "unit": "bytes", "note": "Existing swapped pages may remain after inference stops.",
+       "series": [{"label": "", "expr": "node_memory_SwapTotal_bytes{job='host'} - node_memory_SwapFree_bytes{job='host'}", "of": "node_memory_SwapTotal_bytes{job='host'}"}]},
+      {"title": "GPU temperature", "unit": "celsius", "note": "AMDGPU hwmon temperature, normalized from millidegrees.",
+       "series": [{"label": "{{sensor}}", "expr": "node_hwmon_temp_celsius{job='host'} * on(chip, job, instance) group_left(chip_name) node_hwmon_chip_names{job='host',chip_name='amdgpu'}"}]},
+      {"title": "PPT power", "sub": "AMDGPU sensor", "unit": "watts", "note": "Driver PPT sensor. Do not interpret this APU reading as isolated GPU power or wall power.",
+       "series": [{"label": "{{sensor}}", "expr": "node_hwmon_power_watt{job='host'} * on(chip, job, instance) group_left(chip_name) node_hwmon_chip_names{job='host',chip_name='amdgpu'}"}]}
+    ],
+    "charts": [
+      {"title": "CPU and GPU activity", "unit": "percent",
+       "series": [{"label": "CPU non-idle", "expr": "100 * (1 - avg by(job, instance) (rate(node_cpu_seconds_total{job='host',mode='idle'}[$__rate_interval])))"},
+                  {"label": "GPU {{card}}", "expr": "node_drm_gpu_busy_percent{job='host'}"}]},
+      {"title": "Memory counters", "unit": "bytes", "note": "Unstacked, overlapping kernel counters. Cache is not guaranteed reclaimable while Halogen has pinned file-backed weights. Do not add GTT to physical RAM usage.",
+       "series": [{"label": "MemAvailable", "expr": "node_memory_MemAvailable_bytes{job='host'}"},
+                  {"label": "MemFree", "expr": "node_memory_MemFree_bytes{job='host'}"},
+                  {"label": "Cache + buffers + slab", "expr": "node_memory_Cached_bytes{job='host'} + node_memory_Buffers_bytes{job='host'} + node_memory_SReclaimable_bytes{job='host'}"},
+                  {"label": "GTT used", "expr": "node_drm_memory_gtt_used_bytes{job='host'}"},
+                  {"label": "Swap used", "expr": "node_memory_SwapTotal_bytes{job='host'} - node_memory_SwapFree_bytes{job='host'}"}]},
+      {"title": "Memory pressure", "unit": "percent", "note": "PSI cumulative counters converted to time shares over the rate window, not the kernel avg10 field.",
+       "series": [{"label": "Some tasks stalled", "expr": "100 * rate(node_pressure_memory_waiting_seconds_total{job='host'}[$__rate_interval])"},
+                  {"label": "All non-idle tasks stalled", "expr": "100 * rate(node_pressure_memory_stalled_seconds_total{job='host'}[$__rate_interval])"}]},
+      {"title": "GPU temperature", "unit": "celsius",
+       "series": [{"label": "{{sensor}}", "expr": "node_hwmon_temp_celsius{job='host'} * on(chip, job, instance) group_left(chip_name) node_hwmon_chip_names{job='host',chip_name='amdgpu'}"}]},
+      {"title": "PPT power", "unit": "watts", "note": "PPT is not isolated GPU power or wall power.",
+       "series": [{"label": "{{sensor}}", "expr": "node_hwmon_power_watt{job='host'} * on(chip, job, instance) group_left(chip_name) node_hwmon_chip_names{job='host',chip_name='amdgpu'}"}]},
+      {"title": "Physical disk activity", "unit": "bytes/s", "note": "Summed over whole physical devices only. Partition, loop and device-mapper counters are excluded to avoid duplicate accounting.",
+       "series": [{"label": "Read", "expr": "sum by(job, instance) (rate(node_disk_read_bytes_total{job='host',device=~'nvme[0-9]+n[0-9]+|sd[a-z]+|vd[a-z]+|mmcblk[0-9]+'}[$__rate_interval]))"},
+                  {"label": "Write", "expr": "sum by(job, instance) (rate(node_disk_written_bytes_total{job='host',device=~'nvme[0-9]+n[0-9]+|sd[a-z]+|vd[a-z]+|mmcblk[0-9]+'}[$__rate_interval]))"}]}
+    ],
+    "extras": []
+  },
+  "engines": [
+    {
+      "name": "Halogen",
+      "job": "halogen",
+      "note": "Native metrics, not a token-by-token live trace. Counters advance on completed requests. Pool occupancy includes warm held regions and reflects the last completed request, not the current prompt. Cache readings older than 15 seconds are hidden.",
+      "gates": {
+        "scrape": "and on(job, instance) (up{job='halogen'} == 1)",
+        "live": "and on(job, instance) (up{job='halogen'} == 1) and on(job, instance) (halogen:engine_up{job='halogen'} == 1)",
+        "cache": "and on(job, instance) (up{job='halogen'} == 1) and on(job, instance) (halogen:engine_up{job='halogen'} == 1) and on(job, instance) (halogen:cache_stats_age_seconds{job='halogen'} < 15)"
+      },
+      "status": [
+        {"title": "Metrics scrape", "unit": "flag", "gate": "none", "note": "Prometheus HTTP collection health. Down does not distinguish engine shutdown, network failure or authentication failure.",
+         "series": [{"label": "", "expr": "up{job='halogen'}"}]},
+        {"title": "Engine probe", "unit": "flag", "gate": "scrape", "note": "Halogen's last engine liveness probe, also used by /health. Not a separate model-readiness check or a promise that a new request can be admitted.",
+         "series": [{"label": "", "expr": "halogen:engine_up{job='halogen'}"}]}
+      ],
+      "tiles": [
+        {"title": "Prefill", "sub": "new tokens, completed in 5 min", "unit": "tokens/s", "window": "5m", "note": "Tokens divided by summed engine processing seconds. Not wall-time throughput or current-request speed. No completed work is unavailable, not zero speed.",
+         "series": [{"label": "", "expr": "(rate(llamacpp:prompt_tokens_total{job='halogen'}[$__rate_interval]) / rate(llamacpp:prompt_seconds_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:prompt_seconds_total{job='halogen'}[$__rate_interval]) > 0)"}]},
+        {"title": "Decode", "sub": "completed in 5 min", "unit": "tokens/s", "window": "5m", "note": "Tokens divided by summed engine processing seconds. Not wall-time throughput or current-request speed. No completed work is unavailable, not zero speed.",
+         "series": [{"label": "", "expr": "(rate(llamacpp:tokens_predicted_total{job='halogen'}[$__rate_interval]) / rate(llamacpp:tokens_predicted_seconds_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:tokens_predicted_seconds_total{job='halogen'}[$__rate_interval]) > 0)"}]},
+        {"title": "Pool occupancy", "sub": "last completed request", "unit": "ratio", "note": "Engine-held positions divided by pool capacity, including warm held conversations. Pool capacity is not the maximum context of a single request. Can remain unchanged while idle or during a long request.",
+         "series": [{"label": "", "expr": "llamacpp:kv_cache_usage_ratio{job='halogen'}"}]},
+        {"title": "Cache request hit share", "sub": "requests in 5 min", "unit": "ratio", "window": "5m", "gate": "cache", "note": "Hits divided by hits plus misses, not token-cache share. Unavailable when no measured cache requests.",
+         "series": [{"label": "", "expr": "(rate(halogen:cache_hits_total{job='halogen'}[$__rate_interval]) / (rate(halogen:cache_hits_total{job='halogen'}[$__rate_interval]) + rate(halogen:cache_misses_total{job='halogen'}[$__rate_interval]))) and on(job, instance) ((rate(halogen:cache_hits_total{job='halogen'}[$__rate_interval]) + rate(halogen:cache_misses_total{job='halogen'}[$__rate_interval])) > 0)"}]},
+        {"title": "Draft acceptance share", "sub": "proposals in 5 min", "unit": "ratio", "window": "5m", "note": "Accepted proposals divided by all proposals, draft-head and prompt-lookup together. Unavailable with no proposals, not zero. Does not establish a speedup.",
+         "series": [{"label": "", "expr": "(rate(halogen:draft_tokens_accepted_total{job='halogen'}[$__rate_interval]) / rate(halogen:draft_tokens_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(halogen:draft_tokens_total{job='halogen'}[$__rate_interval]) > 0)"}]},
+        {"title": "Requests in flight", "unit": "count", "note": "Front-end request gauges, not generated token progress.",
+         "series": [{"label": "Processing", "expr": "llamacpp:requests_processing{job='halogen'}"},
+                    {"label": "Deferred", "expr": "llamacpp:requests_deferred{job='halogen'}"}]}
+      ],
+      "charts": [
+        {"title": "Processing speed over completed requests", "unit": "tokens/s", "note": "Tokens divided by summed engine processing seconds in the rate window. Not wall-time throughput or current-request speed.",
+         "series": [{"label": "Prefill, new tokens", "expr": "(rate(llamacpp:prompt_tokens_total{job='halogen'}[$__rate_interval]) / rate(llamacpp:prompt_seconds_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:prompt_seconds_total{job='halogen'}[$__rate_interval]) > 0)"},
+                    {"label": "Decode", "expr": "(rate(llamacpp:tokens_predicted_total{job='halogen'}[$__rate_interval]) / rate(llamacpp:tokens_predicted_seconds_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:tokens_predicted_seconds_total{job='halogen'}[$__rate_interval]) > 0)"}]},
+        {"title": "Aggregate wall-time throughput", "unit": "tokens/s", "note": "Completion-accounted token counters per wall second, including idle time. Short completed requests can appear as bursts. Cached prompt tokens are not newly processed tokens.",
+         "series": [{"label": "Processed prompt", "expr": "rate(llamacpp:prompt_tokens_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Generated", "expr": "rate(llamacpp:tokens_predicted_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Cached prompt", "expr": "rate(halogen:prompt_tokens_cached_total{job='halogen'}[$__rate_interval])"}]},
+        {"title": "Pool positions, last completed request", "unit": "count", "note": "Pool capacity is not the maximum context of a single request. Occupancy includes warm held conversations. Reservations include prompt plus maximum output requests, admitted or not.",
+         "series": [{"label": "Occupied, busy + held", "expr": "llamacpp:kv_cache_tokens{job='halogen'}"},
+                    {"label": "Pool capacity", "expr": "halogen:kv_pool_positions{job='halogen'}"},
+                    {"label": "Front-end reservations", "expr": "halogen:kv_pool_reserved_tokens{job='halogen'}"}]},
+        {"title": "Request and cache activity", "unit": "per-second", "note": "Rates are reset-aware. Cache and front-end counters have different reporting paths, so they need not match at every scrape.",
+         "series": [{"label": "Completed requests", "expr": "rate(halogen:requests_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Cache hits", "gate": "cache", "expr": "rate(halogen:cache_hits_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Cache misses", "gate": "cache", "expr": "rate(halogen:cache_misses_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Disk-tier hits", "gate": "cache", "expr": "rate(halogen:cache_disk_hits_total{job='halogen'}[$__rate_interval])"}]},
+        {"title": "Cache retention, fresh snapshots", "unit": "bytes", "gate": "cache", "note": "Engine-reported retained bytes, not measured RAM usage or disk-directory du. Do not add these to GTT or engine allocations.",
+         "series": [{"label": "Engine cache bytes", "expr": "halogen:cache_bytes{job='halogen'}"},
+                    {"label": "Disk retained bytes", "expr": "halogen:cache_disk_bytes{job='halogen'}"},
+                    {"label": "Disk budget", "expr": "halogen:cache_disk_budget_bytes{job='halogen'}"}]},
+        {"title": "Speculative proposal throughput", "unit": "tokens/s", "note": "Completion-accounted proposals per wall second. Acceptance does not establish a speedup against autoregressive decoding.",
+         "series": [{"label": "Proposed", "expr": "rate(halogen:draft_tokens_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Accepted", "expr": "rate(halogen:draft_tokens_accepted_total{job='halogen'}[$__rate_interval])"}]},
+        {"title": "Cache savings", "unit": "tokens/s", "gate": "cache", "note": "Separate sources, not summed. Cache saved and front-end cached counts may have different epochs and update times.",
+         "series": [{"label": "Engine saved prompt tokens", "expr": "rate(halogen:cache_prompt_tokens_saved_total{job='halogen'}[$__rate_interval])"},
+                    {"label": "Front-end cached prompt tokens", "expr": "rate(halogen:prompt_tokens_cached_total{job='halogen'}[$__rate_interval])"}]},
+        {"title": "Cache evictions", "unit": "per-second", "gate": "cache", "note": "Entries the cache forgot. Not a complete breakdown of dropped, superseded, refused or full/partial matches.",
+         "series": [{"label": "Forgotten entries", "expr": "rate(halogen:cache_evicted_total{job='halogen'}[$__rate_interval])"}]}
+      ],
+      "extras": [
+        {"title": "Token counters, since front-end start", "unit": "count", "note": "Current counter totals, not lifetime across restarts.",
+         "series": [{"label": "Processed prompt", "expr": "llamacpp:prompt_tokens_total{job='halogen'}"},
+                    {"label": "Cached prompt", "expr": "halogen:prompt_tokens_cached_total{job='halogen'}"},
+                    {"label": "Generated", "expr": "llamacpp:tokens_predicted_total{job='halogen'}"}]},
+        {"title": "Oldest request age", "unit": "seconds", "note": "Zero when idle, not a latency distribution.",
+         "series": [{"label": "", "expr": "halogen:busy_for_seconds{job='halogen'}"}]},
+        {"title": "Waiting for pool room", "unit": "flag", "note": "State gauge, not accumulated wait time.",
+         "series": [{"label": "", "expr": "halogen:kv_pool_waiting_for_room{job='halogen'}"}]},
+        {"title": "Cache entries, fresh snapshot", "unit": "count", "gate": "cache", "note": "Retained engine cache records, not entry capacity.",
+         "series": [{"label": "", "expr": "halogen:cache_entries{job='halogen'}"}]},
+        {"title": "Cache snapshot age", "unit": "seconds", "note": "Background report age. Cache readings are hidden at 15 seconds or older, a local display policy, not an upstream freshness guarantee.",
+         "series": [{"label": "", "expr": "halogen:cache_stats_age_seconds{job='halogen'}"}]}
+      ]
+    },
+    {
+      "name": "Gufo",
+      "job": "gufo",
+      "note": "Gufo semantics differ from Halogen. Execution token counters advance live, but cached tokens and speculative totals update at finish or cancellation. Speed gauges retain the latest positive request while idle. Context share is logical in-flight prompt plus output, not retained cache or GPU allocation. Configured context capacity and cache bytes are not exported; use bin/run.sh gufo status.",
+      "gates": {
+        "scrape": "and on() (up{job='gufo'} == 1)",
+        "probe": "and on(job, instance) (up{job='gufo-ready'} == 1)",
+        "live": "and on() (up{job='gufo'} == 1) and on() (up{job='gufo-ready'} == 1) and on() (probe_success{job='gufo-ready'} == 1)"
+      },
+      "status": [
+        {"title": "Metrics scrape", "unit": "flag", "gate": "none", "note": "Successful metrics collection, not model readiness. May remain up while the model is not ready.",
+         "series": [{"label": "", "expr": "up{job='gufo'}"}]},
+        {"title": "Readiness collection", "unit": "flag", "gate": "none", "note": "Collection from the probe exporter. Up means the readiness test ran, not that it passed.",
+         "series": [{"label": "", "expr": "up{job='gufo-ready'}"}]},
+        {"title": "Model readiness", "unit": "flag", "gate": "probe", "note": "Probe requires HTTP 200 and JSON status ready. Not ready can mean model loading, shutdown, device loss or connectivity failure. Ready does not guarantee an unoccupied session.",
+         "series": [{"label": "", "expr": "probe_success{job='gufo-ready'}"}]}
+      ],
+      "tiles": [
+        {"title": "Prefill", "sub": "latest positive request", "unit": "tokens/s", "note": "Historical stage-speed gauge from a finished or cancelled request, not current-request speed. Persists while idle.",
+         "series": [{"label": "", "expr": "llamacpp:prompt_tokens_seconds{job='gufo'} > 0"}]},
+        {"title": "Decode", "sub": "latest positive request", "unit": "tokens/s", "note": "Historical stage-speed gauge from a finished or cancelled request, not current-request speed. Persists while idle.",
+         "series": [{"label": "", "expr": "llamacpp:predicted_tokens_seconds{job='gufo'} > 0"}]},
+        {"title": "Context share", "sub": "in flight, logical", "unit": "ratio", "note": "Whole admitted prompts plus generated tokens divided by sessions times per-session context. Zero while idle. Not KV allocation or Halogen's busy-plus-held pool occupancy.",
+         "series": [{"label": "", "expr": "llamacpp:kv_cache_usage_ratio{job='gufo'}"}]},
+        {"title": "Reused prompt share", "sub": "tokens in 5 min, approximate", "unit": "ratio", "window": "5m", "note": "Token reuse, not request cache-hit rate. Execution and finish accounting clocks differ, so this is approximate, especially for long or failed requests. No work is unavailable.",
+         "series": [{"label": "", "expr": "(rate(llamacpp:prompt_tokens_cached_total{job='gufo'}[$__rate_interval]) / (rate(llamacpp:prompt_tokens_cached_total{job='gufo'}[$__rate_interval]) + rate(llamacpp:prompt_tokens_total{job='gufo'}[$__rate_interval]))) and on(job, instance) ((rate(llamacpp:prompt_tokens_cached_total{job='gufo'}[$__rate_interval]) + rate(llamacpp:prompt_tokens_total{job='gufo'}[$__rate_interval])) > 0)"}]},
+        {"title": "Draft acceptance share", "sub": "proposals in 5 min", "unit": "ratio", "window": "5m", "note": "Accepted divided by proposed draft tokens for finish-accounted requests. No proposals is unavailable. Does not demonstrate speedup.",
+         "series": [{"label": "", "expr": "(rate(llamacpp:spec_decode_num_accepted_tokens_total{job='gufo'}[$__rate_interval]) / rate(llamacpp:spec_decode_num_draft_tokens_total{job='gufo'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:spec_decode_num_draft_tokens_total{job='gufo'}[$__rate_interval]) > 0)"}]},
+        {"title": "Requests in flight", "unit": "count", "note": "Admitted includes cache preparation and cleanup. A ready model can still have all sessions occupied.",
+         "series": [{"label": "Admitted", "expr": "llamacpp:requests_processing{job='gufo'}"},
+                    {"label": "Deferred", "expr": "llamacpp:requests_deferred{job='gufo'}"}]}
+      ],
+      "charts": [
+        {"title": "Latest positive request processing speed", "unit": "tokens/s", "note": "Historical stage-speed gauges from finished or cancelled requests. Nonzero values persist while idle. Not the same as Halogen's windowed processing-speed ratio.",
+         "series": [{"label": "Latest positive prefill", "expr": "llamacpp:prompt_tokens_seconds{job='gufo'} > 0"},
+                    {"label": "Latest positive decode", "expr": "llamacpp:predicted_tokens_seconds{job='gufo'} > 0"}]},
+        {"title": "Aggregate wall-time throughput", "unit": "tokens/s", "note": "Execution counters advance during prefill and generation. Cached tokens update at completion or cancellation, so curves use different accounting clocks. Rates include idle time.",
+         "series": [{"label": "Processed prompt, live", "expr": "rate(llamacpp:prompt_tokens_total{job='gufo'}[$__rate_interval])"},
+                    {"label": "Generated, live", "expr": "rate(llamacpp:tokens_predicted_total{job='gufo'}[$__rate_interval])"},
+                    {"label": "Cached prompt, finish-accounted", "expr": "rate(llamacpp:prompt_tokens_cached_total{job='gufo'}[$__rate_interval])"}]},
+        {"title": "In-flight logical context share", "unit": "ratio", "note": "Includes prompt tokens before prefill executes. Retained cache is excluded and idle sessions contribute zero.",
+         "series": [{"label": "In-flight logical fraction", "expr": "llamacpp:kv_cache_usage_ratio{job='gufo'}"}]},
+        {"title": "Speculative proposal throughput", "unit": "tokens/s", "note": "Speculation counters update at finish or cancellation, not on every generation step.",
+         "series": [{"label": "Proposed, finish-accounted", "expr": "rate(llamacpp:spec_decode_num_draft_tokens_total{job='gufo'}[$__rate_interval])"},
+                    {"label": "Accepted, finish-accounted", "expr": "rate(llamacpp:spec_decode_num_accepted_tokens_total{job='gufo'}[$__rate_interval])"}]}
+      ],
+      "extras": [
+        {"title": "Token counters, since process start", "unit": "count", "note": "Process-wide counters reset after restart. Execution counters can include work performed before scheduler failure.",
+         "series": [{"label": "Processed prompt", "expr": "llamacpp:prompt_tokens_total{job='gufo'}"},
+                    {"label": "Cached prompt", "expr": "llamacpp:prompt_tokens_cached_total{job='gufo'}"},
+                    {"label": "Generated", "expr": "llamacpp:tokens_predicted_total{job='gufo'}"}]},
+        {"title": "Largest completed sequence, since process start", "unit": "count", "note": "A high-water mark of prompt plus output, not an additive total, configured capacity or current occupancy.",
+         "series": [{"label": "", "expr": "llamacpp:n_tokens_max{job='gufo'}"}]},
+        {"title": "Draft tokens per verification round", "sub": "5 min", "unit": "count", "window": "5m", "note": "Token proposals per verification round, not generated tokens per round or draft compute cost.",
+         "series": [{"label": "", "expr": "(rate(llamacpp:spec_decode_num_draft_tokens_total{job='gufo'}[$__rate_interval]) / rate(llamacpp:spec_decode_num_drafts_total{job='gufo'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:spec_decode_num_drafts_total{job='gufo'}[$__rate_interval]) > 0)"}]},
+        {"title": "Confirmed device losses, since process start", "unit": "count", "gate": "scrape", "note": "Fatal context loss leads to process exit, which a scrape may miss. Zero is not proof of GPU health.",
+         "series": [{"label": "", "expr": "gufo_device_lost_total{job='gufo'}"}]}
+      ]
+    },
+    {
+      "name": "Strixite",
+      "job": "strixite",
+      "note": "Prefill totals update after prefill; generation and MTP totals update at finalization. Last-speed gauges retain the last qualifying request while idle. Context is the session size at last worker completion, not live progress. Cache bytes are not total engine memory.",
+      "gates": {
+        "probe": "and on(job, instance) (up{job='strixite-ready'} == 1)",
+        "live": "and on(job, instance) (up{job='strixite'} == 1)"
+      },
+      "status": [
+        {"title": "Metrics scrape", "unit": "flag", "gate": "none", "note": "Successful collection, not model readiness.",
+         "series": [{"label": "", "expr": "up{job='strixite'}"}]},
+        {"title": "Readiness collection", "unit": "flag", "gate": "none", "note": "Up means the probe ran, not that it passed.",
+         "series": [{"label": "", "expr": "up{job='strixite-ready'}"}]},
+        {"title": "Model readiness", "unit": "flag", "gate": "probe", "note": "HTTP 200 and JSON status ok. Busy is independent. Startup degradation and configured capacity must be inspected separately.",
+         "series": [{"label": "", "expr": "probe_success{job='strixite-ready'}"}]}
+      ],
+      "tiles": [
+        {"title": "Prefill", "sub": "last qualifying request", "unit": "tokens/s", "note": "Retained historical gauge while idle. New tokens over prompt-phase time, including preparation and restoration overhead.",
+         "series": [{"label": "", "expr": "strix_last_prefill_tokens_per_second{job='strixite'} > 0"}]},
+        {"title": "Decode", "sub": "last qualifying request", "unit": "tokens/s", "note": "Retained historical gauge while idle. Excludes the first completion token.",
+         "series": [{"label": "", "expr": "strix_last_decode_tokens_per_second{job='strixite'} > 0"}]},
+        {"title": "Context share", "sub": "last completed session", "unit": "ratio", "note": "Session size at last worker completion divided by configured capacity. Not in-flight progress or GPU allocation.",
+         "series": [{"label": "", "expr": "strix_live_tokens{job='strixite'} / strix_context_length{job='strixite'}"}]},
+        {"title": "Reused prompt share", "sub": "tokens in 5 min", "unit": "ratio", "window": "5m", "note": "Reused tokens divided by full prompt tokens. No prompt work is unavailable, not zero. Not request cache-hit probability.",
+         "series": [{"label": "", "expr": "(rate(strix_prompt_tokens_cached_total{job='strixite'}[$__rate_interval]) / rate(strix_prompt_tokens_total{job='strixite'}[$__rate_interval])) and on(job, instance) (rate(strix_prompt_tokens_total{job='strixite'}[$__rate_interval]) > 0)"}]},
+        {"title": "Draft acceptance share", "sub": "proposals in 5 min", "unit": "ratio", "window": "5m", "note": "Accepted drafts divided by drafted tokens. Finalization-accounted; no proposals is unavailable. Not proof of speedup.",
+         "series": [{"label": "", "expr": "(rate(strix_mtp_accepted_tokens_total{job='strixite'}[$__rate_interval]) / rate(strix_mtp_drafted_tokens_total{job='strixite'}[$__rate_interval])) and on(job, instance) (rate(strix_mtp_drafted_tokens_total{job='strixite'}[$__rate_interval]) > 0)"}]},
+        {"title": "Execution slot", "unit": "count", "note": "Busy includes post-generation work; queued requests wait for the single worker.",
+         "series": [{"label": "Busy", "expr": "strix_busy{job='strixite'}"},
+                    {"label": "Queued", "expr": "strix_queue_depth{job='strixite'}"}]}
+      ],
+      "charts": [
+        {"title": "Last qualifying request speed", "unit": "tokens/s", "note": "Retained historical gauges while idle. Zero before measurement is hidden.",
+         "series": [{"label": "Last prefill", "expr": "strix_last_prefill_tokens_per_second{job='strixite'} > 0"},
+                    {"label": "Last decode", "expr": "strix_last_decode_tokens_per_second{job='strixite'} > 0"}]},
+        {"title": "Completion-accounted wall-time throughput", "unit": "tokens/s", "note": "Tokens per wall second including idle. Generation and cache accounting can appear as bursts, not live decode speed.",
+         "series": [{"label": "New prefill", "expr": "rate(strix_prefill_tokens_total{job='strixite'}[$__rate_interval])"},
+                    {"label": "Generated", "expr": "rate(strix_generated_tokens_total{job='strixite'}[$__rate_interval])"},
+                    {"label": "Reused prefix", "expr": "rate(strix_prompt_tokens_cached_total{job='strixite'}[$__rate_interval])"}]},
+        {"title": "Prompt-cache buffer and disk bytes", "unit": "bytes", "note": "RAM-entry and spare-buffer capacities are separate from disk bytes. RAM and disk may contain the same state. Not engine RAM/GPU footprint. Launcher disk cap is 16 GiB, not a measured metric.",
+         "series": [{"label": "RAM entries", "expr": "strix_prompt_cache_ram_bytes{job='strixite'}"},
+                    {"label": "Spare buffers", "expr": "strix_prompt_cache_spare_bytes{job='strixite'}"},
+                    {"label": "Disk", "expr": "strix_prompt_cache_bytes{job='strixite'}"}]},
+        {"title": "Cache-pressure events", "unit": "per-second", "note": "Memory-room refusal, pressure-driven RAM eviction, rejected disk writes by reason and intentionally dropped one-shot states are distinct events. Drops are not necessarily errors.",
+         "series": [{"label": "RAM room refused", "expr": "rate(strix_prompt_cache_room_refused_total{job='strixite'}[$__rate_interval])"},
+                    {"label": "RAM evicted", "expr": "rate(strix_prompt_cache_ram_evicted_total{job='strixite'}[$__rate_interval])"},
+                    {"label": "Write rejected: {{reason}}", "expr": "rate(strix_prompt_cache_rejected_total{job='strixite'}[$__rate_interval])"},
+                    {"label": "One-shot dropped", "expr": "rate(strix_prompt_cache_ram_only_dropped_total{job='strixite'}[$__rate_interval])"}]},
+        {"title": "Cache disk operation rate", "unit": "per-second", "note": "Completed writes and disk loads per wall second. RAM reuse is not counted as a disk load.",
+         "series": [{"label": "Writes", "expr": "rate(strix_prompt_cache_writes_total{job='strixite'}[$__rate_interval])"},
+                    {"label": "Loads", "expr": "rate(strix_prompt_cache_loads_total{job='strixite'}[$__rate_interval])"}]},
+        {"title": "Cache disk write throughput", "unit": "bytes/s", "note": "Completed disk-entry bytes written per wall second, not pending queue size or a filesystem quota.",
+         "series": [{"label": "Written bytes", "expr": "rate(strix_prompt_cache_bytes_written_total{job='strixite'}[$__rate_interval])"}]},
+        {"title": "PLE row wait", "unit": "ratio", "note": "Cumulative forward wait for n-gram rows as a fraction of wall time. Not GPU utilization or indexer timing.",
+         "series": [{"label": "Wait share of wall time", "expr": "rate(strix_ple_wait_seconds_total{job='strixite'}[$__rate_interval])"}]}
+      ],
+      "extras": [
+        {"title": "Context capacity and last completed session", "unit": "count", "note": "Configured capacity and last worker-completion prompt-plus-output size. Neither is in-flight progress or GPU allocation.",
+         "series": [{"label": "Capacity", "expr": "strix_context_length{job='strixite'}"},
+                    {"label": "Last completed session", "expr": "strix_live_tokens{job='strixite'}"}]},
+        {"title": "Prompt-cache entries", "unit": "count", "note": "Disk and RAM entries are separate tiers, not additive unique conversation counts.",
+         "series": [{"label": "Disk", "expr": "strix_prompt_cache_entries{job='strixite'}"},
+                    {"label": "RAM", "expr": "strix_prompt_cache_ram_entries{job='strixite'}"}]},
+        {"title": "Executed requests by outcome", "unit": "count", "note": "Terminal outcomes since process start, not all HTTP requests or validation failures.",
+         "series": [{"label": "{{outcome}}", "expr": "strix_requests_total{job='strixite'}"}]},
+        {"title": "N-gram row-cache hit share", "sub": "5 min", "unit": "ratio", "window": "5m", "note": "Cached unique rows divided by unique gather rows. No gathers is unavailable; not prompt-cache reuse.",
+         "series": [{"label": "", "expr": "(rate(strix_ngram_rows_cached_total{job='strixite'}[$__rate_interval]) / rate(strix_ngram_rows_unique_total{job='strixite'}[$__rate_interval])) and on(job, instance) (rate(strix_ngram_rows_unique_total{job='strixite'}[$__rate_interval]) > 0)"}]},
+        {"title": "Longest PLE wait since start", "unit": "seconds", "note": "Maximum single row wait, a lifetime high-water mark. Not latest wait or a counter rate.",
+         "series": [{"label": "", "expr": "strix_ple_wait_max_seconds{job='strixite'}"}]}
+      ]
+    }
+  ]
+}
+</script>
+
+<script>
+// @ts-check
+/** @typedef {"percent"|"ratio"|"bytes"|"bytes/s"|"tokens/s"|"per-second"|"count"|"seconds"|"watts"|"celsius"|"flag"} Unit */
+/** @typedef {{label: string, expr: string, of?: string, gate?: string}} Series */
+/** @typedef {{title: string, sub?: string, note?: string, unit: Unit, gate?: string, window?: string, series: Series[]}} Panel */
+/** @typedef {{name: string, job: string, note: string, gates: Record<string, string>, status: Panel[], tiles: Panel[], charts: Panel[], extras: Panel[]}} Section */
+/** @typedef {{metric: Record<string, string>, value: [number, string], values: [number, string][]}} Sample */
+/** @typedef {{start: number, end: number, step: number, instantWindow: string, rangeWindow: string}} Context */
+/** @typedef {{el: HTMLElement, refresh: (context: Context) => Promise<unknown>}} Mounted */
+
+const PROMETHEUS = "http://127.0.0.1:9090";
+const SCRAPE = 2; // Seconds. Keep equal to scrape_interval in prometheus.yml.
+const REFRESH = [1, 2, 5, 10, 15, 30];
+const RANGES = /** @type {Record<string, number>} */ ({"15 min": 900, "1 h": 3600, "6 h": 21600});
+const POINTS = 300;
+const COLORS = ["#5ad1c5", "#f2a65a", "#8fa8ff", "#e879a6", "#b5d86b", "#c9a0ff"];
+const WIDTH = 600, HEIGHT = 110;
+
+/** @type {{host: Section, engines: Section[]}} */
+const config = JSON.parse(/** @type {HTMLElement} */ (document.getElementById("panels")).textContent ?? "");
+
+/** @param {string} id */
+const byId = id => /** @type {HTMLElement} */ (document.getElementById(id));
+
+/**
+ * @param {string} tag
+ * @param {string} className
+ * @param {...(Node|string|undefined|false)} children
+ */
+function h(tag, className, ...children) {
+  const el = document.createElement(tag);
+  el.className = className;
+  el.append(...children.filter(child => child !== undefined && child !== false));
+  return el;
+}
+
+/**
+ * @param {string} path
+ * @param {Record<string, string>} params
+ * @returns {Promise<Sample[]>}
+ */
+async function query(path, params) {
+  const response = await fetch(`${PROMETHEUS}/api/v1/${path}?${new URLSearchParams(params)}`, {signal: AbortSignal.timeout(5000)});
+  const body = await response.json();
+  if (body.status !== "success") throw new Error(body.error);
+  return body.data.result;
+}
+
+/**
+ * Apply the rate window and the availability gate, so a stopped target never leaves its last reading looking current.
+ * @param {Section} section @param {Panel} panel @param {Series} series @param {string} expr @param {string} window
+ */
+function compose(section, panel, series, expr, window) {
+  const name = series.gate ?? panel.gate ?? "live";
+  const gate = name === "none" ? "" : section.gates[name];
+  if (gate === undefined) throw new Error(`Unknown gate ${name} in ${section.name} / ${panel.title}`);
+  const body = expr.replaceAll("$__rate_interval", panel.window ?? window);
+  return gate ? `(${body}) ${gate}` : body;
+}
+
+/** @param {string} template @param {Record<string, string>} metric */
+const label = (template, metric) => template.replace(/\{\{(\w+)\}\}/g, (_, key) => metric[key] ?? "");
+
+/** @param {number} value */
+const digits = value => String(Math.abs(value) >= 1000 ? Math.round(value) : Number(value.toPrecision(3)));
+
+/** @param {number} value @param {number} base @param {string[]} units @returns {[string, string]} */
+function scaled(value, base, units) {
+  let index = 0;
+  while (Math.abs(value) >= base && index < units.length - 1) { value /= base; index++; }
+  return [digits(value), units[index]];
+}
+
+/**
+ * @param {number|undefined} value @param {Unit} unit
+ * @returns {[string, string]} Number and unit suffix.
+ */
+function format(value, unit) {
+  if (value === undefined || !Number.isFinite(value)) return ["—", ""];
+  switch (unit) {
+    case "percent": return [digits(value), "%"];
+    case "ratio": return [digits(value * 100), "%"];
+    case "bytes": return scaled(value, 1024, ["B", "KiB", "MiB", "GiB", "TiB"]);
+    case "bytes/s": return scaled(value, 1024, ["B/s", "KiB/s", "MiB/s", "GiB/s"]);
+    case "tokens/s": return [digits(value), "t/s"];
+    case "per-second": return [digits(value), "/s"];
+    case "count": return scaled(value, 1000, ["", "k", "M", "G"]);
+    case "seconds": return value < 120 ? [digits(value), "s"] : [digits(value / 60), "min"];
+    case "watts": return [digits(value), "W"];
+    case "celsius": return [digits(value), "°C"];
+    case "flag": return [value ? "yes" : "no", ""];
+  }
+}
+
+/** @param {Section} section @param {Panel} panel @returns {Mounted} */
+function chip(section, panel) {
+  const el = h("span", "chip", panel.title);
+  if (panel.note) el.title = panel.note;
+  return {el, async refresh(context) {
+    const series = panel.series[0];
+    const samples = await query("query", {query: compose(section, panel, series, series.expr, context.instantWindow)});
+    const failing = samples.filter(sample => Number(sample.value[1]) !== 1).map(sample => label(series.label, sample.metric));
+    el.className = `chip ${samples.length === 0 ? "" : failing.length ? "bad" : "ok"}`;
+    el.textContent = [panel.title, samples.length === 0 ? "unavailable" : failing.filter(Boolean).join(", ")].filter(Boolean).join(": ");
+  }};
+}
+
+/** @param {Section} section @param {Panel} panel @param {boolean} small @returns {Mounted} */
+function tile(section, panel, small) {
+  const values = h("div", "values");
+  const el = h("div", `card tile${small ? " small" : ""}`, h("div", "title", panel.title, panel.sub && h("span", "sub", panel.sub)), values);
+  if (panel.note) el.title = panel.note;
+  /** @param {Series} series @param {string} expr @param {Context} context */
+  const instant = (series, expr, context) => query("query", {query: compose(section, panel, series, expr, context.instantWindow)});
+  return {el, async refresh(context) {
+    const rows = (await Promise.all(panel.series.map(async series => {
+      const [samples, totals] = await Promise.all([instant(series, series.expr, context), series.of ? instant(series, series.of, context) : []]);
+      return samples.map((sample, index) => ({
+        label: label(series.label, sample.metric), value: Number(sample.value[1]),
+        of: totals[index] && Number(totals[index].value[1]),
+      }));
+    }))).flat();
+    const labelled = rows.length > 1;
+    values.className = `values${labelled ? " multi" : ""}`;
+    values.replaceChildren(...(rows.length ? rows : [{label: "", value: NaN, of: undefined}]).map(row => {
+      const [number, suffix] = format(row.value, panel.unit);
+      const total = row.of ? format(row.of, panel.unit).join(" ") : "";
+      return h("div", "value", h("span", "num", number), h("span", "unit", suffix),
+        (labelled || total) && h("span", "label", [labelled && row.label, total && `of ${total}`].filter(Boolean).join(" ")),
+        !!row.of && h("div", "bar", Object.assign(h("i", ""), {style: `width:${Math.min(100, 100 * row.value / row.of)}%`})));
+    }));
+  }};
+}
+
+/** @param {string} tag @param {Record<string, string|number>} attributes */
+function svg(tag, attributes) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
+  return el;
+}
+
+/** @param {Section} section @param {Panel} panel @returns {Mounted} */
+function chart(section, panel) {
+  const plot = svg("svg", {viewBox: `0 0 ${WIDTH} ${HEIGHT}`, preserveAspectRatio: "none"});
+  const max = h("span", "max"), at = h("span", "at"), cursor = h("div", "cursor"), legend = h("div", "legend");
+  const frame = h("div", "plot", plot, max, at, cursor);
+  const el = h("div", "card chart", h("div", "title", panel.title), frame, legend);
+  if (panel.note) el.title = panel.note;
+  /** @type {{label: string, points: [number, number][]}[]} */
+  let lines = [];
+  /** @type {Context|undefined} */
+  let shown;
+  /** @type {number|undefined} */
+  let hover;
+
+  // Legend values follow the cursor, falling back to each line's newest point.
+  function readout() {
+    legend.replaceChildren(...lines.map((line, index) => {
+      const point = hover === undefined ? line.points.at(-1)
+        : line.points.reduce((best, candidate) => Math.abs(candidate[0] - /** @type {number} */ (hover)) < Math.abs(best[0] - /** @type {number} */ (hover)) ? candidate : best);
+      const near = point && (hover === undefined || Math.abs(point[0] - hover) <= /** @type {Context} */ (shown).step);
+      return h("span", "", Object.assign(h("i", ""), {style: `background:${COLORS[index % COLORS.length]}`}),
+        line.label, h("b", "", format(near ? point[1] : undefined, panel.unit).join(" ")));
+    }));
+    at.textContent = hover === undefined ? "" : new Date(hover * 1000).toLocaleTimeString();
+  }
+  frame.addEventListener("mousemove", event => {
+    if (!shown) return;
+    const box = frame.getBoundingClientRect(), fraction = (event.clientX - box.left) / box.width;
+    hover = shown.start + fraction * (shown.end - shown.start);
+    cursor.style.cssText = `display:block;left:${event.clientX - box.left}px`;
+    readout();
+  });
+  frame.addEventListener("mouseleave", () => { hover = undefined; cursor.style.display = "none"; readout(); });
+
+  return {el, async refresh(context) {
+    const results = await Promise.all(panel.series.map(series => query("query_range", {
+      query: compose(section, panel, series, series.expr, context.rangeWindow),
+      start: String(context.start), end: String(context.end), step: String(context.step),
+    })));
+    lines = results.flatMap((samples, index) => samples.map(sample => ({
+      label: label(panel.series[index].label, sample.metric),
+      points: sample.values.map(([time, value]) => /** @type {[number, number]} */ ([time, Number(value)])).filter(point => Number.isFinite(point[1])),
+    })));
+    shown = context;
+    const top = Math.max(...lines.flatMap(line => line.points.map(point => point[1])), 0) || 1;
+    /** @param {number} time */
+    const x = time => ((time - context.start) / (context.end - context.start) * WIDTH).toFixed(1);
+    /** @param {number} value */
+    const y = value => (HEIGHT - value / top * (HEIGHT - 12)).toFixed(1);
+    plot.replaceChildren(
+      ...[0, 0.5, 1].map(level => svg("line", {x1: 0, x2: WIDTH, y1: y(top * level), y2: y(top * level)})),
+      ...lines.map((line, index) => {
+        // Break the line where samples are missing instead of interpolating across a stopped target.
+        let path = "", previous = -Infinity;
+        for (const [time, value] of line.points) {
+          path += time - previous > context.step * 1.5 ? `M${x(time)} ${y(value)}h0` : `L${x(time)} ${y(value)}`;
+          previous = time;
+        }
+        return svg("path", {d: path, stroke: COLORS[index % COLORS.length]});
+      }));
+    max.textContent = lines.length ? format(top, panel.unit).join(" ") : "no data";
+    readout();
+  }};
+}
+
+/** @param {Section} section @returns {Mounted} */
+function mount(section) {
+  const chips = section.status.map(panel => chip(section, panel));
+  const tiles = section.tiles.map(panel => tile(section, panel, false));
+  const charts = section.charts.map(panel => chart(section, panel));
+  const extras = section.extras.map(panel => tile(section, panel, true));
+  /** @param {string} className @param {Mounted[]} mounted */
+  const grid = (className, mounted) => mounted.length > 0 && h("div", `grid ${className}`, ...mounted.map(item => item.el));
+  const el = h("section", "", h("div", "head", h("h2", "", section.name), ...chips.map(item => item.el)), h("p", "note", section.note),
+    grid("tiles", tiles), grid("charts", charts), grid("extras", extras));
+  return {el, refresh: context => Promise.all([...chips, ...tiles, ...charts, ...extras].map(item => item.refresh(context)))};
+}
+
+/**
+ * @param {string} id @param {string} key @param {string[]} options @param {string} fallback
+ * @param {(value: string) => string} text @param {() => void} changed
+ */
+function control(id, key, options, fallback, text, changed) {
+  const select = /** @type {HTMLSelectElement} */ (byId(id));
+  select.append(...options.map(option => Object.assign(document.createElement("option"), {value: option, textContent: text(option)})));
+  const stored = localStorage.getItem(key);
+  select.value = stored !== null && options.includes(stored) ? stored : fallback;
+  select.addEventListener("change", () => { localStorage.setItem(key, select.value); changed(); });
+  return select;
+}
+
+const host = mount(config.host);
+const idle = h("div", "idle", "No engine running. Start one with ", h("code", "", "bin/run.sh halogen|gufo|strixite start --wait"), ".");
+/** @type {Map<string, Mounted>} */
+const engines = new Map();
+byId("main").append(host.el, idle);
+
+async function refresh() {
+  const span = RANGES[range.value], step = Math.max(SCRAPE, Math.ceil(span / POINTS));
+  // Align to the step so chart samples do not shift between polls.
+  const end = Math.floor(Date.now() / 1000 / step) * step;
+  /** @type {Context} */
+  const context = {start: end - span, end, step, instantWindow: `${4 * SCRAPE}s`, rangeWindow: `${Math.max(4 * SCRAPE, step + SCRAPE)}s`};
+  const up = await query("query", {query: `up{job=~"${config.engines.map(engine => engine.job).join("|")}"} == 1`});
+  const active = new Set(up.map(sample => sample.metric.job));
+  for (const engine of config.engines) {
+    const mounted = engines.get(engine.job);
+    if (active.has(engine.job) && !mounted) {
+      const created = mount(engine);
+      engines.set(engine.job, created);
+      byId("main").append(created.el);
+    } else if (!active.has(engine.job) && mounted) {
+      mounted.el.remove();
+      engines.delete(engine.job);
+    }
+  }
+  idle.hidden = engines.size > 0;
+  await Promise.all([host, ...engines.values()].map(section => section.refresh(context)));
+}
+
+/** @type {number|undefined} */
+let timer;
+async function poll() {
+  clearTimeout(timer);
+  if (!document.hidden) {
+    try {
+      await refresh();
+      byId("error").textContent = "";
+      byId("updated").textContent = new Date().toLocaleTimeString();
+    } catch (error) {
+      byId("error").textContent = `Prometheus query failed: ${error instanceof Error ? error.message : error}. Is bin/monitor.sh started?`;
+    }
+    document.body.classList.toggle("stale", byId("error").textContent !== "");
+  }
+  clearTimeout(timer);
+  timer = setTimeout(poll, Number(interval.value) * 1000);
+}
+
+const range = control("range", "strix.range", Object.keys(RANGES), "15 min", value => value, poll);
+const interval = control("refresh", "strix.refresh", REFRESH.map(String), "2", value => `${value} s`, poll);
+document.addEventListener("visibilitychange", poll);
+poll();
+</script>
+</body>
+</html>

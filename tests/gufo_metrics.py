@@ -5,13 +5,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+import dashboard_panels
+
 ROOT = Path(__file__).resolve().parents[1]
-dashboard = json.loads((ROOT / "config/monitoring/dashboards/gufo.json").read_text())
 
 
 def expression(title: str, index: int = 0) -> str:
-    panel = next(panel for panel in dashboard["panels"] if panel["title"] == title)
-    return panel["targets"][index]["expr"].replace("$__rate_interval", "1m")
+    return dashboard_panels.expression("gufo", title, index)
 
 
 def series(name: str, values: str, job: str = "gufo") -> dict[str, str]:
@@ -52,7 +52,7 @@ tests = [
           expression("Draft acceptance share"), None),
     check(base + [series("llamacpp:prompt_tokens_cached_total", "0+0x6"),
                   series("llamacpp:prompt_tokens_total", "0+0x6")],
-          expression("Approximate windowed reused-token share"), None),
+          expression("Reused prompt share"), None),
 ]
 pins = dict(line.split("=", 1) for line in (ROOT / "config/monitoring/pins.env").read_text().splitlines() if line and not line.startswith("#"))
 with tempfile.TemporaryDirectory(prefix="gufo-promql-") as directory:

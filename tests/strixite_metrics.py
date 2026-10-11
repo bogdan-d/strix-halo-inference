@@ -5,13 +5,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+import dashboard_panels
+
 ROOT = Path(__file__).resolve().parents[1]
-dashboard = json.loads((ROOT / "config/monitoring/dashboards/strixite.json").read_text())
 
 
 def expression(title: str, index: int = 0) -> str:
-    panel = next(panel for panel in dashboard["panels"] if panel["title"] == title)
-    return panel["targets"][index]["expr"].replace("$__rate_interval", "1m")
+    return dashboard_panels.expression("strixite", title, index)
 
 
 def series(name: str, values: str, job: str = "strixite") -> dict[str, str]:
@@ -42,14 +42,14 @@ tests = [
     check([up, speed, series("strix_busy", "0+0x6")], expression("Last qualifying request speed", 1), 50),
     check([up, series("strix_last_decode_tokens_per_second", "0+0x6")], expression("Last qualifying request speed", 1), None),
     check([up, series("strix_mtp_accepted_tokens_total", "0+0x6"), series("strix_mtp_drafted_tokens_total", "0+0x6")],
-          expression("Windowed draft acceptance"), None),
+          expression("Draft acceptance share"), None),
     check([up, series("strix_prompt_tokens_cached_total", "0+0x6"), series("strix_prompt_tokens_total", "0+0x6")],
-          expression("Windowed reused-token share"), None),
+          expression("Reused prompt share"), None),
     check([up, series("strix_prompt_tokens_cached_total", "0+5x6"), series("strix_prompt_tokens_total", "0+10x6")],
-          expression("Windowed reused-token share"), 0.5),
+          expression("Reused prompt share"), 0.5),
     check([up, series("strix_mtp_accepted_tokens_total", "0 50 100 150 200 0 50"),
            series("strix_mtp_drafted_tokens_total", "0 100 200 300 400 0 100")],
-          expression("Windowed draft acceptance"), 0.5),
+          expression("Draft acceptance share"), 0.5),
 ]
 pins = dict(line.split("=", 1) for line in (ROOT / "config/monitoring/pins.env").read_text().splitlines()
             if line and not line.startswith("#"))

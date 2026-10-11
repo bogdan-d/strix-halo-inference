@@ -1,6 +1,7 @@
 global:
-  scrape_interval: 5s
-  scrape_timeout: 3s
+  # Keep SCRAPE in dashboard.html equal to this interval.
+  scrape_interval: 2s
+  scrape_timeout: 2s
   evaluation_interval: 15s
 
 scrape_configs:

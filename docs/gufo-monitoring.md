@@ -2,7 +2,7 @@
 
 The current image is 0.12.0. Existing metric contracts remain compatible. Native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.11.0 and were not repeated as benchmarks.
 
-Open [Gufo telemetry](http://127.0.0.1:3000/d/strix-halo-gufo) after starting monitoring and Gufo:
+Open [the dashboard page](../config/monitoring/dashboard.html) after starting monitoring and Gufo. Its Gufo section appears while the engine's metrics scrape is up:
 
 ```bash
 bin/monitor.sh pull
@@ -12,7 +12,7 @@ bin/run.sh gufo start --wait
 
 If either is already running, use the existing instance or explicitly stop and restart it. When upgrading an existing monitoring setup, stop monitoring, pull its new pinned readiness-probe image, then restart monitoring. Gufo itself needs no new image, flag or configuration. Start only one inference engine at a time. Monitoring does not start an engine, and inference works without monitoring.
 
-Run Pi against Gufo as usual and watch the dashboard. The [host dashboard](http://127.0.0.1:3000/d/strix-halo-host) and [Halogen dashboard](http://127.0.0.1:3000/d/strix-halo-halogen) remain separate. Gufo's integration does not depend on Halogen metrics being available. Collection and dashboard refresh happen every five seconds; very short requests can finish between scrapes.
+Run Pi against Gufo as usual and watch the dashboard. Host readings are on the same page, above the engine section. Gufo's integration does not depend on Halogen metrics being available. Collection happens every two seconds and the page refreshes at the interval chosen in its header; very short requests can finish between scrapes. See [monitoring setup](monitoring.md).
 
 ## Readiness is not scrape health
 
@@ -20,7 +20,7 @@ Run Pi against Gufo as usual and watch the dashboard. The [host dashboard](http:
 - **Readiness collection:** Prometheus could collect the HTTP probe's result. Up means the probe ran, not that Gufo passed it.
 - **Model readiness:** the probe received HTTP 200 from `/ready` and parsed a JSON body with `status: ready`. Loading, shutdown, device loss or connectivity failure shows Not ready. If the probe exporter itself cannot be scraped, this shows Unavailable instead of trusting an old successful result. Ready does not guarantee an unoccupied execution slot.
 
-Gufo 0.11.0 has no native Prometheus readiness gauge. The official Prometheus blackbox-exporter supplies that verified gap in a fourth, separately containerized monitoring service. Its HTTP probe has a two-second timeout, a 4 KiB response-body limit and no redirects. Malformed JSON, other status values and HTTP status codes other than 200 fail the probe. The launcher's monitoring `status` checks service availability, not model readiness.
+Gufo 0.11.0 has no native Prometheus readiness gauge. The official Prometheus blackbox-exporter supplies that verified gap in a separately containerized monitoring service. Its HTTP probe has a two-second timeout, a 4 KiB response-body limit and no redirects. Malformed JSON, other status values and HTTP status codes other than 200 fail the probe. The launcher's monitoring `status` checks service availability, not model readiness.
 
 Stopping Gufo makes native scrape health Down and model readiness Not ready after the next collections. Current native readings become Unavailable; historical charts retain earlier samples and show gaps. Stopping the probe makes readiness Unavailable even if native metrics remain reachable. Switching to Halogen does not make old Gufo values look current. The device-loss diagnostic depends only on native scrape health, so it can remain visible when model readiness fails.
 
@@ -40,7 +40,7 @@ These meanings were checked against the pinned Gufo 0.11.0 source and actual wir
 | Draft acceptance share | Rate of `llamacpp:spec_decode_num_accepted_tokens_total` divided by `llamacpp:spec_decode_num_draft_tokens_total`. These update at finish or cancellation. No proposals makes the share unavailable. Acceptance alone does not demonstrate speedup. |
 | Speculative proposal throughput | Proposed and accepted draft-token counter rates, in tokens per wall second. These can appear as completion-accounting bursts rather than live decoding progress. |
 | Draft tokens per verification round | Proposed draft-token rate divided by `llamacpp:spec_decode_num_drafts_total` rate, which counts verification rounds. Not generated tokens per round or draft compute cost. |
-| Confirmed device losses | `gufo_device_lost_total`, since process start. A fatal device-context loss leads to exit and can be missed between five-second scrapes. Zero is not proof of GPU health. No device-loss fault was induced during validation. |
+| Confirmed device losses | `gufo_device_lost_total`, since process start. A fatal device-context loss leads to exit and can be missed between scrapes. Zero is not proof of GPU health. No device-loss fault was induced during validation. |
 
 **Processing speed and throughput are different measurements.** Unlike Halogen, Gufo's execution token counters and finish-accounted `prompt_seconds_total` / `tokens_predicted_seconds_total` use different clocks. Dividing their rates would misrepresent a long in-flight request, so this dashboard uses Gufo's explicit historical speed gauges. The stage-time counters remain available as raw cumulative accounting, not dashboard speed ratios. Shared batched stage time is not a GPU busy stopwatch or end-to-end request latency.
 
@@ -52,7 +52,7 @@ Configured context capacity is not exported by native metrics. The default launc
 
 Prometheus fetches `http://127.0.0.1:8080/metrics`; blackbox-exporter probes `http://127.0.0.1:8080/ready`. Both use the existing host-network boundary. The new exporter listens only on `127.0.0.1:9115` and receives only its read-only probe configuration, no host sensor mounts, GPU devices, weights, engine cache, Podman socket or user directory. Like the other monitoring services, it is rootless, has a read-only root filesystem, drops capabilities and uses no-new-privileges. It adds no persistent volume.
 
-The probe endpoint accepts a target from its local caller and host networking is not network isolation. Do not expose it, Prometheus or Grafana beyond loopback without separate access controls. The configured collection target is fixed to Gufo's local readiness endpoint. Probe response bodies are validated transiently, not stored as telemetry; debug probing is not enabled and probe logging is restricted to warnings. The readiness response includes model identity, not conversation content.
+The probe endpoint accepts a target from its local caller and host networking is not network isolation. Do not expose it or Prometheus beyond loopback without separate access controls. The configured collection target is fixed to Gufo's local readiness endpoint. Probe response bodies are validated transiently, not stored as telemetry; debug probing is not enabled and probe logging is restricted to warnings. The readiness response includes model identity, not conversation content.
 
 Native metric collection retains only 15 reviewed, unlabeled aggregate scalars. Probe collection retains only `probe_success`, `probe_duration_seconds` and `probe_http_status_code`. All publisher-provided labels are removed: stored labels are restricted to metric name, fixed job and loopback instance. Each native scrape allows at most 100 post-relabel samples, each readiness scrape 10. New metrics are dropped unless reviewed. Label stripping can make future labeled variants collide and fail collection rather than silently trusting changed semantics. This limits stored data, not what a future engine might return in its HTTP response.
 
@@ -68,6 +68,8 @@ No prompts, completions, source code, request IDs, cache keys, `/slots` polling 
 Some per-request timing and cache details exist in generation responses, but collecting those responses would require a different instrumentation boundary. This stack does not intercept Pi traffic or invent aggregate telemetry from them. Host GPU sensors remain on the host dashboard.
 
 ## Measured collection cost
+
+These measurements used the earlier five-second scrape interval and were not repeated at two seconds.
 
 A native response was 2,466 bytes excluding HTTP headers. The job retains 15 native scalars, plus Prometheus's automatic scrape series. During a 60-second idle interval with the browser closed, native scrape duration averaged approximately 1.54 ms with a 2.31 ms maximum. Readiness-probe collection averaged 2.57 ms with a 3.32 ms maximum, including the exporter round trip. These are HTTP collection durations, not inference CPU time.
 

@@ -48,8 +48,8 @@ elif a[0] == "run":
                                 capture_output=True, text=True, timeout=10)
         return result, [json.loads(line) for line in calls.read_text().splitlines()]
 
-    for args in ((), ("unknown",), ("start", "--fg"), ("grafana", "start"),
-                 ("grafana", "logs", "extra"), ("stop", "extra")):
+    for args in ((), ("unknown",), ("start", "--fg"), ("prometheus", "start"),
+                 ("prometheus", "logs", "extra"), ("grafana", "logs"), ("stop", "extra")):
         result, recorded = run(*args)
         assert result.returncode == 2 and not recorded, (args, result)
     result, recorded = run("start", EXISTING="1")
@@ -61,17 +61,17 @@ elif a[0] == "run":
     assert [a[-1] for a in recorded if a[0] == "stop"] == ["owned-strix-halo-monitor-exporter", "owned-strix-halo-monitor-probe"]
     assert not any(a[:2] == ["volume", "rm"] for a in recorded)
     result, recorded = run("start", EXITED="1")
-    assert result.returncode == 1 and len([a for a in recorded if a[0] == "stop"]) == 4
+    assert result.returncode == 1 and len([a for a in recorded if a[0] == "stop"]) == 3
     result, recorded = run("start")
     assert result.returncode == 0, result
     launched = [a for a in recorded if a[0] == "run"]
-    assert len(launched) == 4 and all("--detach" in a for a in launched)
+    assert len(launched) == 3 and all("--detach" in a for a in launched)
     assert not any(a[0] == "stop" for a in recorded)
     result, recorded = run("stop", EXISTING="1", UNOWNED_CONTAINER="1")
     assert result.returncode == 1 and not any(a[0] == "stop" for a in recorded)
-    result, recorded = run("grafana", "logs", "--follow", EXISTING="1", UNOWNED_CONTAINER="1")
+    result, recorded = run("prometheus", "logs", "--follow", EXISTING="1", UNOWNED_CONTAINER="1")
     assert result.returncode == 1 and not any(a[0] == "logs" for a in recorded)
-    result, recorded = run("grafana", "logs", "--follow", EXISTING="1")
-    assert result.returncode == 0 and recorded[-1] == ["logs", "--tail", "100", "--follow", "strix-halo-monitor-grafana"]
+    result, recorded = run("prometheus", "logs", "--follow", EXISTING="1")
+    assert result.returncode == 0 and recorded[-1] == ["logs", "--tail", "100", "--follow", "strix-halo-monitor-prometheus"]
     assert not any(a[0] == "stop" for a in recorded)
 print("Monitoring ownership, detached startup and rollback policy checks passed.")

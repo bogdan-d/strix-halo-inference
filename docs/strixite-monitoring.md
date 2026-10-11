@@ -2,7 +2,7 @@
 
 The current image is 0.2.4. Existing accounting semantics and queries remain compatible. Native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed measurements below used 0.2.3. The additive `strix_think_closed_for_call_total` counter is intentionally dropped by the existing allowlist. Streamed prefill progress is not a new Prometheus progress gauge.
 
-Open [Strixite telemetry](http://127.0.0.1:3000/d/strix-halo-strixite) after starting the optional monitoring stack and Strixite:
+Open [the dashboard page](../config/monitoring/dashboard.html) after starting the optional monitoring stack and Strixite. Its Strixite section appears while the engine's metrics scrape is up:
 
 ```bash
 bin/monitor.sh start
@@ -10,7 +10,7 @@ bin/run.sh strixite start --wait
 bin/run.sh strixite status
 ```
 
-Use existing instances if already running. If updating a running monitoring stack, stop and restart monitoring to load its scrape and probe configuration. No new monitoring image or container is needed. Stop the active inference engine and verify memory release before starting Strixite. Monitoring never starts or stops inference. The [host](http://127.0.0.1:3000/d/strix-halo-host), [Halogen](halogen-monitoring.md) and [Gufo](gufo-monitoring.md) dashboards remain separate.
+Use existing instances if already running. If updating a running monitoring stack, stop and restart monitoring to load its scrape and probe configuration. No new monitoring image or container is needed. Stop the active inference engine and verify memory release before starting Strixite. Monitoring never starts or stops inference. Host readings are on the same page. [Halogen](halogen-monitoring.md) and [Gufo](gufo-monitoring.md) have their own sections and semantics. See [monitoring setup](monitoring.md).
 
 ## Readiness and current readings
 
@@ -18,7 +18,7 @@ The native scrape job fetches localhost:5300 `/metrics`. Successful collection i
 
 Health can include a startup `degraded` note. That describes cache adaptation, not readiness or current memory pressure, and is not exported as a metric in this pin. Check `bin/run.sh strixite status` and logs for degradation, expected model and context. The readiness probe does not enforce 262144 capacity, allowing deliberate smaller-context launches; the dashboard shows actual configured capacity from native telemetry. The local baseline still uses native 262144, YaRN factor 1, MTP on, thinking nudge off and low-memory fail.
 
-Every native panel is gated on a successful native scrape. Diagnostics remain visible if readiness fails but metrics are still reachable. Stopping Strixite makes scrape health Down, readiness Not ready and current native readings Unavailable after the next collections. Historical graphs retain prior data and show gaps. A Prometheus failure is a data-source error, not an engine failure. Scraping and dashboard refresh happen every five seconds, so shorter events can be missed.
+Every native panel is gated on a successful native scrape. Diagnostics remain visible if readiness fails but metrics are still reachable. Stopping Strixite makes scrape health Down, readiness Not ready and current native readings Unavailable after the next collections. Historical graphs retain prior data and show gaps. A Prometheus failure is a data-source error, not an engine failure. Scraping happens every two seconds and the page refreshes at the interval chosen in its header, so shorter events can be missed.
 
 ## Strixite 0.2.3 accounting
 
@@ -46,7 +46,7 @@ No current-request token progression, time-to-first-token or inter-token distrib
 
 ## Collection and privacy
 
-The integration reuses the same four rootless monitoring containers and existing named volumes. It adds no device grants, host mounts, socket mounts, permissions, exporters, proxy or Pi traffic interception. Collection is localhost-only and requires no authentication under the current launcher. Host networking remains shared, not isolated. Keep all endpoints local, including the blackbox-exporter probe endpoint that accepts caller-supplied targets.
+The integration reuses the same rootless monitoring containers and the existing Prometheus volume. It adds no device grants, host mounts, socket mounts, permissions, exporters, proxy or Pi traffic interception. Collection is localhost-only and requires no authentication under the current launcher. Host networking remains shared, not isolated. Keep all endpoints local, including the blackbox-exporter probe endpoint that accepts caller-supplied targets.
 
 Prometheus retains 33 reviewed native metric families, currently 37 scalars. Only fixed job/loopback instance labels and bounded `outcome` and `reason` values survive relabeling; unreviewed metric names and nonempty unrecognized dimension values are dropped. Preserving the reviewed dimensions prevents collapsing the three outcomes or rejection reasons into duplicate samples. Each native scrape allows 100 retained samples; each probe scrape allows 10 and retains only success, duration and HTTP status. Publisher-added labels are otherwise removed, so a changed labeled variant can fail collection instead of being silently treated as the verified scalar. Review semantics after image changes.
 

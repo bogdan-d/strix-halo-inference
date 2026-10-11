@@ -131,6 +131,16 @@ Shell syntax, ShellCheck, monitoring lifecycle-policy checks and the real pinned
 
 No inference launcher, engine image or model pin, live Pi setting, host permission, kernel or BIOS setting was changed. Engine pins and live Pi files remained byte-identical. The new image uses ordinary Podman storage, and monitoring history remains in its existing named volumes. Validation used public synthetic prompts and may add state to the existing engine cache; no cache was rotated or deleted. Both engines, all monitoring containers and disposable browsers are stopped at completion, matching the initial state. Temporary screenshots were removed. Optimization tickets 01 through 08 are complete.
 
+## Single-page dashboard, October 12, 2026
+
+Grafana, its pin, its four provisioned dashboards and its provisioning files were replaced by one checked-in HTML page that queries Prometheus directly. Monitoring is now three containers. Scraping changed from five seconds to two, with a two-second timeout, to match the page's default refresh. The earlier monitoring sections above describe the Grafana setup as validated at the time.
+
+Every query on the page was accepted by real Prometheus 3.15.0. Every query from the four removed dashboards is present unchanged, except the host sensor-availability checks, which were dropped, and per-device disk rates, which are now summed. One new reading was added: Strixite last-session tokens divided by configured capacity. The existing promtool policy checks for all three engines pass against the page's definitions, and the monitoring lifecycle check passes for the three-container stack.
+
+Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4 were each started at native 256K, given real non-streaming generations, and compared against their raw `/metrics`: token counters, speeds, context share, reuse share and draft acceptance agreed. Each engine section, the no-engine state and the Prometheus-unreachable state were rendered in headless Firefox opening the page as a local file. Each engine was stopped afterward with memory released, and monitoring was stopped. Prometheus answered a `null` origin with a matching CORS header.
+
+Not exercised: Chromium-based browsers, the 1 hour and 6 hour ranges, refresh intervals other than the default, hover readouts, long-context or cancelled requests, and collection overhead at two-second scraping. The old `strix-halo-monitor-grafana` volume and pulled Grafana image were left in place.
+
 ## Remaining work
 
 Neither restart-safe engine-cache restoration nor long-context performance has been comprehensively tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy or image-build CI was added. Optional host, Halogen and Gufo monitoring now work. Matched-engine benchmarks, near-capacity workloads and multi-request serving remain future work rather than completed telemetry tickets.

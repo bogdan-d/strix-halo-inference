@@ -5,13 +5,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+import dashboard_panels
+
 ROOT = Path(__file__).resolve().parents[1]
-dashboard = json.loads((ROOT / "config/monitoring/dashboards/halogen.json").read_text())
 
 
 def expression(title: str, index: int = 0) -> str:
-    panel = next(panel for panel in dashboard["panels"] if panel["title"] == title)
-    return panel["targets"][index]["expr"].replace("$__rate_interval", "1m")
+    return dashboard_panels.expression("halogen", title, index)
 
 
 def series(name: str, values: str) -> dict[str, str]:
