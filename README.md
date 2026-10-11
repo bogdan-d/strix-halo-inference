@@ -9,6 +9,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Local validation results and limitations](docs/validation.md).
 - [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
 - [Medium versus xhigh for routine coding](docs/thinking-comparison.md), with local exploratory results and a repeatable Pi comparison.
+- [Optional Grafana host monitoring](docs/monitoring.md), independently containerized with bounded history and explicit memory-accounting caveats.
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 
@@ -61,6 +62,18 @@ Use `bin/run.sh halogen start --wait` to wait for readiness and print the endpoi
 `bin/run.sh halogen status` summarizes the actual container's image identity and OCI version, context, speculation, cache limits and readiness. Current pins and shell overrides do not redefine a running container's configuration. Cache disk usage comes from `du` over the entire mounted cache directory, including records for other configurations, and is not the active engine's retained-cache counter. RAM cache usage is unavailable unless verified telemetry is added. Allocation figures extracted from recent startup logs are labeled historical, not live. They may become unavailable when startup lines fall outside the last 1,000 log lines. Host RAM and swap come from `/proc/meminfo`; GTT comes from each GPU's sysfs counters and includes other GPU users. These are separate accounting views, not additive estimates of free memory. In particular, Halogen's pinned weights can make `MemAvailable` misleading. Status remains nonzero for missing, stopped, paused, starting or unresponsive engines. Inspection, disk usage, log collection and readiness probes have finite timeouts. Grafana is not required.
 
 The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client. Vision is not enabled in this initial setup.
+
+## Optional host dashboard
+
+Start the independently managed Grafana, Prometheus and node-exporter containers:
+
+```bash
+bin/monitor.sh pull
+bin/monitor.sh start
+bin/monitor.sh status
+```
+
+Open [the dashboard](http://127.0.0.1:3000/d/strix-halo-host). It shows live CPU, RAM, swap, GTT, memory pressure, disk activity and accessible GPU sensors. It does not yet show engine throughput or context occupancy. Use `bin/monitor.sh grafana logs --follow` for logs and `bin/monitor.sh stop` to stop only monitoring. All services listen on loopback. History survives restart with seven-day and 2 GiB size-based retention. See [monitoring setup and limits](docs/monitoring.md) for permissions, measured overhead and cleanup. Inference remains usable without the dashboard.
 
 ## Update engine images
 
@@ -127,12 +140,13 @@ Pre-existing empty directories and four `.ini` files under `/home/bogdan/models`
 ## Checks and remaining work
 
 ```bash
-bash -n bin/*.sh tests/*.sh
+bash -c 'for file in bin/*.sh tests/*.sh; do bash -n "$file" || exit; done'
 shellcheck -x -P SCRIPTDIR bin/*.sh tests/*.sh
 tests/models.sh
 tests/update.sh
 python tests/run.py
 python tests/status.py
+PYTHONDONTWRITEBYTECODE=1 python tests/monitor.py
 ```
 
 The offline model test verifies refusal to overwrite a corrupt, size-correct model file and rejection of missing weights. The offline update test checks all-or-nothing pin changes on pull failure, correct release-section selection, refusal to rotate caches with an active engine, archive preservation and version-downgrade refusal. Its CLI stubs test project policy, not external provider compatibility. `tests/live.py ENGINE` requires a running model and verifies multi-turn recall, forced tool arguments, streaming disconnect slot release and generation after cancellation. It does not run during ordinary offline checks.
