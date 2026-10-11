@@ -10,6 +10,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
 - [Medium versus xhigh for routine coding](docs/thinking-comparison.md), with local exploratory results and a repeatable Pi comparison.
 - [Optional Grafana host monitoring](docs/monitoring.md), independently containerized with bounded history and explicit memory-accounting caveats.
+- [Halogen inference telemetry](docs/halogen-monitoring.md), with native token, processing-speed, pool, cache and speculation readings.
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 
@@ -73,7 +74,7 @@ bin/monitor.sh start
 bin/monitor.sh status
 ```
 
-Open [the dashboard](http://127.0.0.1:3000/d/strix-halo-host). It shows live CPU, RAM, swap, GTT, memory pressure, disk activity and accessible GPU sensors. It does not yet show engine throughput or context occupancy. Use `bin/monitor.sh grafana logs --follow` for logs and `bin/monitor.sh stop` to stop only monitoring. All services listen on loopback. History survives restart with seven-day and 2 GiB size-based retention. See [monitoring setup and limits](docs/monitoring.md) for permissions, measured overhead and cleanup. Inference remains usable without the dashboard.
+Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). It shows live CPU, RAM, swap, GTT, memory pressure, disk activity and accessible GPU sensors. The separate [Halogen dashboard](http://127.0.0.1:3000/d/strix-halo-halogen) shows native inference metrics with explicit reporting limits. Gufo telemetry is not yet integrated. Use `bin/monitor.sh grafana logs --follow` for logs and `bin/monitor.sh stop` to stop only monitoring. All services listen on loopback. History survives restart with seven-day and 2 GiB size-based retention. See [monitoring setup and limits](docs/monitoring.md) for permissions, measured overhead and cleanup. Inference remains usable without the dashboard.
 
 ## Update engine images
 

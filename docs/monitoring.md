@@ -10,6 +10,8 @@ bin/monitor.sh status
 
 Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). No login is required. Anonymous access is read-only, and dashboard changes belong in the checked-in configuration. Nothing starts automatically at login. An inference engine does not require monitoring to be running.
 
+The same stack also provides [Halogen inference telemetry](halogen-monitoring.md) in a separate dashboard. Restart monitoring once when upgrading from host-only configuration to load its new scrape job. Starting monitoring does not start an engine.
+
 ```bash
 bin/monitor.sh grafana logs
 bin/monitor.sh prometheus logs --follow
@@ -42,7 +44,7 @@ Only node-exporter gets additional host mounts, all read-only:
 - `/proc/pressure` for pressure-stall information.
 - `/sys` for DRM and hwmon sensors, including their symlink targets under the device tree.
 
-There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. No engine endpoint is scraped in this ticket. Halogen and Gufo inference panels remain separate work.
+There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen aggregate metrics over its existing loopback endpoint. Gufo inference panels remain separate pending work.
 
 Grafana uses built-in panels and its built-in Prometheus data source. No additional plugins are installed. Plugin preinstallation, update checks, analytics reporting and the unused alerting subsystem are disabled.
 
