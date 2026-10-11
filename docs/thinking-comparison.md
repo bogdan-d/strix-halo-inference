@@ -6,6 +6,8 @@ On this host, `medium` finished faster in all eight paired comparisons, and both
 
 Pi 1.1.0 used Halogen 0.17.5 and Gufo 0.11.0 with the existing image and model pins, 262,144-token capacity and MTP enabled. Each engine completed two trials per task per effort level, for 16 measured trials. Mean time includes Pi process startup, inference and tool execution, but excludes engine loading and the independent final check.
 
+These measurements predate the shared Bubblewrap boundary described below. They used temporary configuration and workspaces but ran tools with host user permissions. The full comparison has not been repeated under the new sandbox, so these are not sandboxed timing results.
+
 | Engine | Effort | Passed | Mean task time | Total tool calls | Output tokens across four trials | Tool results reporting errors |
 |---|---|---|---|---|---|---|
 | Halogen | medium | 4/4 | 34.59 s | 25 | 7,892 | 0 |
@@ -51,12 +53,17 @@ Use `--thinking xhigh` instead for substantial or ambiguous work. Inside Pi, `/t
 Stop any managed inference engine first. Run from this checkout:
 
 ```bash
+PYTHONDONTWRITEBYTECODE=1 python tests/pi_sandbox.py
 PYTHONDONTWRITEBYTECODE=1 python tests/thinking.py --self-check
 PYTHONDONTWRITEBYTECODE=1 python tests/thinking.py --repeats 2
 ```
 
-The self-check is offline. It verifies that both original task implementations fail their acceptance checks and that event accounting retains truncation and tool-call information. The comparison requires Pi, rootless Podman and the already downloaded pinned weights. It manually starts and stops each engine at 256K with MTP, refuses to run while a managed engine is active, and prints JSON summary records rather than raw conversations. Each Pi invocation has a ten-minute limit. Two repeats produce 16 trials and can take many minutes.
+The sandbox check is offline and exercises actual hidden paths, environment clearing, writable workspace access, immutable settings and failure when Bubblewrap is missing. The thinking self-check is also offline. It verifies that both original task implementations fail their acceptance checks inside the sandbox and that event accounting retains truncation and tool-call information. The comparison requires Pi, Bubblewrap, this host's existing Homebrew installation, rootless Podman and the already downloaded pinned weights. It manually starts and stops each engine at 256K with MTP, refuses to run while a managed engine is active, and prints JSON summary records rather than raw conversations. Each Pi invocation has a ten-minute limit. Two repeats produce 16 trials and can take many minutes.
 
 Temporary Pi configuration, workspaces and engine caches live in a uniquely named directory under the ignored `results` directory on disk, not in the normal agent directory or normal engine caches. They are removed after the owned containers stop. A cleanup failure with an engine still running retains temporary state and reports its path rather than deleting mounted data. The live Pi models and settings are checked for byte-for-byte preservation. Existing weights and normal engine caches are not modified by the harness.
 
-This isolation is not a security sandbox. Pi's tools still run with host user permissions. The harness uses public synthetic tasks, a temporary home and a minimal environment without inherited provider credentials. Review the fixtures and harness before running them. Do not replace the public tasks with private source or prompts and then publish output or conversation artifacts.
+Each fresh host workspace is presented at the stable sandbox path `/workspace`. That changes model-visible paths and potential prefix-cache reuse from the historical host-path runs, so future sandboxed timings should not be treated as directly matched repetitions of the published matrix.
+
+All model-driven Pi processes and independent acceptance checks now run inside the shared [Bubblewrap boundary](../tests/pi_sandbox.py), also used by the Strixite coding check. The current synthetic workspace is the only writable host mount. Temporary model/settings inputs are mounted read-only into an ephemeral agent directory, which allows Pi to create its own locks and empty runtime authentication file without exposing host credentials. Only `/usr` and the existing Homebrew software tree are available read-only. Host home directories, live Pi settings, repositories, weights, inference caches and GPU devices are not mounted. Home, `/tmp`, and runtime agent state are ephemeral, and the environment is cleared. There is no unsandboxed fallback if Bubblewrap or the preflight fails. The fixed acceptance checks remain protected from agent edits and execute imported model-written code inside the same boundary.
+
+Host networking remains shared to reach localhost inference, so this is filesystem and process isolation, not a network sandbox. It does not authorize exposing real projects or credentials to the model. The boundary and read-only provider registration were checked locally without starting inference engines; the full Halogen/Gufo comparison was not rerun for this isolation change. Review fixtures before running them, and do not replace public tasks with private source or prompts and then publish output or conversation artifacts.

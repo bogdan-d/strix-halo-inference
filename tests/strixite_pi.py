@@ -15,8 +15,9 @@ import tempfile
 import time
 from urllib.request import urlopen
 
+from pi_sandbox import sandbox_command, verify_sandbox
+
 ROOT = Path(__file__).resolve().parents[1]
-BREW = Path("/home/linuxbrew/.linuxbrew")
 LIVE_AGENT = Path(os.environ.get("PI_CODING_AGENT_DIR", str(Path.home() / ".pi/agent")))
 LITERAL = 'id_of("<|im_end|>") <tool_call> </tool_call> </think>\nmarker = violet\n'
 SOURCE = "def select_largest(values):\n    return min(values)\n"
@@ -53,28 +54,15 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix="strixite-pi-") as directory:
             temp = Path(directory)
-            for folder in ("agent", "home", "project"):
+            for folder in ("agent", "project"):
                 (temp / folder).mkdir()
             (temp / "agent/models.json").write_text(json.dumps({"providers": {"strixite": provider}}))
             (temp / "agent/settings.json").write_text(json.dumps({"retry": {"enabled": False},
                 "enableInstallTelemetry": False, "enableAnalytics": False,
                 "shellPath": "/bin/bash", "compaction": {"reserveTokens": 16384, "keepRecentTokens": 32768}}))
-            shutil.copy(ROOT / "tests/strixite_guard.ts", temp / "guard.ts")
-            sandbox = ["bwrap", "--unshare-all", "--share-net", "--die-with-parent", "--new-session",
-                       "--ro-bind", "/usr", "/usr", "--ro-bind", str(BREW), str(BREW),
-                       "--symlink", "usr/bin", "/bin", "--symlink", "usr/lib", "/lib",
-                       "--symlink", "usr/lib", "/lib64", "--proc", "/proc", "--dev", "/dev",
-                       "--tmpfs", "/tmp", "--dir", "/etc", "--bind", str(temp), "/trial",
-                       "--chdir", "/trial/project", "--clearenv",
-                       "--setenv", "PATH", f"{BREW}/bin:/usr/bin:/bin",
-                       "--setenv", "HOME", "/trial/home", "--setenv", "LANG", "C.UTF-8",
-                       "--setenv", "PI_CODING_AGENT_DIR", "/trial/agent", "--setenv", "PI_OFFLINE", "1"]
-            # Check the actual boundary before enabling model-generated tools.
-            boundary = subprocess.run(sandbox + ["/bin/bash", "-c",
-                "test ! -e /home/bogdan && test ! -e /models && test ! -e /var/mnt && "
-                "test ! -e /dev/kfd && test -w /trial/project && pi --version"],
-                capture_output=True, text=True, timeout=30, check=True)
-            assert boundary.stdout.strip() == "1.1.0", boundary
+            shutil.copy(ROOT / "tests/strixite_guard.ts", temp / "agent/guard.ts")
+            sandbox = sandbox_command(temp / "project", temp / "agent")
+            assert verify_sandbox(temp / "project", temp / "agent") == "1.1.0"
             for effort in ("off", "medium"):
                 project = temp / "project"
                 (project / "sample.py").write_text(SOURCE)
@@ -88,7 +76,7 @@ def main():
                           "Work only on these synthetic files. Do not install anything or access the network.")
                 started = time.monotonic()
                 run = subprocess.run(sandbox + ["pi", "--offline", "--provider", "strixite", "--model", "qwen3.8-flash-next",
-                    "--thinking", effort, "--mode", "json", "--no-session", "--no-extensions", "--extension", "/trial/guard.ts",
+                    "--thinking", effort, "--mode", "json", "--no-session", "--no-extensions", "--extension", "/agent/guard.ts",
                     "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--no-mcp",
                     "--tools", "read,edit,bash", prompt], capture_output=True, text=True, timeout=300)
                 assert run.returncode == 0, run.stderr

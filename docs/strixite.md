@@ -99,6 +99,8 @@ The isolated check therefore loads the test-only [strict argument guard](../test
 
 `tests/strixite_pi.py` creates temporary agent settings and synthetic Python files, copies the guard there and runs the entire Pi process through existing Bubblewrap. Only `/usr` and the existing `/home/linuxbrew/.linuxbrew` installation are exposed read-only, plus the temporary writable test directory. The boundary check confirms `/home/bogdan`, the model store, repository paths and GPU devices are absent. The process environment is cleared, discovery of host extensions, skills and context is disabled, and sessions are not retained. Host networking remains shared for the localhost API, so this is filesystem and process isolation, not a network sandbox. Temporary test files and captured JSON events are deleted after the run. Hashes of live Pi `models.json` and `settings.json` remained unchanged.
 
+The current runner uses the shared [coding-test boundary](../tests/pi_sandbox.py), also enforced by the Halogen/Gufo thinking comparison. It mounts only the current synthetic workspace writable, with immutable configuration and guard files inside an ephemeral agent directory. Pi's runtime locks and empty authentication file stay in that ephemeral directory. No sibling workspaces or inference caches are exposed. Independent acceptance code uses the same sandbox. The original results below used the earlier Strixite-only boundary; that model loop has not been repeated after this consolidation. Real shared-boundary checks and offline registration of all three providers passed, without running inference.
+
 | Isolated Pi mode | Local result |
 |---|---|
 | Pi and Node | Pi 1.1.0, Node 26.11.1, existing installations |
@@ -113,6 +115,7 @@ The temporary Pi profile derives from the public Halogen profile, points only to
 To repeat on this host, first start only Strixite and wait for readiness. The Pi check requires the existing Bubblewrap and Homebrew layout. The offline guard check requires a Node release with built-in TypeScript stripping. No installation is performed by these checks:
 
 ```bash
+PYTHONDONTWRITEBYTECODE=1 python tests/pi_sandbox.py
 node tests/strixite_guard.mjs
 bin/run.sh strixite start --wait
 python tests/strixite_live.py

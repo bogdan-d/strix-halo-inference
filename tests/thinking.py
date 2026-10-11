@@ -9,11 +9,11 @@ from pathlib import Path
 import re
 import signal
 import subprocess
-import sys
 import tempfile
 import time
 
 from thinking_tasks import TASKS, Task
+from pi_sandbox import sandbox_command, verify_sandbox
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,9 +61,9 @@ def events(text: str) -> Events:
     return result
 
 
-def check_task(task: Task, directory: Path) -> bool:
+def check_task(task: Task, directory: Path, agent: Path) -> bool:
     # Run the original checks, not a potentially edited copy supplied by the agent.
-    result = subprocess.run([sys.executable, "-c", task.checks], cwd=directory,
+    result = subprocess.run(sandbox_command(directory, agent) + ["/usr/bin/python", "-c", task.checks],
                             capture_output=True, text=True, timeout=15)
     return result.returncode == 0
 
@@ -71,9 +71,13 @@ def check_task(task: Task, directory: Path) -> bool:
 def self_check() -> None:
     for task in TASKS:
         with tempfile.TemporaryDirectory(prefix="thinking-baseline-") as directory:
+            agent, workspace = Path(directory) / "agent", Path(directory) / "workspace"
+            agent.mkdir()
+            workspace.mkdir()
             for name, body in task.files.items():
-                (Path(directory) / name).write_text(body)
-            assert not check_task(task, Path(directory)), f"Baseline passed: {task.name}"
+                (workspace / name).write_text(body)
+            verify_sandbox(workspace, agent)
+            assert not check_task(task, workspace, agent), f"Baseline passed: {task.name}"
     sample = json.dumps({"type": "message_end", "message": {
         "role": "assistant", "stopReason": "length", "content": [{"type": "thinking", "thinking": "a\u2028b"}],
         "usage": {"input": 7, "output": 9, "cacheRead": 3}}})
@@ -84,19 +88,19 @@ def self_check() -> None:
     print("Baseline rejection and Pi-event accounting checks passed.", flush=True)
 
 
-def trial(task: Task, engine: str, effort: str, repeat: int, base: Path, env: dict[str, str]) -> dict:
+def trial(task: Task, engine: str, effort: str, repeat: int, base: Path) -> dict:
     workspace = base / f"{engine}-{task.name}-{repeat}-{effort}"
     workspace.mkdir()
     for name, body in task.files.items():
         (workspace / name).write_text(body)
     (workspace / "checks.py").write_text(task.checks)
     model = "halogen-qwen3.8-flash-next" if engine == "halogen" else "qwen3.8-flash-next"
-    args = ["pi", "--offline", "--mode", "json", "--provider", engine, "--model", model,
+    args = sandbox_command(workspace, base / "agent") + ["pi", "--offline", "--mode", "json", "--provider", engine, "--model", model,
             "--thinking", effort, "--no-session", "--no-extensions", "--no-skills",
             "--no-prompt-templates", "--no-context-files", "--no-themes", "--no-approve",
             "--no-mcp", "--tools", "read,edit,write,bash", task.prompt]
     start = time.monotonic()
-    process = subprocess.Popen(args, cwd=workspace, env=env, stdout=subprocess.PIPE,
+    process = subprocess.Popen(args, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, text=True, start_new_session=True)
     timed_out = False
     try:
@@ -117,7 +121,7 @@ def trial(task: Task, engine: str, effort: str, repeat: int, base: Path, env: di
     elapsed = time.monotonic() - start
     measured = events(stdout)
     checks_unchanged = (workspace / "checks.py").read_text() == task.checks
-    checks_passed = check_task(task, workspace)
+    checks_passed = check_task(task, workspace, base / "agent")
     complete = measured.settled and not measured.aborted and bool(measured.stop_reasons) and measured.stop_reasons[-1] == "stop"
     failed_messages = any(reason in ("length", "error", "aborted") for reason in measured.stop_reasons)
     return {"engine": engine, "task": task.name, "effort": effort, "repeat": repeat,
@@ -145,10 +149,6 @@ def main() -> None:
     originals = {name: (agent_dir / name).read_bytes() if (agent_dir / name).exists() else None for name in ("models.json", "settings.json")}
     profile = (ROOT / "config/pi/models.json").read_bytes()
     pins = (ROOT / "config/pins.env").read_bytes()
-    print(json.dumps({"metadata": {"pi": subprocess.check_output(["pi", "--version"], text=True).strip(),
-        "profile_sha256": hashlib.sha256(profile).hexdigest(), "pins_sha256": hashlib.sha256(pins).hexdigest(),
-        "context": 262144, "mtp": "on", "cache": "fresh disk directory per engine; retained across trials; OS file cache not flushed",
-        "governor": Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor").read_text().strip()}}), flush=True)
     results = ROOT / "results"
     existed = results.exists()
     results.mkdir(exist_ok=True)
@@ -158,11 +158,14 @@ def main() -> None:
         agent.mkdir()
         (agent / "models.json").write_bytes(profile)
         (agent / "settings.json").write_bytes((ROOT / "config/pi/settings.json").read_bytes())
-        home = base / "home"
-        home.mkdir()
-        pi_env = {"PATH": os.environ["PATH"], "HOME": str(home), "LANG": "C.UTF-8",
-                  "PI_CODING_AGENT_DIR": str(agent), "PI_OFFLINE": "1", "PI_TELEMETRY": "0",
-                  "XDG_CACHE_HOME": str(base / "client-cache"), "NO_PROXY": "127.0.0.1,localhost"}
+        probe = base / "preflight"
+        probe.mkdir()
+        version = verify_sandbox(probe, agent)
+        print(json.dumps({"metadata": {"pi": version,
+            "profile_sha256": hashlib.sha256(profile).hexdigest(), "pins_sha256": hashlib.sha256(pins).hexdigest(),
+            "filesystem_sandbox": "bubblewrap", "network": "host shared for localhost API",
+            "context": 262144, "mtp": "on", "cache": "fresh disk directory per engine; retained across trials; OS file cache not flushed",
+            "governor": Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor").read_text().strip()}}), flush=True)
         launch_env = dict(os.environ, CACHE_ROOT=str(base / "engine-cache"), CONTEXT="262144", SPECULATIVE="on", START_TIMEOUT="300")
         for engine in ("halogen", "gufo"):
             cid = None
@@ -177,7 +180,7 @@ def main() -> None:
                     order = ("medium", "xhigh") if repeat % 2 else ("xhigh", "medium")
                     for task in TASKS:
                         for effort in order:
-                            print(json.dumps(trial(task, engine, effort, repeat, base, pi_env)), flush=True)
+                            print(json.dumps(trial(task, engine, effort, repeat, base)), flush=True)
             finally:
                 if not cid:
                     inspected = subprocess.run(["podman", "inspect", f"strix-halo-{engine}"], capture_output=True, text=True, timeout=10)

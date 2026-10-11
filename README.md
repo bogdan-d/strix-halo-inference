@@ -149,6 +149,8 @@ Pre-existing empty directories and four `.ini` files under `/home/bogdan/models`
 
 ## Checks and remaining work
 
+The Halogen/Gufo coding comparison and Strixite Pi tool check share a fail-closed Bubblewrap filesystem and process sandbox. Model-driven Pi tools and independent acceptance code see only the current writable synthetic workspace, immutable temporary settings and read-only software. They cannot access live Pi files, host projects, models, engine caches or GPU devices. Host networking is shared for localhost inference, not sandboxed. See [comparison operation and isolation](docs/thinking-comparison.md) and [Strixite test scope](docs/strixite.md). With the existing Bubblewrap and Homebrew installation, `PYTHONDONTWRITEBYTECODE=1 python tests/pi_sandbox.py` checks the real boundary without inference.
+
 ```bash
 bash -c 'for file in bin/*.sh tests/*.sh; do bash -n "$file" || exit; done'
 shellcheck -x -P SCRIPTDIR bin/*.sh tests/*.sh
