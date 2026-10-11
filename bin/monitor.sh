@@ -5,23 +5,24 @@ CONFIG="$ROOT/config/monitoring"
 # shellcheck source=../config/monitoring/pins.env
 source "$CONFIG/pins.env"
 LABEL=io.strix-halo-inference.monitoring
-COMPONENTS=(exporter prometheus grafana)
+COMPONENTS=(exporter probe prometheus grafana)
 select_component() {
   NAME="strix-halo-monitor-$1"
   case "$1" in
     exporter) IMAGE="$EXPORTER_IMAGE"; URL=http://127.0.0.1:9100/metrics ;;
+    probe) IMAGE="$PROBE_IMAGE"; URL=http://127.0.0.1:9115/metrics ;;
     prometheus) IMAGE="$PROMETHEUS_IMAGE"; URL=http://127.0.0.1:9090/-/ready ;;
     grafana) IMAGE="$GRAFANA_IMAGE"; URL=http://127.0.0.1:3000/api/health ;;
   esac
 }
 usage() {
   echo 'Usage: bin/monitor.sh pull|start|stop|status' >&2
-  echo '       bin/monitor.sh exporter|prometheus|grafana logs [--follow]' >&2
+  echo '       bin/monitor.sh exporter|probe|prometheus|grafana logs [--follow]' >&2
   exit 2
 }
 ACTION="${1:-}"
 case "$ACTION" in
-  exporter|prometheus|grafana)
+  exporter|probe|prometheus|grafana)
     [[ $# == 2 || ( $# == 3 && "$3" == --follow ) ]] || usage
     [[ "$2" == logs ]] || usage
     NAME="strix-halo-monitor-$ACTION"
@@ -68,7 +69,7 @@ exec 9>"$CONFIG/.lock"
 flock -n 9 || { echo 'Another monitoring start or stop is in progress.' >&2; exit 1; }
 if [[ "$ACTION" == stop ]]; then
   FAILED=0
-  for component in grafana prometheus exporter; do
+  for component in grafana prometheus probe exporter; do
     NAME="strix-halo-monitor-$component"
     if podman container exists "$NAME"; then
       if owned container "$NAME"; then
@@ -121,6 +122,11 @@ CID=$(podman run "${COMMON[@]}" --name strix-halo-monitor-exporter \
   --web.listen-address=127.0.0.1:9100 --collector.disable-defaults \
   --collector.cpu --collector.meminfo --collector.vmstat --collector.diskstats \
   --collector.pressure --collector.drm --collector.hwmon 9>&-)
+STARTED+=("$CID")
+CID=$(podman run "${COMMON[@]}" --name strix-halo-monitor-probe \
+  -v "$CONFIG/blackbox.yml:/etc/blackbox_exporter/config.yml:ro" \
+  "$PROBE_IMAGE" --config.file=/etc/blackbox_exporter/config.yml \
+  --web.listen-address=127.0.0.1:9115 --log.prober=warn 9>&-)
 STARTED+=("$CID")
 CID=$(podman run "${COMMON[@]}" --name strix-halo-monitor-prometheus \
   --userns=keep-id:uid=65534,gid=65534 \

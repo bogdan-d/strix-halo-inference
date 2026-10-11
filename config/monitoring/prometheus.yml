@@ -21,3 +21,30 @@ scrape_configs:
         regex: 'llamacpp:(prompt_tokens_total|prompt_seconds_total|tokens_predicted_total|tokens_predicted_seconds_total|requests_processing|requests_deferred|kv_cache_tokens|kv_cache_usage_ratio)|halogen:(requests_total|prompt_tokens_cached_total|draft_tokens_total|draft_tokens_accepted_total|kv_pool_positions|kv_pool_reserved_tokens|cache_stats_age_seconds|cache_hits_total|cache_misses_total|cache_prompt_tokens_saved_total|cache_entries|cache_bytes|cache_evicted_total|cache_disk_enabled|cache_disk_bytes|cache_disk_budget_bytes|cache_disk_hits_total|kv_pool_waiting_for_room|engine_up|busy_for_seconds)'
       - action: labelkeep
         regex: '__name__|job|instance'
+
+  - job_name: gufo
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:8080']
+    sample_limit: 100
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        action: keep
+        regex: 'gufo_device_lost_total|llamacpp:(prompt_tokens_total|prompt_tokens_cached_total|prompt_seconds_total|tokens_predicted_total|tokens_predicted_seconds_total|n_tokens_max|spec_decode_num_drafts_total|spec_decode_num_draft_tokens_total|spec_decode_num_accepted_tokens_total|prompt_tokens_seconds|predicted_tokens_seconds|requests_processing|requests_deferred|kv_cache_usage_ratio)'
+      - action: labelkeep
+        regex: '__name__|job|instance'
+
+  - job_name: gufo-ready
+    metrics_path: /probe
+    params:
+      module: [gufo_ready]
+      target: ['http://127.0.0.1:8080/ready']
+    static_configs:
+      - targets: ['127.0.0.1:9115']
+    sample_limit: 10
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        action: keep
+        regex: 'probe_success|probe_duration_seconds|probe_http_status_code'
+      - action: labelkeep
+        regex: '__name__|job|instance'

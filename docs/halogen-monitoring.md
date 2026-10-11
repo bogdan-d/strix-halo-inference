@@ -18,7 +18,7 @@ Run Pi normally against Halogen and watch the dashboard. It refreshes and scrape
 - **In-flight, deferred and busy age:** frontend gauges show current request counts and the age of the oldest request. These are not per-request latency distributions.
 - **Cache snapshot age:** cache reporting is refreshed in the background. Cache panels hide snapshots aged 15 seconds or more. This is our display cutoff, not an upstream freshness promise. A busy engine can keep answering metric scrapes while cache reports become stale.
 
-Stopping Halogen makes its scrape show Down within the next failed five-second collection. Current engine readings become Unavailable. Historical charts remain queryable and show gaps rather than interpolating across shutdown. Stopping monitoring does not stop Halogen. Switching to Gufo leaves Halogen's current readings unavailable because the engines have different endpoints. This ticket does not scrape Gufo.
+Stopping Halogen makes its scrape show Down within the next failed five-second collection. Current engine readings become Unavailable. Historical charts remain queryable and show gaps rather than interpolating across shutdown. Stopping monitoring does not stop Halogen. Switching to Gufo leaves Halogen's current readings unavailable because the engines have different endpoints. [Gufo telemetry](gufo-monitoring.md) uses independent scrape jobs and its own dashboard; similarly named metrics do not imply identical semantics.
 
 ## What each measurement means
 

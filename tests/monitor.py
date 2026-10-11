@@ -58,14 +58,14 @@ elif a[0] == "run":
     assert result.returncode == 1 and not any(a[0] == "run" for a in recorded)
     result, recorded = run("start", FAIL_RUN="prometheus")
     assert result.returncode == 1, result
-    assert [a[-1] for a in recorded if a[0] == "stop"] == ["owned-strix-halo-monitor-exporter"]
+    assert [a[-1] for a in recorded if a[0] == "stop"] == ["owned-strix-halo-monitor-exporter", "owned-strix-halo-monitor-probe"]
     assert not any(a[:2] == ["volume", "rm"] for a in recorded)
     result, recorded = run("start", EXITED="1")
-    assert result.returncode == 1 and len([a for a in recorded if a[0] == "stop"]) == 3
+    assert result.returncode == 1 and len([a for a in recorded if a[0] == "stop"]) == 4
     result, recorded = run("start")
     assert result.returncode == 0, result
     launched = [a for a in recorded if a[0] == "run"]
-    assert len(launched) == 3 and all("--detach" in a for a in launched)
+    assert len(launched) == 4 and all("--detach" in a for a in launched)
     assert not any(a[0] == "stop" for a in recorded)
     result, recorded = run("stop", EXISTING="1", UNOWNED_CONTAINER="1")
     assert result.returncode == 1 and not any(a[0] == "stop" for a in recorded)

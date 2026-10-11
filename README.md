@@ -11,6 +11,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Medium versus xhigh for routine coding](docs/thinking-comparison.md), with local exploratory results and a repeatable Pi comparison.
 - [Optional Grafana host monitoring](docs/monitoring.md), independently containerized with bounded history and explicit memory-accounting caveats.
 - [Halogen inference telemetry](docs/halogen-monitoring.md), with native token, processing-speed, pool, cache and speculation readings.
+- [Gufo inference telemetry](docs/gufo-monitoring.md), with independent readiness probing, live token progress and explicit engine-specific accounting.
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 
@@ -66,7 +67,7 @@ The default is one active request with the full native 262,144-token capacity, c
 
 ## Optional host dashboard
 
-Start the independently managed Grafana, Prometheus and node-exporter containers:
+Start the independently managed Grafana, Prometheus, node-exporter and blackbox-exporter containers:
 
 ```bash
 bin/monitor.sh pull
@@ -74,7 +75,7 @@ bin/monitor.sh start
 bin/monitor.sh status
 ```
 
-Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). It shows live CPU, RAM, swap, GTT, memory pressure, disk activity and accessible GPU sensors. The separate [Halogen dashboard](http://127.0.0.1:3000/d/strix-halo-halogen) shows native inference metrics with explicit reporting limits. Gufo telemetry is not yet integrated. Use `bin/monitor.sh grafana logs --follow` for logs and `bin/monitor.sh stop` to stop only monitoring. All services listen on loopback. History survives restart with seven-day and 2 GiB size-based retention. See [monitoring setup and limits](docs/monitoring.md) for permissions, measured overhead and cleanup. Inference remains usable without the dashboard.
+Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). It shows live CPU, RAM, swap, GTT, memory pressure, disk activity and accessible GPU sensors. Separate [Halogen](http://127.0.0.1:3000/d/strix-halo-halogen) and [Gufo](http://127.0.0.1:3000/d/strix-halo-gufo) dashboards show inference metrics with explicit engine-specific reporting limits. Gufo readiness uses the official blackbox-exporter; upgrading an existing stack requires stopping it, pulling the new pinned image, then restarting. Use `bin/monitor.sh grafana logs --follow` for logs and `bin/monitor.sh stop` to stop only monitoring. All services listen on loopback. History survives restart with seven-day and 2 GiB size-based retention. See [monitoring setup and limits](docs/monitoring.md) for permissions, measured overhead and cleanup. Inference remains usable without the dashboard.
 
 ## Update engine images
 

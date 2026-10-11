@@ -1,0 +1,923 @@
+{
+  "uid": "strix-halo-gufo",
+  "title": "Strix Halo / Gufo",
+  "description": "Gufo 0.11.0 native aggregate telemetry and independent HTTP model-readiness probing. Different clocks and logical-context semantics are explicit.",
+  "tags": [
+    "strix-halo",
+    "gufo"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Gufo telemetry",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Gufo 0.11.0 semantics differ from Halogen.** Execution token counters advance live, but stage seconds, cached tokens and speculative totals update at finish or cancellation. Speed gauges retain the latest positive request speed while idle. Context usage is logical in-flight prompt plus output, not retained cache or GPU allocation. [Host dashboard](/d/strix-halo-host)."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Metrics scrape",
+      "type": "stat",
+      "description": "Successful metrics collection, not model readiness. May remain up while the model is not ready.",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "up{job=\"gufo\"}",
+          "legendFormat": "Native metrics",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Readiness collection",
+      "type": "stat",
+      "description": "Collection from the probe exporter. Up means the readiness test ran, not that it passed.",
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "up{job=\"gufo-ready\"}",
+          "legendFormat": "HTTP probe",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Model readiness",
+      "type": "stat",
+      "description": "Probe requires HTTP 200 and JSON status ready. Not ready can mean model loading, shutdown, device loss or connectivity failure. If the probe exporter cannot be scraped, this is unavailable.",
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not ready",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "Ready",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "probe_success{job=\"gufo-ready\"} and on(job, instance) (up{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "/ready",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Requests in flight",
+      "type": "stat",
+      "description": "Admitted includes cache preparation and cleanup. A ready model can still have all sessions occupied.",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:requests_processing{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Admitted",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:requests_deferred{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Deferred",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Token counters, since process start",
+      "type": "stat",
+      "description": "Process-wide counters reset after restart. Execution counters can include work performed before scheduler failure. Failed requests do not add finish-accounted cached, stage-time and draft totals.",
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 16,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:prompt_tokens_total{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Processed prompt",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:prompt_tokens_cached_total{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Cached prompt",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:tokens_predicted_total{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Generated",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Latest positive request processing speed",
+      "type": "timeseries",
+      "description": "Historical stage-speed gauges from finished or cancelled requests, not current-request speed. Nonzero values persist while idle and zero-work requests do not clear them. Not the same as Halogen's windowed processing-speed ratio.",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:tokens/s",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:prompt_tokens_seconds{job=\"gufo\"} > 0) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Latest positive prefill",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:predicted_tokens_seconds{job=\"gufo\"} > 0) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Latest positive decode",
+          "instant": false,
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Aggregate wall-time throughput",
+      "type": "timeseries",
+      "description": "Execution counters advance during prefill chunks and generation. Cached tokens update at completion/cancellation, so curves use different accounting clocks. Rates include idle time.",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:tokens/s",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(rate(llamacpp:prompt_tokens_total{job=\"gufo\"}[$__rate_interval])) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Processed prompt, live",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(rate(llamacpp:tokens_predicted_total{job=\"gufo\"}[$__rate_interval])) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Generated, live",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(rate(llamacpp:prompt_tokens_cached_total{job=\"gufo\"}[$__rate_interval])) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Cached prompt, finish-accounted",
+          "instant": false,
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "In-flight logical context share",
+      "type": "timeseries",
+      "description": "Whole admitted prompts plus generated tokens divided by sessions times per-session context. Includes prompt tokens before prefill executes. Retained cache is excluded and idle sessions contribute zero. Not KV allocation or Halogen's busy-plus-held pool occupancy.",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:kv_cache_usage_ratio{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "In-flight logical fraction",
+          "instant": false,
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Largest completed sequence, since process start",
+      "type": "stat",
+      "description": "Declared a counter upstream, but it is a high-water mark, not an additive token total. Display the value directly. Not configured capacity or current context occupancy.",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(llamacpp:n_tokens_max{job=\"gufo\"}) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Prompt + output high-water mark",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Approximate windowed reused-token share",
+      "type": "stat",
+      "description": "Token reuse, not request cache-hit rate. Execution and finish accounting clocks differ, so this is approximate over the rate window, especially for long or failed requests. No work is unavailable. RAM versus disk reuse is not separately exported.",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "((rate(llamacpp:prompt_tokens_cached_total{job=\"gufo\"}[$__rate_interval]) / (rate(llamacpp:prompt_tokens_cached_total{job=\"gufo\"}[$__rate_interval]) + rate(llamacpp:prompt_tokens_total{job=\"gufo\"}[$__rate_interval]))) and on(job, instance) ((rate(llamacpp:prompt_tokens_cached_total{job=\"gufo\"}[$__rate_interval]) + rate(llamacpp:prompt_tokens_total{job=\"gufo\"}[$__rate_interval])) > 0)) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Reused prompt fraction",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Draft acceptance share",
+      "type": "stat",
+      "description": "Accepted divided by proposed draft tokens for finish-accounted requests. No proposals is unavailable. Does not demonstrate speedup over autoregressive decoding.",
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "((rate(llamacpp:spec_decode_num_accepted_tokens_total{job=\"gufo\"}[$__rate_interval]) / rate(llamacpp:spec_decode_num_draft_tokens_total{job=\"gufo\"}[$__rate_interval])) and on(job, instance) (rate(llamacpp:spec_decode_num_draft_tokens_total{job=\"gufo\"}[$__rate_interval]) > 0)) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Accepted proposals",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Speculative proposal throughput",
+      "type": "timeseries",
+      "description": "Speculation counters update at finish/cancellation, not on every generation step. Generated token throughput elsewhere updates live.",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:tokens/s",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(rate(llamacpp:spec_decode_num_draft_tokens_total{job=\"gufo\"}[$__rate_interval])) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Proposed, finish-accounted",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "(rate(llamacpp:spec_decode_num_accepted_tokens_total{job=\"gufo\"}[$__rate_interval])) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Accepted, finish-accounted",
+          "instant": false,
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Draft tokens per verification round",
+      "type": "stat",
+      "description": "Token proposals per verification round, not generated tokens per round or draft compute cost.",
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 12,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "((rate(llamacpp:spec_decode_num_draft_tokens_total{job=\"gufo\"}[$__rate_interval]) / rate(llamacpp:spec_decode_num_drafts_total{job=\"gufo\"}[$__rate_interval])) and on(job, instance) (rate(llamacpp:spec_decode_num_drafts_total{job=\"gufo\"}[$__rate_interval]) > 0)) and on() (up{job=\"gufo\"} == 1) and on() (up{job=\"gufo-ready\"} == 1) and on() (probe_success{job=\"gufo-ready\"} == 1)",
+          "legendFormat": "Proposals / round",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Confirmed device losses, since process start",
+      "type": "stat",
+      "description": "Can be visible even if model readiness fails. Fatal context loss leads to process exit, which a five-second scrape may miss. Zero is not proof of GPU health. Restart resets this counter.",
+      "gridPos": {
+        "x": 12,
+        "y": 39,
+        "w": 12,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "strix-host"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "strix-host"
+          },
+          "expr": "gufo_device_lost_total{job=\"gufo\"} and on() (up{job=\"gufo\"} == 1)",
+          "legendFormat": "Device loss events",
+          "instant": true,
+          "range": false
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Unavailable native measurements",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Not exported in Gufo's native metrics:** configured context capacity, retained RAM/disk cache bytes and limits, request cache-hit rate, end-to-end latency distributions, and total live GPU allocation. Do not turn `n_tokens_max` into capacity or in-flight logical context into physical KV use. Use `bin/run.sh gufo status` for actual launch configuration. No per-request content or IDs are collected."
+      }
+    }
+  ]
+}

@@ -10,12 +10,13 @@ bin/monitor.sh status
 
 Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). No login is required. Anonymous access is read-only, and dashboard changes belong in the checked-in configuration. Nothing starts automatically at login. An inference engine does not require monitoring to be running.
 
-The same stack also provides [Halogen inference telemetry](halogen-monitoring.md) in a separate dashboard. Restart monitoring once when upgrading from host-only configuration to load its new scrape job. Starting monitoring does not start an engine.
+The same stack also provides separate [Halogen inference telemetry](halogen-monitoring.md) and [Gufo inference telemetry](gufo-monitoring.md) dashboards. When upgrading an existing setup, stop monitoring, run `pull` to install the new readiness-probe image, then restart monitoring to load the scrape configuration. Starting monitoring does not start an engine.
 
 ```bash
 bin/monitor.sh grafana logs
 bin/monitor.sh prometheus logs --follow
 bin/monitor.sh exporter logs --follow
+bin/monitor.sh probe logs --follow
 bin/monitor.sh stop
 ```
 
@@ -28,10 +29,11 @@ The component comes before `logs`. Snapshot logs include the last 100 lines. Fol
 | Grafana | 13.2.3 | `127.0.0.1:3000` | Volume `strix-halo-monitor-grafana` |
 | Prometheus | 3.15.0 | `127.0.0.1:9090` | Volume `strix-halo-monitor-prometheus` |
 | node-exporter | 1.12.1 | `127.0.0.1:9100` | None |
+| blackbox-exporter | 0.29.0 | `127.0.0.1:9115` | None |
 
 Images come from Grafana and Prometheus's official registries. Exact digests are in [monitoring pins](../config/monitoring/pins.env). The launcher uses installed images only. Run `pull` before the first start, or after deliberately changing those pins. `bin/update.sh` still updates engine images only, not this monitoring stack. Image changes require an explicit monitoring stop and restart. Back up monitoring data before version changes because older images may not understand migrated databases.
 
-All three containers use rootless Podman, read-only root filesystems, dropped capabilities and no-new-privileges. Prometheus and Grafana have separate writable data volumes. Their container users are mapped to the host user with `keep-id`, without changing host permissions. There are no privileged containers, GPU device grants, Podman socket mounts or whole-host filesystem mounts.
+All four containers use rootless Podman, read-only root filesystems, dropped capabilities and no-new-privileges. Prometheus and Grafana have separate writable data volumes. Their container users are mapped to the host user with `keep-id`, without changing host permissions. There are no privileged containers, GPU device grants, Podman socket mounts or whole-host filesystem mounts.
 
 Host networking lets the services reach each other on loopback without a proxy or special host-gateway address. Each process binds explicitly to `127.0.0.1`, rather than relying on a port-publishing rule. Host networking is not network isolation. These processes can reach other host-local services. The endpoints have no network authentication for local readers, so keep them local and do not tunnel or expose them publicly without adding appropriate access controls. Grafana's login form, basic authentication and sign-up are disabled. Its initial administrator password is randomly generated, not a public default.
 
@@ -44,7 +46,7 @@ Only node-exporter gets additional host mounts, all read-only:
 - `/proc/pressure` for pressure-stall information.
 - `/sys` for DRM and hwmon sensors, including their symlink targets under the device tree.
 
-There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen aggregate metrics over its existing loopback endpoint. Gufo inference panels remain separate pending work.
+There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen and Gufo aggregate metrics over their existing loopback endpoints. The readiness probe receives only its read-only configuration and probes Gufo's `/ready`, without recording response bodies. Its local probe endpoint accepts caller-supplied targets, another reason not to expose this host-network service beyond loopback.
 
 Grafana uses built-in panels and its built-in Prometheus data source. No additional plugins are installed. Plugin preinstallation, update checks, analytics reporting and the unused alerting subsystem are disabled.
 
@@ -90,11 +92,11 @@ An exploratory 60-second idle measurement with the browser closed and five-secon
 | Prometheus | 99 MiB | 0.28% |
 | Grafana | 355 MiB | 0.58% |
 
-CPU was calculated from each process's native `process_cpu_seconds_total` counter. Memory came from `process_resident_memory_bytes`. Summed RSS was approximately 478 MiB and includes potentially shared pages. It is not an exact net physical-memory cost. Startup, an open dashboard and inference activity can raise resource use. No peak-memory or controlled throughput comparison was performed.
+CPU was calculated from each process's native `process_cpu_seconds_total` counter. Memory came from `process_resident_memory_bytes`. Summed RSS was approximately 478 MiB and includes potentially shared pages. This initial host-only measurement predates engine scraping and the fourth container; it is not the current stack's exact net physical-memory cost. The added readiness probe measured approximately 35 MiB RSS and 0.067% of one logical CPU in a later idle window. Engine collection costs and updated whole-Prometheus readings are documented in the separate engine guides. Startup, an open dashboard and inference activity can raise resource use. No peak-memory or controlled throughput comparison was performed.
 
 ## Troubleshooting and cleanup
 
-- **Start fails:** use the reported error to check whether an image is missing, a name is occupied, or port 3000, 9090 or 9100 is in use. The launcher refuses to replace existing containers or reuse volumes without its ownership label.
+- **Start fails:** use the reported error to check whether an image is missing, a name is occupied, or port 3000, 9090, 9100 or 9115 is in use. The launcher refuses to replace existing containers or reuse volumes without its ownership label.
 - **Partial startup:** HTTP readiness is bounded to 60 seconds, with two-second probes. Failure or interruption stops containers whose IDs this invocation captured and retains volumes. If interrupted during container creation before its ID returns, inspect `podman ps -a` and use `bin/monitor.sh stop` to clean up the owned stack. No engine is stopped by that command.
 - **Unavailable sensor:** inspect exporter logs and the collector-health panel. Verify the source is readable on the host. Do not fix it by granting privileged mode, exposing the Podman socket or changing device permissions.
 - **No CPU rate yet:** allow several five-second scrapes to arrive. The default dashboard shows the last 15 minutes, which may initially contain mostly empty space.
