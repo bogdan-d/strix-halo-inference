@@ -15,12 +15,12 @@
           "maxTokens": 16384,
           "thinkingLevelMap": {
             "off": "none",
-            "minimal": "low",
+            "minimal": null,
             "low": "low",
             "medium": "medium",
-            "high": "xhigh",
+            "high": null,
             "xhigh": "xhigh",
-            "max": "xhigh"
+            "max": null
           },
           "compat": {
             "supportsStore": false,
@@ -62,12 +62,12 @@
           "maxTokens": 16384,
           "thinkingLevelMap": {
             "off": "none",
-            "minimal": "low",
+            "minimal": null,
             "low": "low",
             "medium": "medium",
-            "high": "xhigh",
+            "high": null,
             "xhigh": "xhigh",
-            "max": "xhigh"
+            "max": null
           },
           "compat": {
             "supportsStore": false,
