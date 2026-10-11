@@ -43,6 +43,34 @@ def main():
     call = result["choices"][0]["message"]["tool_calls"][0]["function"]
     assert call["name"] == "report_ready" and json.loads(call["arguments"]) == {"status": "ready"}, result
 
+    # Native auto-tool streams can split arguments across deltas. Inspect, never execute.
+    calls = {}
+    finish = None
+    done = False
+    fragments = 0
+    with request("/v1/chat/completions", {**common, "stream": True, "tools": [tool],
+                 "tool_choice": "auto", "messages": [{"role": "user", "content": "Call report_ready with status ready."}]}) as stream:
+        for line in stream:
+            if not line.startswith(b"data: "):
+                continue
+            payload = line[6:].strip()
+            if payload == b"[DONE]":
+                done = True
+                break
+            for choice in json.loads(payload).get("choices", []):
+                finish = choice.get("finish_reason") or finish
+                for delta in choice.get("delta", {}).get("tool_calls", []):
+                    current = calls.setdefault(delta["index"], {"name": "", "arguments": "", "id": ""})
+                    current["id"] += delta.get("id", "")
+                    function = delta.get("function", {})
+                    current["name"] += function.get("name", "")
+                    current["arguments"] += function.get("arguments", "")
+                    fragments += bool(function.get("arguments"))
+    assert done and finish == "tool_calls" and len(calls) == 1, (done, finish, calls)
+    streamed = next(iter(calls.values()))
+    assert streamed["id"] and streamed["name"] == "report_ready", streamed
+    assert json.loads(streamed["arguments"]) == {"status": "ready"}, streamed
+
     body = {**common, "max_tokens": 8192, "stream": True,
             "messages": [{"role": "user", "content": "Write the integers from 1 to 100000, one per line. Do not summarize or stop early."}]}
     with request("/v1/chat/completions", body) as stream:
@@ -67,6 +95,7 @@ def main():
     followup = chat([{"role": "user", "content": "Reply with exactly: ready"}])
     assert followup["choices"][0]["message"]["content"].strip() == "ready", followup
     print(json.dumps({"engine": args.engine, "model": model, "conversation": "pass", "tool_call": "pass",
+                      "streamed_auto_tool": "pass", "argument_fragments": fragments,
                       "disconnect_slot_release": "pass", "generation_after_cancel": "pass",
                       "followup_timings": second.get("timings")}, indent=2))
 

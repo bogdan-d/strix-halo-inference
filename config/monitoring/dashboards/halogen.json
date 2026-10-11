@@ -1,7 +1,7 @@
 {
   "uid": "strix-halo-halogen",
   "title": "Strix Halo / Halogen",
-  "description": "Halogen 0.17.5 native aggregate telemetry. Processing speed is distinct from wall-time throughput, and pool occupancy is a completed-request snapshot.",
+  "description": "Halogen 0.18.0 native aggregate telemetry. Processing speed is distinct from wall-time throughput, and pool occupancy is a completed-request snapshot.",
   "tags": [
     "strix-halo",
     "halogen"

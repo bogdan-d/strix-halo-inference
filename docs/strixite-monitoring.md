@@ -1,5 +1,7 @@
 # Strixite inference dashboard
 
+The current image is 0.2.4. Existing accounting semantics and queries remain compatible. Native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed measurements below used 0.2.3. The additive `strix_think_closed_for_call_total` counter is intentionally dropped by the existing allowlist. Streamed prefill progress is not a new Prometheus progress gauge.
+
 Open [Strixite telemetry](http://127.0.0.1:3000/d/strix-halo-strixite) after starting the optional monitoring stack and Strixite:
 
 ```bash

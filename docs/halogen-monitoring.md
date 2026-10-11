@@ -1,5 +1,7 @@
 # Halogen inference dashboard
 
+The current image is 0.18.0. Existing metric contracts remain compatible and its native scrape passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.17.5. The two new rewrite/cut-back counters are intentionally not collected by the existing allowlist.
+
 Open [Halogen telemetry](http://127.0.0.1:3000/d/strix-halo-halogen) after starting monitoring and Halogen:
 
 ```bash

@@ -1,7 +1,7 @@
 {
   "uid": "strix-halo-gufo",
   "title": "Strix Halo / Gufo",
-  "description": "Gufo 0.11.0 native aggregate telemetry and independent HTTP model-readiness probing. Different clocks and logical-context semantics are explicit.",
+  "description": "Gufo 0.12.0 native aggregate telemetry and independent HTTP model-readiness probing. Different clocks and logical-context semantics are explicit.",
   "tags": [
     "strix-halo",
     "gufo"
@@ -37,7 +37,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Gufo 0.11.0 semantics differ from Halogen.** Execution token counters advance live, but stage seconds, cached tokens and speculative totals update at finish or cancellation. Speed gauges retain the latest positive request speed while idle. Context usage is logical in-flight prompt plus output, not retained cache or GPU allocation. [Host dashboard](/d/strix-halo-host)."
+        "content": "**Gufo 0.12.0 semantics differ from Halogen.** Execution token counters advance live, but stage seconds, cached tokens and speculative totals update at finish or cancellation. Speed gauges retain the latest positive request speed while idle. Context usage is logical in-flight prompt plus output, not retained cache or GPU allocation. [Host dashboard](/d/strix-halo-host)."
       }
     },
     {

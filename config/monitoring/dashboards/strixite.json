@@ -1,7 +1,7 @@
 {
   "uid": "strix-halo-strixite",
   "title": "Strix Halo / Strixite",
-  "description": "Strixite 0.2.3 native aggregate metrics, independent health probing and explicit completion-accounting semantics.",
+  "description": "Strixite 0.2.4 native aggregate metrics, independent health probing and explicit completion-accounting semantics.",
   "tags": [
     "strix-halo",
     "strixite"
@@ -37,7 +37,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Strixite 0.2.3.** Prefill totals update after prefill; generation and MTP totals update at finalization. Last-speed gauges retain the last qualifying request while idle. `live_tokens` is the last worker-completion session size, not live progress. Cache bytes are not total engine memory. [Host dashboard](/d/strix-halo-host)."
+        "content": "**Strixite 0.2.4.** Prefill totals update after prefill; generation and MTP totals update at finalization. Last-speed gauges retain the last qualifying request while idle. `live_tokens` is the last worker-completion session size, not live progress. Cache bytes are not total engine memory. [Host dashboard](/d/strix-halo-host)."
       }
     },
     {

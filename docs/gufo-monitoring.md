@@ -1,5 +1,7 @@
 # Gufo inference dashboard
 
+The current image is 0.12.0. Existing metric contracts remain compatible. Native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.11.0 and were not repeated as benchmarks.
+
 Open [Gufo telemetry](http://127.0.0.1:3000/d/strix-halo-gufo) after starting monitoring and Gufo:
 
 ```bash
