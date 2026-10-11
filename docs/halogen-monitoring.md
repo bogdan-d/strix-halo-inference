@@ -22,6 +22,17 @@ Run Pi normally against Halogen and watch the dashboard. It scrapes every two se
 
 Stopping Halogen makes its scrape show Down within the next failed two-second collection. The Halogen section then leaves the page. Historical charts remain queryable and show gaps rather than interpolating across shutdown. Stopping monitoring does not stop Halogen. Switching to Gufo leaves Halogen's current readings unavailable because the engines have different endpoints. [Gufo telemetry](gufo-monitoring.md) uses independent scrape jobs and its own section; similarly named metrics do not imply identical semantics.
 
+## Pinned weights and MemAvailable
+
+Halogen maps its 62.1 GiB of weights from the checkpoint file and pins them. The kernel still counts those pages as reclaimable file cache, so `MemAvailable`, `free` and the host section's MemAvailable reading overstate free memory by about that much while Halogen is loaded. Its startup log says so directly. Gufo and Strixite do not do this; their allocations lower `MemAvailable` normally.
+
+Halogen exports no weight-memory metric, and the pin does not appear in the kernel's `Unevictable`, `Mlocked` or pinned-page counters. The Halogen section therefore shows two host-kernel readings, gated on the engine being up:
+
+- **Mapped file pages:** `/proc/meminfo` `Mapped` for the whole host. On this host it was 1.35 GiB without Halogen and 64.0 GiB with it loaded, against 62.3 GiB of file-backed resident memory in the engine process.
+- **RAM left, estimate:** `MemAvailable` minus `Mapped`. It read 31.0 GiB when Halogen's own startup log reported 33.6 GiB left.
+
+The estimate is a lower bound, not a measurement. `Mapped` also includes other programs' mapped files and any lookup-table pages Halogen has touched, both of which the kernel can reclaim. It can therefore drift lower than reality during long sessions; how far was not measured. The exact engine figures remain in the startup log and `bin/run.sh halogen status`.
+
 ## What each measurement means
 
 Metric names and wire types below were checked against the pinned Halogen 0.17.5 endpoint. Gauges describe snapshots. Counters accumulate work within their reporting epoch.

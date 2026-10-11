@@ -58,6 +58,7 @@ Prometheus scrapes every target every two seconds with a two-second timeout, so 
 |---|---|
 | CPU activity | Rates of `/proc/stat` CPU-time counters, averaged across logical CPUs. Non-idle includes I/O wait. |
 | Physical RAM | `/proc/meminfo` total, free, available, and cache plus buffers plus reclaimable slab. These overlapping counters are deliberately not stacked. |
+| Mapped file pages | `/proc/meminfo` `Mapped`, file pages mapped into any process. Charted with the other memory counters; it jumps by the weight size when Halogen loads. |
 | Swap | Kernel total and free swap counters, with used swap shown as their difference. Existing swapped pages can remain after inference stops. |
 | GTT | AMDGPU `mem_info_gtt_total` and `mem_info_gtt_used`, exported in bytes. Includes all GPU users, not only inference. |
 | Memory pressure | Rates of cumulative PSI waiting and stalled seconds. The resulting percentages are not the kernel's `avg10` field. |
@@ -66,7 +67,7 @@ Prometheus scrapes every target every two seconds with a two-second timeout, so 
 | GPU temperature | AMDGPU hwmon temperature in Celsius, normalized from millidegrees. |
 | PPT power | AMDGPU hwmon power in watts, normalized from microwatts. On this APU, do not call it isolated GPU power or wall power. |
 
-**Kernel counters are not engine allocations or guaranteed desktop headroom.** Halogen's pinned file-backed weights can still appear reclaimable in `MemAvailable`. Its GTT charge also excludes some resident weight memory. Do not add GTT usage to physical RAM usage or interpret free GTT as free RAM. This host-only dashboard intentionally does not estimate memory left for applications or invent a live engine allocation. The existing engine `status` command separately labels measured startup allocation reports as historical.
+**Kernel counters are not engine allocations or guaranteed desktop headroom.** Halogen's pinned file-backed weights can still appear reclaimable in `MemAvailable`. Its GTT charge also excludes some resident weight memory. Do not add GTT usage to physical RAM usage or interpret free GTT as free RAM. The host section does not estimate memory left for applications or invent a live engine allocation. The Halogen section adds one labelled estimate for its pinned weights, described in [Halogen telemetry](halogen-monitoring.md#pinned-weights-and-memavailable). The existing engine `status` command separately labels measured startup allocation reports as historical.
 
 The Collectors status names any failing collector. A missing sensor reading shows a dash, not a manufactured zero. Current values use instant queries gated on successful scrapes, so a stopped exporter does not leave its last reading looking current. Historical charts retain earlier samples and show gaps. If Prometheus cannot be reached, the page shows an error in its header and dims the last drawn readings; this is not an engine failure.
 

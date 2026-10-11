@@ -116,6 +116,7 @@ replaced by the panel's window, else by a window derived from the scrape interva
        "series": [{"label": "MemAvailable", "expr": "node_memory_MemAvailable_bytes{job='host'}"},
                   {"label": "MemFree", "expr": "node_memory_MemFree_bytes{job='host'}"},
                   {"label": "Cache + buffers + slab", "expr": "node_memory_Cached_bytes{job='host'} + node_memory_Buffers_bytes{job='host'} + node_memory_SReclaimable_bytes{job='host'}"},
+                  {"label": "Mapped file pages", "expr": "node_memory_Mapped_bytes{job='host'}"},
                   {"label": "GTT used", "expr": "node_drm_memory_gtt_used_bytes{job='host'}"},
                   {"label": "Swap used", "expr": "node_memory_SwapTotal_bytes{job='host'} - node_memory_SwapFree_bytes{job='host'}"}]},
       {"title": "Memory pressure", "unit": "percent", "note": "PSI cumulative counters converted to time shares over the rate window, not the kernel avg10 field.",
@@ -135,11 +136,12 @@ replaced by the panel's window, else by a window derived from the scrape interva
     {
       "name": "Halogen",
       "job": "halogen",
-      "note": "Native metrics, not a token-by-token live trace. Counters advance on completed requests. Pool occupancy includes warm held regions and reflects the last completed request, not the current prompt. Cache readings older than 15 seconds are hidden.",
+      "note": "Native metrics, not a token-by-token live trace. Counters advance on completed requests. Pool occupancy includes warm held regions and reflects the last completed request, not the current prompt. Cache readings older than 15 seconds are hidden. The host MemAvailable above counts Halogen's pinned weights as reclaimable; read RAM left here instead.",
       "gates": {
         "scrape": "and on(job, instance) (up{job='halogen'} == 1)",
         "live": "and on(job, instance) (up{job='halogen'} == 1) and on(job, instance) (halogen:engine_up{job='halogen'} == 1)",
-        "cache": "and on(job, instance) (up{job='halogen'} == 1) and on(job, instance) (halogen:engine_up{job='halogen'} == 1) and on(job, instance) (halogen:cache_stats_age_seconds{job='halogen'} < 15)"
+        "cache": "and on(job, instance) (up{job='halogen'} == 1) and on(job, instance) (halogen:engine_up{job='halogen'} == 1) and on(job, instance) (halogen:cache_stats_age_seconds{job='halogen'} < 15)",
+        "host": "and on() (up{job='host'} == 1) and on() (up{job='halogen'} == 1) and on() (halogen:engine_up{job='halogen'} == 1)"
       },
       "status": [
         {"title": "Metrics scrape", "unit": "flag", "gate": "none", "note": "Prometheus HTTP collection health. Down does not distinguish engine shutdown, network failure or authentication failure.",
@@ -148,6 +150,10 @@ replaced by the panel's window, else by a window derived from the scrape interva
          "series": [{"label": "", "expr": "halogen:engine_up{job='halogen'}"}]}
       ],
       "tiles": [
+        {"title": "RAM left, estimate", "sub": "MemAvailable minus mapped file pages", "unit": "bytes", "gate": "host", "note": "Halogen pins its weights as file-backed pages that the kernel still counts as reclaimable, so MemAvailable overstates free memory by their size. This subtracts every mapped file page on the host. It is a lower bound: lookup-table pages Halogen has touched and other programs' mapped files are also subtracted, although the kernel can reclaim those.",
+         "series": [{"label": "", "expr": "node_memory_MemAvailable_bytes{job='host'} - node_memory_Mapped_bytes{job='host'}", "of": "node_memory_MemTotal_bytes{job='host'}"}]},
+        {"title": "Mapped file pages", "sub": "host-wide, includes pinned weights", "unit": "bytes", "gate": "host", "note": "Kernel Mapped counter for the whole host. With Halogen loaded it is mostly the pinned weights, plus touched lookup-table pages and other programs' mapped files. Halogen exports no native weight-memory metric; its exact figure is in the startup log and bin/run.sh halogen status.",
+         "series": [{"label": "", "expr": "node_memory_Mapped_bytes{job='host'}", "of": "node_memory_MemTotal_bytes{job='host'}"}]},
         {"title": "Prefill", "sub": "new tokens, completed in 5 min", "unit": "tokens/s", "window": "5m", "note": "Tokens divided by summed engine processing seconds. Not wall-time throughput or current-request speed. No completed work is unavailable, not zero speed.",
          "series": [{"label": "", "expr": "(rate(llamacpp:prompt_tokens_total{job='halogen'}[$__rate_interval]) / rate(llamacpp:prompt_seconds_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(llamacpp:prompt_seconds_total{job='halogen'}[$__rate_interval]) > 0)"}]},
         {"title": "Decode", "sub": "completed in 5 min", "unit": "tokens/s", "window": "5m", "note": "Tokens divided by summed engine processing seconds. Not wall-time throughput or current-request speed. No completed work is unavailable, not zero speed.",
