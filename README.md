@@ -10,6 +10,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Local validation results and limitations](docs/validation.md).
 - [Pi coding agent setup for both engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
 - [Medium versus xhigh for routine coding](docs/thinking-comparison.md), with local exploratory results and a repeatable Pi comparison.
+- [Sandboxed three-engine coding comparison](docs/coding-comparison.md), with matched tasks, strict tool arguments, memory-release checks and a repeatable smoke gate.
 - [Optional Grafana host monitoring](docs/monitoring.md), independently containerized with bounded history and explicit memory-accounting caveats.
 - [Halogen inference telemetry](docs/halogen-monitoring.md), with native token, processing-speed, pool, cache and speculation readings.
 - [Gufo inference telemetry](docs/gufo-monitoring.md), with independent readiness probing, live token progress and explicit engine-specific accounting.

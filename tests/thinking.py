@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class Events:
     tools: dict[str, int] = field(default_factory=dict)
     tool_errors: int = 0
+    tool_error_tools: dict[str, int] = field(default_factory=dict)
     turns: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -46,6 +47,9 @@ def events(text: str) -> Events:
             result.tools[name] = result.tools.get(name, 0) + 1
         elif event["type"] == "tool_execution_end":
             result.tool_errors += int(bool(event.get("isError")))
+            if event.get("isError"):
+                name = event["toolName"]
+                result.tool_error_tools[name] = result.tool_error_tools.get(name, 0) + 1
         elif event["type"] == "agent_settled":
             result.settled = True
             result.aborted = bool(event.get("aborted"))
@@ -88,7 +92,7 @@ def self_check() -> None:
     print("Baseline rejection and Pi-event accounting checks passed.", flush=True)
 
 
-def trial(task: Task, engine: str, effort: str, repeat: int, base: Path) -> dict:
+def trial(task: Task, engine: str, effort: str, repeat: int, base: Path, *, strict: bool = False) -> dict:
     workspace = base / f"{engine}-{task.name}-{repeat}-{effort}"
     workspace.mkdir()
     for name, body in task.files.items():
@@ -98,7 +102,10 @@ def trial(task: Task, engine: str, effort: str, repeat: int, base: Path) -> dict
     args = sandbox_command(workspace, base / "agent") + ["pi", "--offline", "--mode", "json", "--provider", engine, "--model", model,
             "--thinking", effort, "--no-session", "--no-extensions", "--no-skills",
             "--no-prompt-templates", "--no-context-files", "--no-themes", "--no-approve",
-            "--no-mcp", "--tools", "read,edit,write,bash", task.prompt]
+            "--no-mcp", "--tools", "read,edit,write,bash"]
+    if strict:
+        args += ["--extension", "/agent/guard.ts"]
+    args += [task.prompt]
     start = time.monotonic()
     process = subprocess.Popen(args, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, text=True, start_new_session=True)
@@ -124,11 +131,14 @@ def trial(task: Task, engine: str, effort: str, repeat: int, base: Path) -> dict
     checks_passed = check_task(task, workspace, base / "agent")
     complete = measured.settled and not measured.aborted and bool(measured.stop_reasons) and measured.stop_reasons[-1] == "stop"
     failed_messages = any(reason in ("length", "error", "aborted") for reason in measured.stop_reasons)
+    guard_ok = not strict or ("strict-arguments: blocked" not in stderr and
+                             stderr.count("strict-arguments: allowed") == sum(measured.tools.values()))
     return {"engine": engine, "task": task.name, "effort": effort, "repeat": repeat,
             "seconds": round(elapsed, 2), "pi_exit": process.returncode, "timeout": timed_out,
             "stderr_present": bool(stderr.strip()), "checks_passed": checks_passed,
             "checks_unchanged": checks_unchanged,
-            "passed": checks_passed and checks_unchanged and complete and not failed_messages and not timed_out and process.returncode == 0,
+            "strict_guard_passed": guard_ok if strict else None,
+            "passed": checks_passed and checks_unchanged and complete and not failed_messages and not timed_out and process.returncode == 0 and guard_ok,
             **asdict(measured)}
 
 
