@@ -83,17 +83,17 @@ Open [the host dashboard](http://127.0.0.1:3000/d/strix-halo-host). It shows liv
 
 ## Update engine images
 
-`bin/update.sh` checks both publishers' `latest` image tags, validates stable release versions and Linux AMD64 metadata, pulls changed images by their resolved digests, then atomically updates the image and version pins in `config/pins.env`. It refuses version downgrades and commits neither pin if either pull fails. Previously pulled images remain available. Updating requires Skopeo in addition to the ordinary launcher requirements. Skopeo is already installed on the validated host.
+`bin/update.sh` checks all three publishers' `latest` image tags, validates stable release versions and Linux AMD64 metadata, pulls changed images by their resolved digests, then atomically updates the image and version pins in `config/pins.env`. It refuses version downgrades and writes none of the pins if any pull fails. Previously pulled images remain available. Updating requires Skopeo in addition to the ordinary launcher requirements. Skopeo is already installed on the validated host.
 
-The updater remains limited to Halogen and Gufo during the Strixite trial. It preserves Strixite pins, and `--fresh-cache` does not archive Strixite's cache. Its managed-engine guard still blocks rotation while Strixite is active. Strixite update and monitoring support are deferred until runtime validation justifies keeping it.
+The updater includes Strixite and normalizes an optional leading `v` in OCI release versions before comparison and pinning. Model revisions are never changed implicitly. A read-only check on October 11 found Strixite v0.2.4 available; the locally validated v0.2.3 pin remains unchanged until a deliberate update and runtime validation.
 
 ```bash
 bin/update.sh --check   # Inspect available images and release notes without changing anything
-bin/update.sh           # Pull changed images and update both pins
-bin/update.sh --pull    # Pull both resolved images even if their pins are already current
+bin/update.sh           # Pull changed images and update all three pins
+bin/update.sh --pull    # Pull all resolved images even if their pins are already current
 ```
 
-The output shows versions, digests, advertised image revisions and the selected versions' release notes with source links. Gufo uses its GitHub Releases page. Halogen currently publishes no GitHub Releases, so the updater explicitly uses the matching version section from its tagged `CHANGELOG.md`. Notes are shown even when the pins are current. Missing notes are reported without substituting a different release. GitHub rate-limit or other HTTP failures abort the update before pulls and pin changes.
+The output shows versions, digests, advertised image revisions and the selected versions' release notes with source links. Gufo and Strixite use their GitHub Releases pages. Halogen currently publishes no GitHub Releases, so the updater explicitly uses the matching version section from its tagged `CHANGELOG.md`. Notes are shown even when the pins are current. Missing notes are reported without substituting a different release. GitHub rate-limit or other HTTP failures abort the update before pulls and pin changes.
 
 This tracks published stable images, not every commit on `main` or the `edge` tag. Release notes are publisher claims, not local validation results. Review them for model-format and runtime compatibility before restarting. The script does not rebuild source, execute the new images, upgrade model revisions, download weights, alter Pi settings or restart an active container. There is no `--build` flag because these are prebuilt upstream images. Content-addressed layers do not need a global cache prune to fetch a newer image.
 
@@ -106,9 +106,9 @@ bin/run.sh halogen status
 bin/run.sh halogen smoke
 ```
 
-Use `gufo` instead for that engine. An image update leaves the currently running container on its existing image until you restart it. Repeat `status` until ready. Run `python tests/live.py ENGINE` after a release change to verify conversation, tools and cancellation before relying on it for coding.
+Use `gufo` or `strixite` instead for that engine. An image update leaves the currently running container on its existing image until you restart it. Repeat `status` until ready. Run `python tests/live.py ENGINE` for Halogen/Gufo or `python tests/strixite_live.py` for Strixite after a release change to verify conversation, tools and cancellation before relying on it for coding.
 
-For a deliberately fresh prompt cache, stop all managed engines first and run `bin/update.sh --fresh-cache`. This archives only the `halogen` and `gufo` cache directories under the launcher's `CACHE_ROOT`, normally `$HOME/.cache/strix-halo-inference`, into a timestamped sibling archive. The next start creates an empty engine cache. A shared startup lock prevents a managed engine from starting during rotation. Old data is preserved, not deleted, so archives still consume disk space and may contain private conversation state. No weights, unrelated Podman caches or host page caches are cleared. `--check` cannot be combined with `--pull` or `--fresh-cache`.
+For a deliberately fresh prompt cache, stop all managed engines first and run `bin/update.sh --fresh-cache`. This archives only the `halogen`, `gufo` and `strixite` cache directories under the launcher's `CACHE_ROOT`, normally `$HOME/.cache/strix-halo-inference`, into a timestamped sibling archive. The next start creates an empty engine cache. A shared startup lock prevents a managed engine from starting during rotation. Old data is preserved, not deleted, so archives still consume disk space and may contain private conversation state. No weights, unrelated Podman caches or host page caches are cleared. This command also performs the ordinary image update, so review `--check` first. `--check` cannot be combined with `--pull` or `--fresh-cache`.
 
 Review updates with `git diff -- config/pins.env`. To roll back, restore the previous image and version assignments together, then explicitly restart the selected engine. Do not restore the entire file if it contains unrelated model-pin edits you want to keep.
 

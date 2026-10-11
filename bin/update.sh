@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+ENGINES = (("halogen", "HALOGEN", "peonist-ai/halogen-flash-server"),
+           ("gufo", "GUFO", "gufo-org/gufo"),
+           ("strixite", "STRIXITE", "shawnshekari/strixite"))
 
 @dataclass(frozen=True)
 class Image:
@@ -98,7 +101,7 @@ def inspect_image(engine: str, prefix: str, current: str, pinned_version: str) -
         raise ValueError(f"Unexpected repository or platform for {engine}")
     if not isinstance(labels, dict) or not isinstance(labels.get("org.opencontainers.image.version"), str):
         raise ValueError(f"Missing release version on {engine} image")
-    version = labels["org.opencontainers.image.version"]
+    version = labels["org.opencontainers.image.version"].removeprefix("v")
     if version_tuple(version) < version_tuple(pinned_version):
         raise ValueError(f"Refusing {engine} downgrade from {pinned_version} to {version}")
     reference = repository + "@" + digest
@@ -114,8 +117,8 @@ def main() -> None:
     root = Path(sys.argv[1])
     parser = argparse.ArgumentParser(prog="bin/update.sh", description="Update digest-pinned upstream images and show their release notes.")
     parser.add_argument("--check", action="store_true", help="Inspect only, without pulling images or writing files")
-    parser.add_argument("--pull", action="store_true", help="Pull both resolved images even when their pins are unchanged")
-    parser.add_argument("--fresh-cache", action="store_true", help="Archive both engine prompt caches. Engines must be stopped")
+    parser.add_argument("--pull", action="store_true", help="Pull all three resolved images even when their pins are unchanged")
+    parser.add_argument("--fresh-cache", action="store_true", help="Archive all three engine prompt caches. Engines must be stopped")
     args = parser.parse_args(sys.argv[2:])
     if args.check and (args.pull or args.fresh_cache):
         parser.error("--check cannot be combined with --pull or --fresh-cache")
@@ -138,7 +141,7 @@ def main() -> None:
                               "--format", "{{.Names}}"]).strip()
             if active:
                 raise ValueError(f"Stop the active engine before archiving caches: {active}")
-            for engine in ("halogen", "gufo"):
+            for engine, _, _ in ENGINES:
                 path = cache / engine
                 if path.is_symlink() or (path.exists() and not path.is_dir()):
                     raise ValueError(f"Expected an ordinary cache directory: {path}")
@@ -147,8 +150,7 @@ def main() -> None:
         original = path.read_text()
         pins = dict(re.findall(r"^([A-Z_]+)=(\S+)$", original, flags=re.MULTILINE))
         images = []
-        for engine, prefix, upstream in (("halogen", "HALOGEN", "peonist-ai/halogen-flash-server"),
-                                          ("gufo", "GUFO", "gufo-org/gufo")):
+        for engine, prefix, upstream in ENGINES:
             if prefix + "_IMAGE" not in pins or prefix + "_VERSION" not in pins:
                 raise ValueError(f"Missing image or version pin for {engine}")
             image = inspect_image(engine, prefix, pins[prefix + "_IMAGE"], pins[prefix + "_VERSION"])
@@ -187,7 +189,7 @@ def main() -> None:
         if args.fresh_cache:
             archive = cache / ("archive-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
             archive.mkdir()
-            for engine in ("halogen", "gufo"):
+            for engine, _, _ in ENGINES:
                 source = cache / engine
                 if source.exists():
                     source.rename(archive / engine)
