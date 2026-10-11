@@ -83,6 +83,8 @@ bin/monitor.sh status
 
 Open the printed `file://` address of [the dashboard page](config/monitoring/dashboard.html) in a browser. One page shows live CPU, RAM, swap, GTT, memory pressure, disk activity and accessible GPU sensors, followed by the running engine's inference metrics with explicit engine-specific reporting limits. Choose a refresh interval of 1, 2, 5, 10, 15 or 30 seconds in its header; the default is 2 seconds, matching the scrape interval. Gufo and Strixite readiness use the official blackbox-exporter; stop and restart an existing stack to load new scrape/probe configuration. Use `pull` first only if a pinned monitoring image is missing or changed. Use `bin/monitor.sh prometheus logs --follow` for logs and `bin/monitor.sh stop` to stop only monitoring. All services listen on loopback. History survives restart with seven-day and 2 GiB size-based retention. See [monitoring setup and limits](docs/monitoring.md) for permissions, measured overhead and cleanup. Inference remains usable without the dashboard.
 
+For start, stop and log controls on the page, run `bin/dashboard.py` instead and open the `http://127.0.0.1:9099/` address it prints. The page then has buttons to start and stop monitoring and one engine at a time, and a drawer that follows container logs. The helper runs in the foreground, listens on loopback only and can run nothing except those fixed `bin/run.sh` and `bin/monitor.sh` commands. See [dashboard controls](docs/monitoring.md#dashboard-controls) for its boundaries.
+
 ## Update engine images
 
 `bin/update.sh` checks all three publishers' `latest` image tags, validates stable release versions and Linux AMD64 metadata, pulls changed images by their resolved digests, then atomically updates the image and version pins in `config/pins.env`. It refuses version downgrades and writes none of the pins if any pull fails. Previously pulled images remain available. Updating requires Skopeo in addition to the ordinary launcher requirements. Skopeo is already installed on the validated host.
@@ -162,6 +164,7 @@ tests/update.sh
 python tests/run.py
 python tests/status.py
 PYTHONDONTWRITEBYTECODE=1 python tests/monitor.py
+PYTHONDONTWRITEBYTECODE=1 python tests/dashboard.py
 PYTHONDONTWRITEBYTECODE=1 python tests/strixite_metrics.py
 ```
 

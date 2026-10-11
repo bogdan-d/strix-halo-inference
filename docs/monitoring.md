@@ -10,6 +10,8 @@ bin/monitor.sh status
 
 `start` and `status` print the `file://` address of [the dashboard page](../config/monitoring/dashboard.html). Open it in a browser. It is one self-contained HTML file with no build step, dependency or server of its own. It reads the local Prometheus HTTP API directly. Nothing starts automatically at login. An inference engine does not require monitoring to be running.
 
+Opened that way the page only reads. To also start and stop monitoring and engines and to read container logs from the page, use the [dashboard controls](#dashboard-controls) helper.
+
 The page always shows host readings. Below them it shows whichever engine's metrics scrape is currently up, with headline speed, context, reuse and speculation readings, then charts and engine-specific extras. With no engine running it says so. Engine semantics are documented separately for [Halogen](halogen-monitoring.md), [Gufo](gufo-monitoring.md) and [Strixite](strixite-monitoring.md); similar headline names do not imply identical accounting. Hover over a reading for its caveat. Stop and restart monitoring to load new scrape/probe configuration; run `pull` first only when pinned images are missing or changed. Starting monitoring does not start an engine.
 
 Use the header controls to choose the chart range (15 minutes, 1 hour or 6 hours) and the refresh interval (1, 2, 5, 10, 15 or 30 seconds, default 2). Both choices are remembered by the browser. Polling pauses while the tab is hidden.
@@ -22,6 +24,30 @@ bin/monitor.sh stop
 ```
 
 The component comes before `logs`. Snapshot logs include the last 100 lines. Following ends when the container exits, and `Ctrl+C` stops only the viewer. Containers are auto-removed after stopping, so their logs are unavailable afterward. Logs use the file driver with a 10 MB size limit per container. Stopping preserves the Prometheus volume. Repeating `stop` is safe when the stack is already stopped.
+
+## Dashboard controls
+
+```bash
+bin/dashboard.py
+```
+
+This optional helper serves the same page at `http://127.0.0.1:9099/` and runs the commands behind its buttons. It is one Python file using only the standard library and runs on the host, not in a container, because it has to call Podman through the existing launchers. It runs in the foreground and nothing starts it at login. `Ctrl+C` stops only the helper; engines and monitoring keep running. Set `DASHBOARD_PORT` to use another port.
+
+Served by the helper, the page header gains:
+
+- **Monitoring:** its state and one Start or Stop button. While monitoring is off the page says so instead of reporting a query error. Start still needs the pinned images from `bin/monitor.sh pull`.
+- **Engine:** one button per engine and a Stop button. A click starts that engine with the launcher defaults, or with `CONTEXT` and `SPECULATIVE` if they were exported before starting the helper. While any engine is starting, ready or stopping the other buttons are disabled, so switching needs an explicit stop first. The starting engine shows seconds since its container started until its health check passes. Engine controls work while monitoring is off.
+- **Logs:** a drawer with one tab per container that follows its log, starting from the last 100 lines. It opens on an engine's tab when that engine is started, so a failed start is visible. Scrolling up pauses following. Tabs for containers that do not exist are disabled, and a stopped container's log is gone once it is removed.
+
+Pull, update, diagnose, smoke and status stay in the terminal. A refused or failed command shows its last output line in the header; hover over it for the full output. State comes from Podman and each engine's health address every two seconds, so engines started or stopped in a terminal show up too.
+
+The helper adds the first loopback endpoint here that acts instead of only reading, so its boundary is deliberately narrow:
+
+- It binds `127.0.0.1` only and accepts only its own `Host` name, which defeats DNS rebinding.
+- It refuses any request a browser marks as coming from another site, requires its own `Origin` on every command, and sends no cross-origin headers. Other pages open in the browser can neither run commands nor read state or logs.
+- Each request path selects one fixed command line: `bin/run.sh <engine> start|stop|logs --follow` or `bin/monitor.sh start|stop` and `bin/monitor.sh <component> logs --follow`. No request text reaches a command. The one-engine rule stays in `bin/run.sh`; the helper relays its refusal.
+- It has no authentication. Any local process, under any local user, can still start or stop these engines and monitoring and read their logs through it. Do not run it on a shared host, and do not tunnel or expose the port.
+- Logs are streamed to the page and not stored. Closing the drawer, switching tabs or closing the page ends that log viewer. The Gufo log seen during validation held request metadata, not prompt text. The other engines and other settings were not reviewed, so treat the drawer like a terminal showing those logs.
 
 ## Stack and boundaries
 
@@ -100,6 +126,7 @@ CPU was calculated from each process's native `process_cpu_seconds_total` counte
 - **Partial startup:** HTTP readiness is bounded to 60 seconds, with two-second probes. Failure or interruption stops containers whose IDs this invocation captured and retains volumes. If interrupted during container creation before its ID returns, inspect `podman ps -a` and use `bin/monitor.sh stop` to clean up the owned stack. No engine is stopped by that command.
 - **Unavailable sensor:** inspect exporter logs and the collector-health panel. Verify the source is readable on the host. Do not fix it by granting privileged mode, exposing the Podman socket or changing device permissions.
 - **No CPU rate yet:** allow several five-second scrapes to arrive. The default dashboard shows the last 15 minutes, which may initially contain mostly empty space.
+- **Controls unavailable:** the page was served by `bin/dashboard.py` and can no longer reach it. Start the helper again; readings continue meanwhile. Opened as a `file://` address the page has no controls by design.
 - **Dashboard changes:** edit the panel JSON block in the checked-in page and reload the browser tab. Keep `SCRAPE` in the page equal to `scrape_interval` in the Prometheus configuration. A scrape or launcher change needs a stop and start.
 - **Page shows a query error:** check `bin/monitor.sh status`. The page needs Prometheus on `127.0.0.1:9090` and a browser that permits a local file to read it. Firefox was verified.
 - **Lost history:** check whether the monitoring volume was removed or retention expired. Ordinary container removal does not delete the named volume. Back it up while monitoring is stopped before replacing storage or upgrading databases.
@@ -116,7 +143,7 @@ This deletion is irreversible without a backup. A `strix-halo-monitor-grafana` v
 
 ## Validation and sources
 
-`PYTHONDONTWRITEBYTECODE=1 python tests/monitor.py` checks argument rejection, ownership guards, detached launch, partial-start rollback and preservation of volumes. Its CLI stubs test project policy, not compatibility with Podman. Real-service validation of the page ran every panel query against real Prometheus, compared readings with each engine's raw `/metrics` after real generations, and rendered the page in headless Firefox. Engine generation checks and validation details are recorded in [local validation](validation.md).
+`PYTHONDONTWRITEBYTECODE=1 python tests/monitor.py` checks argument rejection, ownership guards, detached launch, partial-start rollback and preservation of volumes. Its CLI stubs test project policy, not compatibility with Podman. `PYTHONDONTWRITEBYTECODE=1 python tests/dashboard.py` runs the helper against script stubs and checks that foreign hosts, other sites' requests and commands without its origin are refused before any command runs, that only the listed paths map to commands, and that closing a log connection ends its viewer. Real-service validation of the page ran every panel query against real Prometheus, compared readings with each engine's raw `/metrics` after real generations, and rendered the page in headless Firefox. Engine generation checks and validation details are recorded in [local validation](validation.md).
 
 - [node-exporter container and collector documentation](https://github.com/prometheus/node_exporter/blob/v1.12.1/README.md).
 - [Pinned DRM collector and metric definitions](https://github.com/prometheus/node_exporter/blob/v1.12.1/collector/drm_linux.go).

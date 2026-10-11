@@ -11,13 +11,19 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .02em; }
-#error { color: var(--bad); }
+#error, #notice { color: var(--bad); }
 .controls { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); }
-.controls label { display: flex; align-items: center; gap: 6px; }
-select { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
+.controls label, .group { display: flex; align-items: center; gap: 6px; }
+#helper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; color: var(--muted); }
+select, button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
+button { padding: 3px 10px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.on { opacity: 1; color: var(--accent); border-color: var(--accent); }
 main { padding: 4px 20px 24px; max-width: 2200px; margin: 0 auto; }
 section { margin-top: 18px; }
 .head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
@@ -58,19 +64,41 @@ h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-t
 .idle { margin-top: 18px; padding: 18px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
 code { color: var(--text); }
 body.stale main { opacity: .45; }
+#offline { margin: 18px 20px; }
+#drawer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; height: 34vh; display: flex; flex-direction: column; background: var(--card); border-top: 1px solid var(--line); }
+#drawer .head { margin: 0; padding: 6px 20px; border-bottom: 1px solid var(--line); }
+#log { flex: 1; margin: 0; padding: 8px 20px; overflow: auto; font: 12px/1.45 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+body.logs { padding-bottom: 34vh; }
 </style>
 </head>
 <body>
 <header>
   <h1>Strix Halo</h1>
+  <div id="helper" hidden>
+    <span class="group">Monitoring <span id="monitoring" class="chip"></span><button id="monitor"></button></span>
+    <span class="group">Engine <span id="engines" class="group"></span><button id="stop">Stop</button></span>
+  </div>
+  <span id="notice"></span>
   <span id="error"></span>
   <div class="controls">
     <span id="updated"></span>
+    <button id="logs" hidden>Logs</button>
     <label>Range <select id="range"></select></label>
     <label>Refresh <select id="refresh"></select></label>
   </div>
 </header>
+<div id="offline" class="idle" hidden></div>
 <main id="main"></main>
+<aside id="drawer" hidden>
+  <div class="head">
+    <span id="tabs" class="group"></span>
+    <div class="controls">
+      <label><input type="checkbox" id="follow" checked> Follow</label>
+      <button id="close" title="Close logs">×</button>
+    </div>
+  </div>
+  <pre id="log"></pre>
+</aside>
 
 <!--
 Panel definitions, also read by tests/dashboard_panels.py. Every query is "(expr) gate", where the gate is the
@@ -356,7 +384,11 @@ replaced by the panel's window, else by a window derived from the scrape interva
 /** @typedef {{metric: Record<string, string>, value: [number, string], values: [number, string][]}} Sample */
 /** @typedef {{start: number, end: number, step: number, instantWindow: string, rangeWindow: string}} Context */
 /** @typedef {{el: HTMLElement, refresh: (context: Context) => Promise<unknown>}} Mounted */
+/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping", since: number}} Engine */
+/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[]}} State */
 
+// True when bin/dashboard.py serves this page. It also runs the commands behind the buttons; opened as a file, the page only reads.
+const HELPER = location.protocol !== "file:";
 const PROMETHEUS = "http://127.0.0.1:9090";
 const SCRAPE = 2; // Seconds. Keep equal to scrape_interval in prometheus.yml.
 const REFRESH = [1, 2, 5, 10, 15, 30];
@@ -580,7 +612,8 @@ function control(id, key, options, fallback, text, changed) {
 }
 
 const host = mount(config.host);
-const idle = h("div", "idle", "No engine running. Start one with ", h("code", "", "bin/run.sh halogen|gufo|strixite start --wait"), ".");
+const idle = HELPER ? h("div", "idle", "No engine running. Start one above.")
+  : h("div", "idle", "No engine running. Start one with ", h("code", "", "bin/run.sh halogen|gufo|strixite start --wait"), ".");
 /** @type {Map<string, Mounted>} */
 const engines = new Map();
 byId("main").append(host.el, idle);
@@ -612,7 +645,7 @@ async function refresh() {
 let timer;
 async function poll() {
   clearTimeout(timer);
-  if (!document.hidden) {
+  if (!document.hidden && !offline()) {
     try {
       await refresh();
       byId("error").textContent = "";
@@ -629,7 +662,163 @@ async function poll() {
 const range = control("range", "strix.range", Object.keys(RANGES), "15 min", value => value, poll);
 const interval = control("refresh", "strix.refresh", REFRESH.map(String), "2", value => `${value} s`, poll);
 document.addEventListener("visibilitychange", poll);
-poll();
+
+/** @type {State|undefined} */
+let state;
+let failure = "";
+/** @type {string|undefined} */
+let tab;
+/** @type {AbortController|undefined} */
+let stream;
+const SOURCES = [...config.engines.map(engine => ({id: engine.job, name: engine.name})),
+  {id: "prometheus", name: "Prometheus"}, {id: "exporter", name: "Exporter"}, {id: "probe", name: "Probe"}];
+const follow = /** @type {HTMLInputElement} */ (byId("follow"));
+
+// Monitoring is known to be down, so its absence is a state to show rather than a query error.
+const offline = () => state !== undefined && state.monitoring !== "on" && state.monitoring !== "partial";
+const active = () => Object.entries(state?.engines ?? {}).find(([, engine]) => engine.state !== "stopped");
+
+/** @param {string} id @param {string} text @param {() => void} clicked */
+function button(id, text, clicked) {
+  const el = /** @type {HTMLButtonElement} */ (h("button", "", text));
+  el.dataset.id = id;
+  el.addEventListener("click", clicked);
+  return el;
+}
+
+function render() {
+  const monitoring = state?.monitoring, running = active();
+  byId("monitoring").className = `chip ${monitoring === "on" ? "ok" : monitoring === "partial" ? "bad" : ""}`;
+  byId("monitoring").textContent = monitoring ?? "unknown";
+  const monitor = /** @type {HTMLButtonElement} */ (byId("monitor"));
+  monitor.textContent = monitoring === "off" ? "Start" : "Stop";
+  monitor.disabled = !state || monitoring === "starting" || monitoring === "stopping";
+  for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("engines").childNodes)) {
+    const engine = state?.engines[el.dataset.id ?? ""], name = SOURCES.find(source => source.id === el.dataset.id)?.name;
+    const shown = engine?.state === "starting" && engine.since ? `loading ${Math.max(0, Math.round(Date.now() / 1000 - engine.since))} s` : engine?.state;
+    el.textContent = engine && engine.state !== "stopped" ? `${name} · ${shown}` : name ?? "";
+    el.className = engine && engine.state !== "stopped" ? "on" : "";
+    // One engine at a time: starting another needs an explicit stop first.
+    el.disabled = !state || !!running;
+  }
+  const stop = /** @type {HTMLButtonElement} */ (byId("stop"));
+  stop.hidden = !running;
+  stop.disabled = running?.[1].state === "stopping";
+  for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("tabs").childNodes)) {
+    el.className = el.dataset.id === tab ? "on" : "";
+    el.disabled = el.dataset.id !== tab && !state?.logs.includes(el.dataset.id ?? "");
+  }
+  byId("notice").textContent = state ? failure : "Controls unavailable. Is bin/dashboard.py running?";
+  byId("offline").textContent = `Monitoring is ${monitoring}. Host and engine readings need it; engines run without it.`;
+  byId("offline").hidden = !offline();
+  byId("main").hidden = offline();
+  if (offline()) {
+    byId("error").textContent = "";
+    document.body.classList.remove("stale");
+  }
+}
+
+/** @type {number|undefined} */
+let watcher;
+async function watch() {
+  clearTimeout(watcher);
+  if (!document.hidden) {
+    const was = offline();
+    try {
+      const response = await fetch("/state", {signal: AbortSignal.timeout(5000)});
+      if (!response.ok) throw new Error(await response.text());
+      state = await response.json();
+    } catch {
+      state = undefined;
+    }
+    render();
+    if (was && !offline()) poll();
+  }
+  clearTimeout(watcher);
+  watcher = setTimeout(watch, 2000);
+}
+
+/**
+ * Run one of the helper's fixed start or stop commands. Resolves once it has finished.
+ * @param {string} path
+ */
+async function act(path) {
+  failure = "";
+  byId("notice").title = "";
+  for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("helper").querySelectorAll("button"))) el.disabled = true;
+  try {
+    const response = await fetch(path, {method: "POST"});
+    const output = (await response.text()).trim();
+    if (!response.ok) {
+      failure = output.split("\n").at(-1) || `Request failed: ${response.status}`;
+      byId("notice").title = output;
+    }
+    return response.ok;
+  } catch (error) {
+    failure = String(error);
+    return false;
+  } finally {
+    await watch();
+  }
+}
+
+/**
+ * Show one container's log and follow it until another tab opens, the drawer closes or the container exits.
+ * @param {string} id
+ */
+async function tail(id) {
+  stream?.abort();
+  const controller = stream = new AbortController(), log = byId("log");
+  tab = id;
+  log.replaceChildren();
+  byId("drawer").hidden = false;
+  document.body.classList.add("logs");
+  follow.checked = true;
+  render();
+  /** @param {string} text */
+  const write = text => {
+    log.append(text.replace(/\x1b\[[0-9;]*m/g, ""));
+    while (log.childNodes.length > 2000) log.firstChild?.remove();
+    if (follow.checked) log.scrollTop = log.scrollHeight;
+  };
+  try {
+    const response = await fetch(`/logs/${id}`, {signal: controller.signal});
+    const reader = /** @type {ReadableStream<BufferSource>} */ (response.body).pipeThrough(new TextDecoderStream()).getReader();
+    for (let part = await reader.read(); !part.done; part = await reader.read()) write(part.value);
+    write("\n[log ended]\n");
+  } catch (error) {
+    if (!controller.signal.aborted) write(`\n[${error}]\n`);
+  }
+}
+
+function closeLogs() {
+  stream?.abort();
+  byId("drawer").hidden = true;
+  document.body.classList.remove("logs");
+}
+
+if (HELPER) {
+  byId("helper").hidden = byId("logs").hidden = false;
+  byId("engines").append(...config.engines.map(engine => button(engine.job, engine.name, async () => {
+    // Open the log at once, so a failed start is visible.
+    if (await act(`/engine/${engine.job}/start`)) tail(engine.job);
+  })));
+  byId("tabs").append(...SOURCES.map(source => button(source.id, source.name, () => tail(source.id))));
+  byId("monitor").addEventListener("click", () => act(`/monitoring/${state?.monitoring === "off" ? "start" : "stop"}`));
+  byId("stop").addEventListener("click", () => { const running = active(); if (running) act(`/engine/${running[0]}/stop`); });
+  byId("logs").addEventListener("click", () => {
+    const available = state?.logs ?? [];
+    if (byId("drawer").hidden) tail(tab && available.includes(tab) ? tab : available[0] ?? tab ?? "prometheus"); else closeLogs();
+  });
+  byId("close").addEventListener("click", closeLogs);
+  // Scrolling up pauses following; returning to the end resumes it.
+  byId("log").addEventListener("scroll", () => { const log = byId("log"); follow.checked = log.scrollHeight - log.scrollTop - log.clientHeight < 8; });
+  follow.addEventListener("change", () => { if (follow.checked) byId("log").scrollTop = byId("log").scrollHeight; });
+  document.addEventListener("visibilitychange", watch);
+  watch().then(poll);
+} else {
+  poll();
+}
 </script>
 </body>
 </html>

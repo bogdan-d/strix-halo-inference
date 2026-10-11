@@ -141,6 +141,14 @@ Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4 were each started at native 256K,
 
 Not exercised: Chromium-based browsers, the 1 hour and 6 hour ranges, refresh intervals other than the default, hover readouts, long-context or cancelled requests, and collection overhead at two-second scraping. The old `strix-halo-monitor-grafana` volume and pulled Grafana image were removed by name afterward.
 
+## Dashboard controls, October 12, 2026
+
+`bin/dashboard.py` was added: a loopback-only helper that serves the dashboard page and runs fixed `bin/run.sh` and `bin/monitor.sh` commands for its new start, stop and log controls. No launcher, container or scrape configuration changed.
+
+The offline helper check passes, and the page script type-checks. On the real host, with headless Firefox driving the served page: monitoring was started through the helper and stopped from its page button with the Prometheus volume retained. Gufo 0.12.0 was started from its page button at native 256K; the other engine buttons were disabled, the log drawer opened on Gufo by itself, the button counted loading seconds and then showed ready, and `bin/run.sh gufo smoke` returned a real generation. Switching the drawer to Prometheus ended the Gufo log viewer. The page Stop button stopped Gufo with memory released and the drawer showed the log ending. A refused command showed the launcher's message in the header. The monitoring-off placeholder, the notice after the helper was stopped, and the unchanged control-free page opened as a file were also rendered. Everything was stopped afterward.
+
+Not exercised: Halogen and Strixite started from the page, the visible stopping state (Gufo and monitoring stopped within about two seconds), a start that fails after its container exists, the partial monitoring state, a second engine start raced from another client, Chromium-based browsers, and manual use of the Follow checkbox and scrolling.
+
 ## Remaining work
 
 Neither restart-safe engine-cache restoration nor long-context performance has been comprehensively tested. No host package, group, device-permission, login-limit, kernel or BIOS change was made. No persistent inference service, proxy or image-build CI was added. Optional host, Halogen and Gufo monitoring now work. Matched-engine benchmarks, near-capacity workloads and multi-request serving remain future work rather than completed telemetry tickets.
