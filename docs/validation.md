@@ -139,7 +139,7 @@ Every query on the page was accepted by real Prometheus 3.15.0. Every query from
 
 Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4 were each started at native 256K, given real non-streaming generations, and compared against their raw `/metrics`: token counters, speeds, context share, reuse share and draft acceptance agreed. Each engine section, the no-engine state and the Prometheus-unreachable state were rendered in headless Firefox opening the page as a local file. Each engine was stopped afterward with memory released, and monitoring was stopped. Prometheus answered a `null` origin with a matching CORS header.
 
-Not exercised: Chromium-based browsers, the 1 hour and 6 hour ranges, refresh intervals other than the default, hover readouts, long-context or cancelled requests, and collection overhead at two-second scraping. The old `strix-halo-monitor-grafana` volume and pulled Grafana image were left in place.
+Not exercised: Chromium-based browsers, the 1 hour and 6 hour ranges, refresh intervals other than the default, hover readouts, long-context or cancelled requests, and collection overhead at two-second scraping. The old `strix-halo-monitor-grafana` volume and pulled Grafana image were removed by name afterward.
 
 ## Remaining work
 
