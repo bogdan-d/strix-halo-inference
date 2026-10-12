@@ -81,7 +81,8 @@ def main():
                     break
         else:
             raise AssertionError("Stream ended before producing content")
-    deadline = time.monotonic() + 20
+    # Halogen holds a dropped reply for its 20-second retry grace before the slot reads idle.
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if args.engine == "halogen":
             idle = get("/health")["in_flight"] == 0
@@ -91,7 +92,7 @@ def main():
             break
         time.sleep(0.5)
     else:
-        raise AssertionError("Disconnected request did not release its slot within 20 seconds")
+        raise AssertionError("Disconnected request did not release its slot within 30 seconds")
     followup = chat([{"role": "user", "content": "Reply with exactly: ready"}])
     assert followup["choices"][0]["message"]["content"].strip() == "ready", followup
     print(json.dumps({"engine": args.engine, "model": model, "conversation": "pass", "tool_call": "pass",

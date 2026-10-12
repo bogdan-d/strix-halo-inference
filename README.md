@@ -8,7 +8,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Strixite third-engine assessment](docs/strixite-research.md), with container compatibility, 256K memory estimates and performance evidence. See the [trial operations, local allocation results and remaining validation gates](docs/strixite.md).
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Local validation results and limitations](docs/validation.md).
-- [October 11 engine updates](docs/engine-updates.md), with release compatibility, basic runtime checks and image cleanup.
+- [Engine updates](docs/engine-updates.md), with the October 12 pins and their partial checks, the October 11 release compatibility and basic runtime checks, and image cleanup.
 - [Pi coding agent setup for all three engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
 - [Medium versus xhigh for routine coding](docs/thinking-comparison.md), with local exploratory results and a repeatable Pi comparison.
 - [Sandboxed three-engine coding comparison](docs/coding-comparison.md), with matched tasks, strict tool arguments, memory-release checks and a repeatable smoke gate.
@@ -32,7 +32,7 @@ bin/run.sh gufo pull
 bin/run.sh gufo diagnose
 ```
 
-The current images are Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4. All passed basic native-256K generation, API tools, short decode cancellation and shutdown checks on October 11. Earlier detailed coding and monitoring measurements used older versions; see the [update record](docs/engine-updates.md) for scope. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
+The current images are Halogen 0.18.1, Gufo 0.13.0 and Strixite 0.2.4. Halogen and Gufo moved to these pins on October 12. Halogen 0.18.1 passed generation, API tools, short decode cancellation and shutdown checks at a reduced 32K context only; Gufo 0.13.0 has not been started on this host yet. Strixite 0.2.4 and the previous Halogen 0.18.0 and Gufo 0.12.0 passed basic native-256K generation, API tools, short decode cancellation and shutdown checks on October 11. Earlier detailed coding and monitoring measurements used older versions; see the [update record](docs/engine-updates.md) for scope. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
 
 ```bash
 bin/models.sh download halogen
@@ -89,7 +89,7 @@ For start, stop and log controls on the page, run `bin/dashboard.py` instead and
 
 `bin/update.sh` checks all three publishers' `latest` image tags, validates stable release versions and Linux AMD64 metadata, pulls changed images by their resolved digests, then atomically updates the image and version pins in `config/pins.env`. It refuses version downgrades and writes none of the pins if any pull fails. Previously pulled images remain available. Updating requires Skopeo in addition to the ordinary launcher requirements. Skopeo is already installed on the validated host.
 
-The updater includes Strixite and normalizes an optional leading `v` in OCI release versions before comparison and pinning. Model revisions are never changed implicitly. The October 11 update selected Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4, followed by [basic runtime checks](docs/engine-updates.md).
+The updater includes Strixite and normalizes an optional leading `v` in OCI release versions before comparison and pinning. Model revisions are never changed implicitly. The October 11 update selected Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4, followed by [basic runtime checks](docs/engine-updates.md). The October 12 update moved Halogen to 0.18.1, checked briefly at 32K context, and Gufo to 0.13.0, not started yet.
 
 ```bash
 bin/update.sh --check   # Inspect available images and release notes without changing anything

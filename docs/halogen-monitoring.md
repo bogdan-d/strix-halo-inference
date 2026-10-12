@@ -1,6 +1,6 @@
 # Halogen inference dashboard
 
-The current image is 0.18.0. Existing metric contracts remain compatible and its native scrape passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.17.5. The two new rewrite/cut-back counters are intentionally not collected by the existing allowlist.
+The current image is 0.18.1, pinned October 12. Its metrics endpoint still exports every allowlisted metric name, but wire types, semantics and a scrape through Prometheus were not rechecked. On 0.18.0 the existing metric contracts remained compatible and its native scrape passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.17.5. The two rewrite/cut-back counters added in 0.18.0 are intentionally not collected by the existing allowlist.
 
 Open [the dashboard page](../config/monitoring/dashboard.html) after starting monitoring and Halogen. Its Halogen section appears while the engine's metrics scrape is up:
 

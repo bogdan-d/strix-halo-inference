@@ -1,6 +1,6 @@
 # Local validation, October 10, 2026
 
-The detailed results below are historical. Current image pins moved to Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4 on October 11, followed by basic checks only. See the [release update record](engine-updates.md) for current versions, compatibility and validation scope. Historical image digests remain in Git history rather than the current `config/pins.env`.
+The detailed results below are historical. Image pins moved to Halogen 0.18.0, Gufo 0.12.0 and Strixite 0.2.4 on October 11, followed by basic checks only. Halogen 0.18.1 and Gufo 0.13.0 were pinned on October 12. Halogen passed a short check at 32K context, and Gufo has not been started. See the [release update record](engine-updates.md) for current versions, compatibility and validation scope. Historical image digests remain in Git history rather than the current `config/pins.env`.
 
 Host: CachyOS, kernel `7.2.9-2-cachyos`, Ryzen AI Max+ 395, Radeon 8060S, approximately 125 GiB usable system RAM. Existing BIOS, IOMMU and kernel settings were preserved. Rootless Podman uses `runc`. GPU devices are directly accessible on this host, so supplementary-group preservation was not needed for these checks.
 
