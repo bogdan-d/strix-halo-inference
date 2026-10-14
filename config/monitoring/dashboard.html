@@ -194,7 +194,9 @@ replaced by the panel's window, else by a window derived from the scrape interva
          "series": [{"label": "", "expr": "(rate(halogen:draft_tokens_accepted_total{job='halogen'}[$__rate_interval]) / rate(halogen:draft_tokens_total{job='halogen'}[$__rate_interval])) and on(job, instance) (rate(halogen:draft_tokens_total{job='halogen'}[$__rate_interval]) > 0)"}]},
         {"title": "Requests in flight", "unit": "count", "note": "Front-end request gauges, not generated token progress.",
          "series": [{"label": "Processing", "expr": "llamacpp:requests_processing{job='halogen'}"},
-                    {"label": "Deferred", "expr": "llamacpp:requests_deferred{job='halogen'}"}]}
+                    {"label": "Deferred", "expr": "llamacpp:requests_deferred{job='halogen'}"}]},
+        {"title": "Longest queue wait", "sub": "request waiting now", "unit": "seconds", "note": "How long the request that has waited longest for the slot has waited so far. Zero when nothing waits. Not a latency distribution or the time a request spends running.",
+         "series": [{"label": "", "expr": "halogen:queue_wait_longest_seconds{job='halogen'}"}]}
       ],
       "charts": [
         {"title": "Processing speed over completed requests", "unit": "tokens/s", "note": "Tokens divided by summed engine processing seconds in the rate window. Not wall-time throughput or current-request speed.",
@@ -233,6 +235,8 @@ replaced by the panel's window, else by a window derived from the scrape interva
                     {"label": "Generated", "expr": "llamacpp:tokens_predicted_total{job='halogen'}"}]},
         {"title": "Oldest request age", "unit": "seconds", "note": "Zero when idle, not a latency distribution.",
          "series": [{"label": "", "expr": "halogen:busy_for_seconds{job='halogen'}"}]},
+        {"title": "Gave up in the queue, since front-end start", "unit": "count", "note": "Requests that left the queue without starting: the client hung up or the queue timeout passed. Current counter total, not lifetime across restarts.",
+         "series": [{"label": "", "expr": "halogen:queue_gave_up_total{job='halogen'}"}]},
         {"title": "Waiting for pool room", "unit": "flag", "note": "State gauge, not accumulated wait time.",
          "series": [{"label": "", "expr": "halogen:kv_pool_waiting_for_room{job='halogen'}"}]},
         {"title": "Cache entries, fresh snapshot", "unit": "count", "gate": "cache", "note": "Retained engine cache records, not entry capacity.",
