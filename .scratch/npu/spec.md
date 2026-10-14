@@ -30,8 +30,8 @@ The Flash model itself takes 81.4 GiB and leaves about 30.6 GiB of host memory a
 
 ## Open decisions
 
-- **Which helpers earn their memory?** See the candidate uses below. Loading all five costs well over 10 GB beside Flash.
-- **Opt-in or always on?** `NPU_MODELS` is opt-in for now and keeps Halogen exactly as before when unset. Decide whether a fixed set becomes the default.
+- **Which helpers earn their memory?** None yet: no client exists. NPU models stay opt-in and all files are kept ([ADR 0001](../../docs/adr/0001-npu-models-stay-opt-in.md)).
+- **Opt-in or always on?** Opt-in, until a client needs a model (ADR 0001).
 - **Flash speed cost.** Measured in ticket 03: with the NPU continuously busy, decode slows 5 to 7% with the small models and 11 to 12% with the 4B ones. Small set about 6.2 GiB host RAM, 4B pair about 8.9 GiB.
 - **Gufo and Strixite.** Recheck at each update whether either gained NPU support.
 

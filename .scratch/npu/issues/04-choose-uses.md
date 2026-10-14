@@ -4,8 +4,12 @@
 
 **Blocked by:** 03
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] Each kept helper has a named client and a reason that outweighs its memory and Flash-speed cost.
-- [ ] The decision is recorded under `docs/adr/`.
-- [ ] `config/npu-files.tsv` lists only kept models, and unused files are removed with the user's approval.
+- [x] Each kept helper has a named client and a reason that outweighs its memory and Flash-speed cost.
+- [x] The decision is recorded under `docs/adr/`.
+- [x] `config/npu-files.tsv` lists only kept models, and unused files are removed with the user's approval.
+
+## Comments
+
+- October 14: the user chose to load no NPU model by default and build no client yet, and to keep all downloaded files. No helper is kept loaded, so none needs a client. Recorded in [ADR 0001](../../../docs/adr/0001-npu-models-stay-opt-in.md).
