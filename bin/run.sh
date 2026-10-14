@@ -33,6 +33,9 @@ case "$ENGINE" in
 esac
 NAME="strix-halo-$ENGINE"
 MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
+NPU_MODELS="${NPU_MODELS:-}"
+# Holding the fabric clock costs about 2.3 W at idle, so it is held only while Halogen runs NPU models.
+FABRIC_CLOCK="${FABRIC_CLOCK:-/usr/local/sbin/halogen-fabric-clock}"
 CACHE_ROOT="${CACHE_ROOT:-$HOME/.cache/strix-halo-inference}"
 BASE="http://127.0.0.1:$PORT"
 if [[ "$WAIT" == true ]]; then
@@ -44,7 +47,13 @@ case "$ACTION" in
   stop)
     STOP_TIMEOUT=60
     [[ "$ENGINE" != strixite ]] || STOP_TIMEOUT=90
-    podman stop --time "$STOP_TIMEOUT" "$NAME"; free -h; exit ;;
+    STATUS=0
+    podman stop --time "$STOP_TIMEOUT" "$NAME" || STATUS=$?
+    # Release even when the container already exited, so a failed NPU start does not keep the clock held.
+    if [[ "$ENGINE" == halogen && -x "$FABRIC_CLOCK" ]] && "$FABRIC_CLOCK" status >/dev/null; then
+      sudo -n "$FABRIC_CLOCK" release || STATUS=1
+    fi
+    free -h; exit "$STATUS" ;;
   logs)
     podman container exists "$NAME" || { echo "No container logs available for $NAME. It may be stopped and auto-removed." >&2; exit 1; }
     exec podman logs --tail 100 "${FOLLOW[@]}" "$NAME" ;;
@@ -60,7 +69,7 @@ esac
 
 [[ "$(podman info --format '{{.Host.Security.Rootless}}')" == true ]] || { echo 'Use rootless Podman, not sudo.' >&2; exit 1; }
 # The NPU is passed to every engine so NPU features need no launcher change. Halogen uses it only when
-# HALOGEN_NPU_MODELS is set, which also needs host XRT and a held fabric clock (.scratch/npu/spec.md).
+# NPU_MODELS is set, which also needs host XRT and a held fabric clock (README, NPU models).
 GPU=(--device /dev/kfd --device /dev/dri --device /dev/accel/accel0 --ulimit memlock=-1:-1)
 if [[ "$(podman info --format '{{.Host.OCIRuntime.Name}}')" == crun ]]; then
   GPU+=(--group-add keep-groups)
@@ -79,6 +88,25 @@ if [[ "$ACTION" == diagnose ]]; then
 fi
 
 "$ROOT/bin/models.sh" check "$ENGINE"
+NPU=()
+if [[ -n "$NPU_MODELS" ]]; then
+  [[ "$ENGINE" == halogen && "$ACTION" == start ]] || { echo 'NPU_MODELS applies only to bin/run.sh halogen start.' >&2; exit 2; }
+  [[ "$NPU_MODELS" =~ ^[a-z0-9][a-z0-9.-]*(,[a-z0-9][a-z0-9.-]*)*$ ]] || { echo 'NPU_MODELS must be comma-separated model ids.' >&2; exit 2; }
+  IFS=, read -r -a IDS <<<"$NPU_MODELS"
+  for ID in "${IDS[@]}"; do
+    # Only models whose own weights are in the manifest can load; devices-only entries cannot.
+    awk -F'\t' -v path="$ID/$ID.hnpw" '$3 == path {found = 1} END {exit !found}' "$ROOT/config/npu-files.tsv" \
+      || { echo "NPU model $ID is not in config/npu-files.tsv. Add it with bin/npu-manifest.sh, then bin/models.sh download npu." >&2; exit 2; }
+  done
+  "$ROOT/bin/models.sh" check npu
+  # Distribution XRT libraries find each other at their own path, so each is mounted there and where Halogen looks.
+  XRT_LIB_DIR="${XRT_LIB_DIR:-/usr/lib}"
+  for LIB in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
+    SOURCE="$(readlink -f -- "$XRT_LIB_DIR/$LIB")" && [[ -f "$SOURCE" ]] || { echo "Host XRT library $XRT_LIB_DIR/$LIB is missing. Install xrt and xrt-plugin-amdxdna." >&2; exit 1; }
+    NPU+=(--volume "$SOURCE:/opt/xilinx/xrt/lib/$LIB:ro" --volume "$SOURCE:$XRT_LIB_DIR/$LIB:ro")
+  done
+  NPU+=(--env "HALOGEN_NPU_MODELS=$NPU_MODELS")
+fi
 mkdir -p -- "$CACHE_ROOT/$ENGINE"
 exec 9>"$CACHE_ROOT/start.lock"
 flock -n 9 || { echo 'Another engine start is in progress.' >&2; exit 1; }
@@ -94,7 +122,7 @@ ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.ma
   "${GPU[@]}" --publish "127.0.0.1:$PORT:$PORT"
   --volume "$MODELS_DIR:/models:ro" --volume "$CACHE_ROOT/$ENGINE:/cache:rw")
 if [[ "$ENGINE" == halogen ]]; then
-  ARGS+=(--ipc=host
+  ARGS+=(--ipc=host "${NPU[@]}"
     --env "HALOGEN_CHECKPOINT=/models/$REPO/qwen38-flash-next-v2.hgn"
     --env "HALOGEN_TOKENIZER=/models/$REPO/tokenizer"
     --env "HALOGEN_CTX=$CONTEXT" --env "HALOGEN_KV_POOL_POSITIONS=$CONTEXT"
@@ -121,9 +149,12 @@ else
     --prompt-cache-dir /cache --prompt-cache-gib 16 --prompt-cache-ram-margin-gib 8
     --low-memory fail --think-nudge off)
 fi
+if [[ -n "$NPU_MODELS" ]]; then
+  sudo -n "$FABRIC_CLOCK" hold || { echo "Could not hold the GPU fabric clock. Install $FABRIC_CLOCK and its sudoers rule (README, NPU models)." >&2; exit 1; }
+fi
 printf 'Starting %s:' "$ENGINE"; printf ' %q' "${ARGS[@]}"; echo
 # Keep the startup lock in this shell, not the detached container monitor.
-CID="$("${ARGS[@]}" 9>&-)"
+CID="$("${ARGS[@]}" 9>&-)" || { [[ -z "$NPU_MODELS" ]] || sudo -n "$FABRIC_CLOCK" release; exit 1; }
 echo "$CID"
 exec 9>&-
 echo "Container started, not yet ready. Check bin/run.sh $ENGINE status and bin/run.sh $ENGINE logs"

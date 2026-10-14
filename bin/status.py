@@ -42,6 +42,7 @@ def show_configuration(engine: str, container: dict) -> None:
         disk = env.get("HALOGEN_CACHE_DISK_GIB")
         disk_limit = f"{disk} GiB" if disk is not None else "unavailable"
         ram_limit = staging = None
+        print(f"Configured NPU models: {env.get('HALOGEN_NPU_MODELS') or 'none'}")
     elif engine == "gufo":
         context = setting(args, "--context")
         mtp = setting(args, "--speculative") or "unavailable"

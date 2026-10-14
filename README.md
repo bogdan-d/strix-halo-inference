@@ -41,8 +41,6 @@ bin/models.sh download gufo
 
 Downloads can take a long time. Repeating the command verifies existing final files and resumes incomplete files. A size or checksum mismatch fails without replacing the existing file. `bin/models.sh verify ENGINE` performs a full hash check. Launches use `check`, a fast presence and size check, rather than reading hundreds of gigabytes before every start.
 
-NPU model files for Halogen are listed in `config/npu-files.tsv` and stored under `/home/bogdan/models/npu`, the layout Halogen reads at `/models/npu`. `bin/npu-manifest.sh` derives the list from the record inside the pinned Halogen image, which Halogen uses to refuse any other file. Rerun it after a Halogen pin change, review the diff, then run `bin/models.sh download npu`. The files are downloaded but not loaded; see the [NPU plan](.scratch/npu/spec.md).
-
 Start one engine, wait for its readiness endpoint, then test and stop it:
 
 ```bash
@@ -72,6 +70,27 @@ Use `bin/run.sh halogen start --wait` to wait for readiness and print the endpoi
 `bin/run.sh halogen status` summarizes the actual container's image identity and OCI version, context, speculation, cache limits and readiness. Current pins and shell overrides do not redefine a running container's configuration. Cache disk usage comes from `du` over the entire mounted cache directory, including records for other configurations, and is not the active engine's retained-cache counter. RAM cache usage is unavailable unless verified telemetry is added. Allocation figures extracted from recent startup logs are labeled historical, not live. They may become unavailable when startup lines fall outside the last 1,000 log lines. Host RAM and swap come from `/proc/meminfo`; GTT comes from each GPU's sysfs counters and includes other GPU users. These are separate accounting views, not additive estimates of free memory. In particular, Halogen's pinned weights can make `MemAvailable` misleading. Status remains nonzero for missing, stopped, paused, starting or unresponsive engines. Inspection, disk usage, log collection and readiness probes have finite timeouts. The monitoring dashboard is not required.
 
 The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client. Vision is not enabled in this initial setup.
+
+## NPU models
+
+Halogen can serve small models on the NPU beside the Flash model, on the same port. Gufo and Strixite cannot. Name them at start, for example `env NPU_MODELS=decider-0.8b,embeddinggemma-2 bin/run.sh halogen start --wait`. Without `NPU_MODELS` the container starts exactly as before. Which models are worth their memory is still open; see the [NPU plan](.scratch/npu/spec.md).
+
+Their files are listed in `config/npu-files.tsv` and stored under `/home/bogdan/models/npu`, the layout Halogen reads at `/models/npu`. `bin/npu-manifest.sh` derives the list from the record inside the pinned Halogen image, which Halogen uses to refuse any other file. Rerun it after a Halogen pin change, review the diff, then run `bin/models.sh download npu`. The launcher accepts only models whose weights are listed there and checks their files before starting. `HALOGEN_DOWNLOAD` stays unset, so the models volume stays read-only.
+
+The host needs XRT and a held GPU fabric clock. XRT is the user-space half of the NPU driver and must match the host kernel's `amdxdna`, so Halogen uses the host's copy: the launcher mounts `libxrt_coreutil.so.2`, `libxrt_core.so.2` and `libxrt_driver_xdna.so.2` from `/usr/lib` read-only, at both `/usr/lib` and `/opt/xilinx/xrt/lib`. On Strix Halo, GPU and NPU work at once can hang the machine or corrupt NPU results while the fabric clock changes speed, so Halogen refuses NPU models unless it is held. Holding it measured about 2.3 W extra at idle on this host, so the launcher holds it only while Halogen runs NPU models: `start` runs `sudo -n halogen-fabric-clock hold` before the container starts, and `bin/run.sh halogen stop` releases it, also when the container has already exited. A suspend can hand the clock back to the driver; this host does not suspend, so the launcher does not handle it. Restart Halogen after a resume.
+
+One-time host setup, with the script from Halogen's [`deploy/host/`](https://github.com/peonist-ai/halogen-flash-server/tree/v0.18.3/deploy/host) at the pinned release. Its boot unit is not used:
+
+```bash
+sudo pacman -S --needed xrt xrt-plugin-amdxdna
+curl -fsSLO https://raw.githubusercontent.com/peonist-ai/halogen-flash-server/v0.18.3/deploy/host/halogen-fabric-clock
+echo "0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a  halogen-fabric-clock" | sha256sum -c
+sudo install -m 755 -o root -g root halogen-fabric-clock /usr/local/sbin/
+echo "$USER ALL=(root) NOPASSWD: /usr/local/sbin/halogen-fabric-clock hold, /usr/local/sbin/halogen-fabric-clock release" > halogen-fabric-clock.sudoers
+visudo -cf halogen-fabric-clock.sudoers && sudo install -m 440 -o root -g root halogen-fabric-clock.sudoers /etc/sudoers.d/halogen-fabric-clock
+```
+
+`halogen-fabric-clock status` needs no root. `bin/run.sh halogen status` shows the configured NPU models.
 
 ## Optional dashboard
 
@@ -125,8 +144,8 @@ Review updates with `git diff -- config/pins.env`. To roll back, restore the pre
 - Start with manual launches. Add user-level systemd Quadlets after both engines work reliably. Do not enable both at login.
 - Run only one engine at a time. Separate containers do not create additional GPU memory, and both engines need most of the host's shared memory.
 - Publish Halogen at `127.0.0.1:8731` and Gufo at `127.0.0.1:8080`, subject to checking for existing listeners. Do not expose internal engine ports.
-- Pass `/dev/kfd`, `/dev/dri` and the NPU's `/dev/accel/accel0` to every engine. The NPU device is world-readable and writable on this host, so it needs no group. None of the engines uses the NPU yet; see the [NPU plan](.scratch/npu/spec.md). With `crun`, preserve supplementary GPU groups. This host's `runc` path was verified with directly accessible GPU devices. If devices require group-based access and the container cannot access them, use `crun` rather than changing device permissions.
-- Halogen uses its documented host IPC setting. Both launchers request unlimited container memlock, but rootless Podman can silently clamp this to the host user's hard limit. On this host it remains 8 MiB. The GPU-backed weight allocation still worked. Optional Halogen `mlock` and NPU features are not enabled. No seccomp disablement, privileged mode or writable host control mount is used.
+- Pass `/dev/kfd`, `/dev/dri` and the NPU's `/dev/accel/accel0` to every engine. The NPU device is world-readable and writable on this host, so it needs no group. Only Halogen uses it, when [NPU models](#npu-models) are named. With `crun`, preserve supplementary GPU groups. This host's `runc` path was verified with directly accessible GPU devices. If devices require group-based access and the container cannot access them, use `crun` rather than changing device permissions.
+- Halogen uses its documented host IPC setting. Both launchers request unlimited container memlock, but rootless Podman can silently clamp this to the host user's hard limit. On this host it remains 8 MiB. The GPU-backed weight allocation still worked. Optional Halogen `mlock` is not enabled. No seccomp disablement, privileged mode or writable host control mount is used. With NPU models, the host's three XRT libraries are mounted read-only, and the fabric clock is held by a root-owned host script through one narrow sudoers rule, not from the container.
 - Keep existing BIOS, kernel and IOMMU settings for the first baseline. Investigate any required host tuning explicitly rather than applying it silently.
 
 ## Model storage

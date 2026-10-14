@@ -51,6 +51,14 @@ After these checks, Halogen was switched to `HALOGEN_FORK=1` with `HALOGEN_FORK_
 
 Startup allocation is unchanged at 81.4 GiB. Health, smoke, the live API test and stop passed with the setting, and `GET /halogen/handles` listed the kept `auto` states. Up to four states are kept, using about 0.9 GiB of host memory plus the pool positions they hold, at most half the pool. The startup template check reports the model's own reply as reusable in 4 of its 6 turn shapes, so some reply shapes may still be processed again. A real Pi session with the setting was not measured. Kept states are shared by every client of the port, which stays bound to localhost.
 
+### NPU host setup
+
+XRT was installed from the CachyOS repositories: `xrt 1:2.21.75-14.1` and `xrt-plugin-amdxdna 1:2.21.75-2.1`. Halogen names AMD's XRT 2.25 and Ubuntu's 2.21 as tested, not Arch builds. Checked before installing, the three libraries the container loads need at most `GLIBC_2.38` and `GLIBCXX_3.4.32`, within the image's glibc 2.41 and `GLIBCXX_3.4.33`, and their other dependencies are in the image. The image itself carries no XRT.
+
+Halogen's `halogen-fabric-clock` script was taken from its `v0.18.3` tag (`deploy/host/halogen-fabric-clock`, SHA-256 `0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a`). It only sets the GPU's `power_dpm_force_performance_level` to `manual` and `pp_dpm_fclk` to its top level, 2000 MHz here, or sets the level back to `auto`. Halogen says holding costs about a watt. Idle package power (`amdgpu` `PPT`, which includes the CPU), averaged over 60 seconds after 10 seconds of settling, measured 16.21 W held against 13.56 W on `auto`, then 15.35 W against 13.36 W: about 2.3 W. The boot unit was therefore not enabled; `bin/run.sh` holds the clock only while Halogen runs NPU models, through a sudoers rule limited to `hold` and `release`.
+
+`NPU_MODELS` was added to the launcher and checked only with stubs (`tests/run.py`). No NPU model has been loaded yet, and the clock hold, Halogen's acceptance of the host XRT libraries and the Flash slowdown are not exercised.
+
 ## October 12 update
 
 `bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.2.4 digest. Model revisions, weight files, launch settings, live Pi files and host settings remain unchanged.

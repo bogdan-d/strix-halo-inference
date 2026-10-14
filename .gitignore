@@ -9,3 +9,4 @@
 /config/.update.lock
 /config/.pins.env.*
 /config/monitoring/.lock
+__pycache__/

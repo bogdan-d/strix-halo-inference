@@ -19,8 +19,9 @@ with tempfile.TemporaryDirectory(prefix="strix-halo-run-") as directory:
     (temp / "config").mkdir()
     shutil.copy(ROOT / "bin/run.sh", temp / "bin/run.sh")
     shutil.copy(ROOT / "config/pins.env", temp / "config/pins.env")
+    shutil.copy(ROOT / "config/npu-files.tsv", temp / "config/npu-files.tsv")
     models = temp / "bin/models.sh"
-    models.write_text("#!/bin/sh\nexit 0\n")
+    models.write_text('#!/bin/sh\necho "$*" >> "$MODELS_CALLS"\n[ "$2" != npu ] || [ -z "$MISSING_NPU" ]\n')
     models.chmod(0o755)
     podman = commands / "podman"
     podman.write_text('''#!/usr/bin/env python3
@@ -32,7 +33,9 @@ if sys.argv[1:3] == ["container", "exists"] and os.environ.get("MISSING"):
 if sys.argv[1] == "info":
     print("true" if "Rootless" in sys.argv[-1] else "runc")
 elif sys.argv[1] == "run":
-    print("fixture-container")
+    sys.exit(1) if os.environ.get("RUN_FAILS") else print("fixture-container")
+elif sys.argv[1] == "stop" and os.environ.get("MISSING"):
+    sys.exit(125)
 elif sys.argv[1] == "ps":
     print(os.environ.get("ACTIVE", ""))
 elif sys.argv[1] == "inspect":
@@ -54,9 +57,23 @@ else:
     print('{"choices":[{"message":{"content":"ready"}}]}')
 ''')
     curl.chmod(0o755)
+    # sudo is recorded, not run; the clock stub reports held only when asked to.
+    sudo = commands / "sudo"
+    sudo.write_text('#!/bin/sh\nprintf \'["sudo", "%s", "%s", "%s"]\\n\' "$@" >> "$CALLS"\n[ -z "$SUDO_FAILS" ]\n')
+    sudo.chmod(0o755)
+    clock = temp / "halogen-fabric-clock"
+    clock.write_text('#!/bin/sh\n[ -n "$CLOCK_HELD" ]\n')
+    clock.chmod(0o755)
+    xrt = temp / "xrt"
+    xrt.mkdir()
+    for library in ("libxrt_coreutil.so.2", "libxrt_core.so.2", "libxrt_driver_xdna.so.2"):
+        (xrt / (library + ".2.21.75")).touch()
+        (xrt / library).symlink_to(library + ".2.21.75")
     env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls),
                CACHE_ROOT=str(temp / "cache"), MODELS_DIR=str(temp / "models"),
-               REQUEST_RECORD=str(temp / "payload"), CONTEXT="262144", SPECULATIVE="on")
+               REQUEST_RECORD=str(temp / "payload"), CONTEXT="262144", SPECULATIVE="on",
+               MODELS_CALLS=str(temp / "models-calls"), FABRIC_CLOCK=str(clock), XRT_LIB_DIR=str(xrt))
+    env.pop("NPU_MODELS", None)
 
     def run(*args, **overrides):
         return subprocess.run([str(temp / "bin/run.sh"), *args], env=env | overrides,
@@ -144,4 +161,51 @@ else:
     payload = json.loads((temp / "payload").read_text())
     assert payload["reasoning_effort"] == "none" and payload["max_tokens"] == 32
     assert "presence_penalty" not in payload and "chat_template_kwargs" not in payload
+
+    def recorded():
+        return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+
+    # Without NPU_MODELS, Halogen gets no NPU settings and the clock is left alone.
+    calls.unlink()
+    (temp / "models-calls").unlink()
+    assert run("halogen", "start").returncode == 0
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert not any("NPU" in arg or "xrt" in arg for arg in launch), launch
+    assert not any(call[0] == "sudo" for call in recorded())
+    assert (temp / "models-calls").read_text() == "check halogen\n"
+    calls.unlink()
+    result = run("halogen", "start", NPU_MODELS="decider-0.8b,embeddinggemma-2")
+    assert result.returncode == 0, result
+    order = [call[0] for call in recorded()]
+    assert order.index("sudo") < order.index("run") and recorded()[order.index("sudo")][1:3] == ["-n", str(clock)]
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert "HALOGEN_NPU_MODELS=decider-0.8b,embeddinggemma-2" in launch
+    assert not any("HALOGEN_DOWNLOAD" in arg for arg in launch) and f"{env['MODELS_DIR']}:/models:ro" in launch
+    for library in ("libxrt_coreutil.so.2", "libxrt_core.so.2", "libxrt_driver_xdna.so.2"):
+        assert f"{xrt}/{library}.2.21.75:/opt/xilinx/xrt/lib/{library}:ro" in launch
+        assert f"{xrt}/{library}.2.21.75:{xrt}/{library}:ro" in launch
+    assert (temp / "models-calls").read_text().endswith("check npu\n")
+    # Refusals happen before the clock is held or a container starts.
+    for engine, overrides, code, message in (
+            ("halogen", {"NPU_MODELS": "qwen3-embedding-0.6b"}, 2, "not in config/npu-files.tsv"),
+            ("halogen", {"NPU_MODELS": "decider-0.8b,,x"}, 2, "comma-separated"),
+            ("gufo", {"NPU_MODELS": "decider-0.8b"}, 2, "applies only to bin/run.sh halogen"),
+            ("halogen", {"NPU_MODELS": "decider-0.8b", "MISSING_NPU": "1"}, 1, ""),
+            ("halogen", {"NPU_MODELS": "decider-0.8b", "XRT_LIB_DIR": str(temp)}, 1, "Install xrt"),
+            ("halogen", {"NPU_MODELS": "decider-0.8b", "SUDO_FAILS": "1"}, 1, "Could not hold")):
+        calls.unlink(missing_ok=True)
+        result = run(engine, "start", **overrides)
+        assert result.returncode == code and message in result.stderr, (overrides, result)
+        assert not any(call[0] == "run" for call in recorded()), overrides
+        assert "SUDO_FAILS" in overrides or not any(call[0] == "sudo" for call in recorded()), overrides
+    calls.unlink()
+    assert run("halogen", "start", NPU_MODELS="decider-0.8b", RUN_FAILS="1").returncode == 1
+    assert [call[1:3] for call in recorded() if call[0] == "sudo"] == [["-n", str(clock)]] * 2
+    assert recorded()[-1] == ["sudo", "-n", str(clock), "release"]
+    # Stop releases a held clock even when the container is already gone, and only then.
+    for overrides, code in (({"CLOCK_HELD": "1"}, 0), ({"CLOCK_HELD": "1", "MISSING": "1"}, 125), ({}, 0)):
+        calls.unlink()
+        assert run("halogen", "stop", **overrides).returncode == code, overrides
+        released = recorded()[-1] == ["sudo", "-n", str(clock), "release"]
+        assert released == bool(overrides), overrides
 print("Launcher argument, logs and readiness policy checks passed.")
