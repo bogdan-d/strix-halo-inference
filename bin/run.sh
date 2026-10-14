@@ -59,7 +59,9 @@ case "$ACTION" in
 esac
 
 [[ "$(podman info --format '{{.Host.Security.Rootless}}')" == true ]] || { echo 'Use rootless Podman, not sudo.' >&2; exit 1; }
-GPU=(--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1)
+# The NPU is passed to every engine so NPU features need no launcher change. Halogen uses it only when
+# HALOGEN_NPU_MODELS is set, which also needs host XRT and a held fabric clock (.scratch/npu/spec.md).
+GPU=(--device /dev/kfd --device /dev/dri --device /dev/accel/accel0 --ulimit memlock=-1:-1)
 if [[ "$(podman info --format '{{.Host.OCIRuntime.Name}}')" == crun ]]; then
   GPU+=(--group-add keep-groups)
 else

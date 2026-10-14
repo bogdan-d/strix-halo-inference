@@ -6,12 +6,14 @@ source "$ROOT/config/pins.env"
 
 ACTION="${1:-}"
 ENGINE="${2:-}"
-case "$ACTION" in download|verify|check) ;; *) echo 'Usage: bin/models.sh download|verify|check halogen|gufo|strixite' >&2; exit 2 ;; esac
+case "$ACTION" in download|verify|check) ;; *) echo 'Usage: bin/models.sh download|verify|check halogen|gufo|strixite|npu' >&2; exit 2 ;; esac
 case "$ENGINE" in
   halogen) REPO="$HALOGEN_REPO"; REVISION="$HALOGEN_REVISION" ;;
   gufo) REPO="$GUFO_REPO"; REVISION="$GUFO_REVISION" ;;
   strixite) REPO="$STRIXITE_REPO"; REVISION="$STRIXITE_REVISION" ;;
-  *) echo 'Choose halogen, gufo or strixite.' >&2; exit 2 ;;
+  # NPU files come from one repository per model, named on each manifest line.
+  npu) REPO=npu; REVISION= ;;
+  *) echo 'Choose halogen, gufo, strixite or npu.' >&2; exit 2 ;;
 esac
 MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
 DEST="$MODELS_DIR/$REPO"
@@ -20,15 +22,18 @@ if [[ "$ACTION" == download ]]; then
   exec 9>"$DEST/.download.lock"
   flock -n 9 || { echo "Another download holds $DEST/.download.lock" >&2; exit 1; }
 fi
-while IFS=$'\t' read -r HASH SIZE FILE; do
+while IFS=$'\t' read -r HASH SIZE FILE FILE_REPO FILE_REVISION; do
   TARGET="$DEST/$FILE"
+  SOURCE="$REPO/resolve/$REVISION/$FILE"
+  # NPU paths start with the model id, which is not part of the path in its repository.
+  [[ -z "${FILE_REPO:-}" ]] || SOURCE="$FILE_REPO/resolve/$FILE_REVISION/${FILE#*/}"
   VERIFIED=0
   if [[ "$ACTION" == download && ! -f "$TARGET" ]]; then
     mkdir -p -- "$(dirname -- "$TARGET")"
-    echo "Downloading $REPO/$FILE at $REVISION"
+    echo "Downloading $SOURCE"
     curl --fail --location --retry 5 --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
       --continue-at - --output "$TARGET.partial" \
-      "https://huggingface.co/$REPO/resolve/$REVISION/$FILE"
+      "https://huggingface.co/$SOURCE"
     [[ "$(stat -c %s -- "$TARGET.partial")" == "$SIZE" ]] || { echo "Wrong download size: $FILE" >&2; exit 1; }
     printf '%s  %s\n' "$HASH" "$TARGET.partial" | sha256sum --check --status || { echo "SHA-256 mismatch: $FILE. Partial file preserved." >&2; exit 1; }
     mv -n -- "$TARGET.partial" "$TARGET"

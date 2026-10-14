@@ -41,6 +41,8 @@ bin/models.sh download gufo
 
 Downloads can take a long time. Repeating the command verifies existing final files and resumes incomplete files. A size or checksum mismatch fails without replacing the existing file. `bin/models.sh verify ENGINE` performs a full hash check. Launches use `check`, a fast presence and size check, rather than reading hundreds of gigabytes before every start.
 
+NPU model files for Halogen are listed in `config/npu-files.tsv` and stored under `/home/bogdan/models/npu`, the layout Halogen reads at `/models/npu`. `bin/npu-manifest.sh` derives the list from the record inside the pinned Halogen image, which Halogen uses to refuse any other file. Rerun it after a Halogen pin change, review the diff, then run `bin/models.sh download npu`. The files are downloaded but not loaded; see the [NPU plan](.scratch/npu/spec.md).
+
 Start one engine, wait for its readiness endpoint, then test and stop it:
 
 ```bash
@@ -123,7 +125,7 @@ Review updates with `git diff -- config/pins.env`. To roll back, restore the pre
 - Start with manual launches. Add user-level systemd Quadlets after both engines work reliably. Do not enable both at login.
 - Run only one engine at a time. Separate containers do not create additional GPU memory, and both engines need most of the host's shared memory.
 - Publish Halogen at `127.0.0.1:8731` and Gufo at `127.0.0.1:8080`, subject to checking for existing listeners. Do not expose internal engine ports.
-- Pass `/dev/kfd` and `/dev/dri`. With `crun`, preserve supplementary GPU groups. This host's `runc` path was verified with directly accessible GPU devices. If devices require group-based access and the container cannot access them, use `crun` rather than changing device permissions.
+- Pass `/dev/kfd`, `/dev/dri` and the NPU's `/dev/accel/accel0` to every engine. The NPU device is world-readable and writable on this host, so it needs no group. None of the engines uses the NPU yet; see the [NPU plan](.scratch/npu/spec.md). With `crun`, preserve supplementary GPU groups. This host's `runc` path was verified with directly accessible GPU devices. If devices require group-based access and the container cannot access them, use `crun` rather than changing device permissions.
 - Halogen uses its documented host IPC setting. Both launchers request unlimited container memlock, but rootless Podman can silently clamp this to the host user's hard limit. On this host it remains 8 MiB. The GPU-backed weight allocation still worked. Optional Halogen `mlock` and NPU features are not enabled. No seccomp disablement, privileged mode or writable host control mount is used.
 - Keep existing BIOS, kernel and IOMMU settings for the first baseline. Investigate any required host tuning explicitly rather than applying it silently.
 
