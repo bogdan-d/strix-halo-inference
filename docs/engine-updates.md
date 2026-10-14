@@ -43,6 +43,14 @@ Not exercised: Pi sessions on the new versions, strict tool schemas, structured 
 
 Sources: [Halogen 0.18.2 changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.2/CHANGELOG.md), [Halogen 0.18.3 changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.3/CHANGELOG.md), [Gufo 0.14.0 release](https://github.com/gufo-org/gufo/releases/tag/v0.14.0) and [Gufo 0.15.0 release](https://github.com/gufo-org/gufo/releases/tag/v0.15.0).
 
+### Reply-end reuse
+
+After these checks, Halogen was switched to `HALOGEN_FORK=1` with `HALOGEN_FORK_MAP=auto`, new in 0.18.3. Without it, each turn reused the previous prompt from cache but processed the model's own previous reply again, reasoning included. In a recorded Pi session that was up to about 7,500 tokens per turn.
+
+[`.scratch/fork-map/bench.py`](../.scratch/fork-map/bench.py) replays a Pi-shaped conversation at temperature 0, with tool calls, reasoning sent back and two follow-up questions, from an empty cache for each configuration. At `xhigh` effort, a follow-up question after a 1,396-token reply processed 1,430 tokens again and took 1.13 seconds to its first token without the setting. With it, a follow-up after a 1,970-token reply processed 35 tokens and took 0.23 seconds. Uncached tokens after the first request fell from 9,534 to 6,324; the remainder is new tool output. Greedy replies were not identical between the two configurations, so the turns differ in length. The two configurations were compared turn by turn rather than with a single throughput figure.
+
+Startup allocation is unchanged at 81.4 GiB. Health, smoke, the live API test and stop passed with the setting, and `GET /halogen/handles` listed the kept `auto` states. Up to four states are kept, using about 0.9 GiB of host memory plus the pool positions they hold, at most half the pool. The startup template check reports the model's own reply as reusable in 4 of its 6 turn shapes, so some reply shapes may still be processed again. A real Pi session with the setting was not measured. Kept states are shared by every client of the port, which stays bound to localhost.
+
 ## October 12 update
 
 `bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.2.4 digest. Model revisions, weight files, launch settings, live Pi files and host settings remain unchanged.

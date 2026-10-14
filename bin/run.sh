@@ -98,7 +98,9 @@ if [[ "$ENGINE" == halogen ]]; then
     --env "HALOGEN_CHECKPOINT=/models/$REPO/qwen38-flash-next-v2.hgn"
     --env "HALOGEN_TOKENIZER=/models/$REPO/tokenizer"
     --env "HALOGEN_CTX=$CONTEXT" --env "HALOGEN_KV_POOL_POSITIONS=$CONTEXT"
-    --env HALOGEN_KV_SLOTS=1 --env HALOGEN_CACHE_DIR=/cache --env HALOGEN_CACHE_DISK_GIB=16)
+    --env HALOGEN_KV_SLOTS=1 --env HALOGEN_CACHE_DIR=/cache --env HALOGEN_CACHE_DISK_GIB=16
+    # Keep each reply's end state so the next turn does not process the reply again.
+    --env HALOGEN_FORK=1 --env HALOGEN_FORK_MAP=auto)
   [[ "$SPECULATIVE" == on ]] || ARGS+=(--env HALOGEN_DRAFTER_DEFAULT=0 --env HALOGEN_PLD=0)
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
