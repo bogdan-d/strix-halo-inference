@@ -32,9 +32,14 @@ if 'raw.githubusercontent.com' in url:
     print('# Changelog\n\n## '+pins['HALOGEN_VERSION']+'\n\nSelected changelog.\n\n## 0.0.1\n\nOlder changelog.\n\n200',end='')
 elif 'peonist-ai' in url:
     print('{}\n404',end='')
+elif url.endswith('/tags?per_page=100'):
+    # The fixture only trails Gufo's releases, and one of them predates the pin gap.
+    tags=[{'name':'v0.12.5'},{'name':'v0.0.1'}] if '/gufo' in url else []
+    print(json.dumps(tags)+'\n200',end='')
 else:
     prefix='STRIXITE' if '/strixite/' in url else 'GUFO'
-    print(json.dumps({'tag_name':'v'+pins[prefix+'_VERSION'],'draft':False,'prerelease':False,
+    tag=re.search(r'/releases/tags/(v[0-9.]+)',url)
+    print(json.dumps({'tag_name':tag.group(1) if tag else 'v'+pins[prefix+'_VERSION'],'draft':False,'prerelease':False,
                       'body':prefix+' selected release notes'})+'\n200',end='')
 PY
 cat > "$TEMP/commands/podman" <<'PY'
@@ -64,13 +69,15 @@ if grep -q 'Older changelog' "$TEMP/output"; then
   echo 'Printed changes for the wrong release' >&2; exit 1
 fi
 
-# Make the image pins older than the verified fixture to exercise a real pin transition.
+# Make the image pins older than the verified fixture to exercise a real pin transition,
+# with Gufo trailing by a release so the release it skips is reported as well.
 python - "$TEMP/config/pins.env" <<'PY'
 import re,sys
 from pathlib import Path
 p=Path(sys.argv[1])
-p.write_text(re.sub(r'^(HALOGEN_IMAGE|GUFO_IMAGE|STRIXITE_IMAGE)=(.*?)@sha256:[0-9a-f]{64}',
-                    lambda m: m[1]+'='+m[2]+'@sha256:'+'0'*64, p.read_text(), flags=re.M))
+text=re.sub(r'^(HALOGEN_IMAGE|GUFO_IMAGE|STRIXITE_IMAGE)=(.*?)@sha256:[0-9a-f]{64}',
+            lambda m: m[1]+'='+m[2]+'@sha256:'+'0'*64, p.read_text(), flags=re.M)
+p.write_text(re.sub(r'^GUFO_VERSION=.*$','GUFO_VERSION=0.12.0',text,flags=re.M))
 PY
 cp -- "$TEMP/config/pins.env" "$TEMP/before.env"
 for ENGINE in gufo strixite; do
@@ -98,6 +105,11 @@ cmp -- "$TEMP/config/pins.env" "$TEMP/expected.env"
 [[ "$(find "$TEMP/cache" -path '*/strixite/marker' -type f | wc -l)" == 1 ]]
 [[ "$(cat "$TEMP/cache"/archive-*/strixite/marker)" == 'trial cache' ]]
 grep -q 'Running containers are unchanged' "$TEMP/output"
+GUFO_TARGET="$(sed -n 's/^GUFO_VERSION=//p' "$TEMP/expected.env")"
+grep -qF "gufo: 0.12.0 -> $GUFO_TARGET, update available" "$TEMP/output"
+grep -qF 'Release notes v0.12.5: https://github.com/gufo-org/gufo/releases/tag/v0.12.5' "$TEMP/output"
+grep -qF "Release notes v$GUFO_TARGET: https://github.com/gufo-org/gufo/releases/tag/v$GUFO_TARGET" "$TEMP/output"
+[[ "$(grep -m1 -o 'gufo/releases/tag/v[0-9.]*' "$TEMP/output")" == 'gufo/releases/tag/v0.12.5' ]]
 
 for ENGINE in GUFO STRIXITE; do
 python - "$TEMP/config/pins.env" "$TEMP/expected.env" "$ENGINE" <<'PY'

@@ -19,6 +19,8 @@ ENGINES = (("halogen", "HALOGEN", "peonist-ai/halogen-flash-server"),
            ("gufo", "GUFO", "gufo-org/gufo"),
            ("strixite", "STRIXITE", "shawnshekari/strixite"))
 
+STABLE_TAG = re.compile(r"v?[0-9]+\.[0-9]+\.[0-9]+")
+
 @dataclass(frozen=True)
 class Image:
     prefix: str
@@ -80,7 +82,27 @@ def release_notes(upstream: str, version: str) -> None:
         raise ValueError(f"Invalid release notes for {tag}")
     # Release prose is untrusted terminal output, never executable input.
     body = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", body)
-    print(f"Release notes: {url}\n{body.strip()}\n", flush=True)
+    print(f"Release notes {tag}: {url}\n{body.strip()}\n", flush=True)
+
+
+def versions_to_report(upstream: str, pinned: str, latest: str) -> list[str]:
+    """Every stable release after the current pin up to latest, oldest first."""
+    lower, upper = version_tuple(pinned), version_tuple(latest)
+    if upper <= lower:
+        return [latest]
+    # GitHub lists tags newest first; 100 covers any realistic gap between two runs.
+    status, body = http_get(f"https://api.github.com/repos/{upstream}/tags?per_page=100")
+    tags = json.loads(body) if status == 200 else None
+    if not isinstance(tags, list):
+        raise ValueError(f"Invalid tag list for {upstream}")
+    versions = {latest}
+    for tag in tags:
+        name = tag.get("name") if isinstance(tag, dict) else None
+        if isinstance(name, str) and STABLE_TAG.fullmatch(name):
+            version = name.removeprefix("v")
+            if lower < version_tuple(version) <= upper:
+                versions.add(version)
+    return sorted(versions, key=version_tuple)
 
 
 def inspect_image(engine: str, prefix: str, current: str, pinned_version: str) -> Image:
@@ -154,7 +176,8 @@ def main() -> None:
             if prefix + "_IMAGE" not in pins or prefix + "_VERSION" not in pins:
                 raise ValueError(f"Missing image or version pin for {engine}")
             image = inspect_image(engine, prefix, pins[prefix + "_IMAGE"], pins[prefix + "_VERSION"])
-            release_notes(upstream, image.version)
+            for version in versions_to_report(upstream, pins[prefix + "_VERSION"], image.version):
+                release_notes(upstream, version)
             images.append(image)
         if args.check:
             print("Check only. No images pulled, pins written or caches changed.")
