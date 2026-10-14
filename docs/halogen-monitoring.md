@@ -1,6 +1,6 @@
 # Halogen inference dashboard
 
-The current image is 0.18.1, pinned October 12. Its metrics endpoint still exports every allowlisted metric name, but wire types, semantics and a scrape through Prometheus were not rechecked. On 0.18.0 the existing metric contracts remained compatible and its native scrape passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.17.5. The two rewrite/cut-back counters added in 0.18.0 are intentionally not collected by the existing allowlist.
+The current image is 0.18.3, pinned October 14 and not started, so its metric exposition is unverified on this host. 0.18.3 adds four `halogen:queue_*` names that the existing allowlist does not collect, plus a `longest_wait_s` field on `/health` that no local reader uses. On 0.18.1 every allowlisted metric name was still exported, but wire types, semantics and a scrape through Prometheus were not rechecked. On 0.18.0 the existing metric contracts remained compatible and its native scrape passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.17.5. The two rewrite/cut-back counters added in 0.18.0 are intentionally not collected by the existing allowlist.
 
 Open [the dashboard page](../config/monitoring/dashboard.html) after starting monitoring and Halogen. Its Halogen section appears while the engine's metrics scrape is up:
 

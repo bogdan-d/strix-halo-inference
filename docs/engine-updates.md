@@ -1,5 +1,41 @@
 # Engine updates
 
+## October 14 update
+
+`bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.2.4 digest. Model revisions, weight files, launch settings, live Pi files and host settings remain unchanged. The updater printed only the selected releases' notes during this run, so the Halogen 0.18.2 and Gufo 0.14.0 notes below were read from the publishers separately. The updater now prints the notes of every stable release after the pin, and a `--check` from the October 12 pins reproduced all four sections.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.1 | 0.18.3 | `sha256:b5c28a27c11af02fc907c9c263522f2fc9ad1bd27b470adceca081175952de32` |
+| Gufo | 0.13.0 | 0.15.0 | `sha256:451341e2249d72c04f8ef159aebacbe3d14e0591888c19c77a26f3d183961936` |
+| Strixite | 0.2.4 | 0.2.4 | `sha256:23411d0de807055c97ce885b0ac60cfe17609836bb0d5a5c39d3cbb891a34876` |
+
+**Neither new image has been started on this host, and nothing below is a local result.** The interactive agent session that ran the update was itself being served by the Halogen 0.18.1 container, so stopping that engine would have ended the session, and the change was deliberately not exercised. Health, generation, tools, structured output, cancellation, metrics, stop and memory release remain unexercised for Halogen 0.18.3, and Gufo 0.15.0 is unstarted exactly as the 0.13.0 it replaces was. Every point below comes from the publishers' release notes only. The images advertise image revisions Halogen `293c940b140e` and Gufo `89d6185532ff6d5de0336000fc6ad62e869b82b6`; neither was compared with public source. Nothing was pruned from the image store: the Halogen 0.18.1 image is still in use by the running container, and the October 12 digests therefore stay available without a re-pull.
+
+### Halogen 0.18.2 and 0.18.3
+
+- **End-of-text handling (#173).** The model declares two end-of-text tokens and 0.18.1 stopped on one, so an affected reply ran on to `max_tokens` and returned empty or with text after the end. 0.18.3 stops on either. Nothing of that shape was seen in local sessions.
+- **Queue visibility and abandoned requests.** A client that disconnects while its request is queued now leaves the queue instead of taking a slot when its turn arrives, and a request waiting more than 30 seconds logs what it waits for, again every five minutes. `/health` adds `longest_wait_s` beside `queued`, and `/metrics` adds `halogen:queue_waited_total`, `halogen:queue_wait_seconds_total`, `halogen:queue_wait_longest_seconds` and `halogen:queue_gave_up_total`, none of which the current relabel allowlist collects. The dashboard treats `/health` as a boolean only, so the added field changes nothing there.
+- **Startup memory reading.** The budget now counts kernel `CmaFree` as unavailable on hosts that reserve it, so a post-restart `host memory left` figure may not be comparable with the October 12 check for that reason alone.
+- **New startup line.** `HALOGEN_TEMPLATE_CHECK` defaults to `warn` and reports whether the loaded chat template re-renders a conversation the way the prompt cache needs to reuse earlier turns. The launcher sets nothing, so this line should be read after the first restart on 0.18.3.
+- **Strict tool schemas (0.18.2, #147).** A tool declared `strict: true` gets a call that names one of the request's tools with arguments matching its schema, at any temperature; `HALOGEN_STRICT_TOOLS=0` accepts the field without enforcing it. Neither `bin/run.sh` nor the Pi profile sets that variable, and whether the Pi profile sends `strict` on its tools was not checked.
+- **Structured output and template parsing (0.18.2).** A `response_format` schema with an open object or an array without `items` no longer stalls the server for about a minute the first time it is sent, a sampled request with a schema and tools starts its JSON as promptly as a greedy one, and chat-template markers typed inside a message, tool result or tool description now reach the model as characters rather than as the template's own markers (`HALOGEN_CLIENT_MARKERS=special` restores the previous behavior).
+- **Old GPU firmware (0.18.2).** A host with GPU firmware predating 2026 no longer fails on prompts of about 70 to 2,000 tokens or on images: the server reads the firmware version and logs one line saying it runs as with `HALOGEN_QSA_FORCE_SEL=1`. This host's firmware state was not checked, so that line is worth looking for after the restart.
+- **Checkpoints and cache format.** Both Halogen sections state the Flash checkpoints are unchanged and that temperature 0 output stays byte-identical to serial greedy decode. Neither mentions a prompt cache or snapshot format change, and whether the existing `/cache` contents are reused on 0.18.3 was not checked.
+- **Not reachable from this launcher.** The NPU features added in 0.18.2 and 0.18.3, namely EmbeddingGemma 2 and WeMM-Embedding-4B on `/v1/embeddings`, `/v1/images/edits` and `/v1/images/variations`, the opt-in streaming guard and the longer decider texts, need NPU model names that `bin/run.sh` does not set. `max_tokens: -1`, the llama.cpp-shaped `/props`, `/slots`, `/tokenize` and `/detokenize` routes, Codex tool namespaces, opt-in `HALOGEN_FORK_MAP=auto` and the second-AMD-GPU selection including `HALOGEN_GPU_DEVICE` are likewise unused here, and the slower default NPU image generation is irrelevant without NPU image models.
+
+### Gufo 0.14.0 and 0.15.0
+
+- **0.14.0** wired Flash-Next serving to the component cache (#573) and added a ROCm managed-alloc fallback (#460).
+- **0.15.0** pins Flash-Next cache pages without compacting host memory (#589), accepts response schemas without `additionalProperties`, accepts IPv6 listen addresses, which does not change the localhost-only endpoint used here, and speeds up wide prefill kernels for Qwen Flash (#571), a publisher performance claim that was not benchmarked locally.
+- Neither release note mentions a cache or snapshot format change, so whether an existing prompt cache is reused or starts cold on 0.15.0 is unknown, as it already was for 0.13.0.
+
+### Checks deferred on purpose
+
+Both engines still need the usual one-at-a-time pass, and for Halogen the person performing it has to be outside the served session: native 262144 startup and its allocation, the new `HALOGEN_TEMPLATE_CHECK` line and any firmware workaround line, a bounded non-thinking generation, multi-turn recall, a forced named tool, a streamed tool with strict schema assembly, a short-decode disconnect, `/health` and `/metrics` field and name review including the four new queue names, a Prometheus scrape and dashboard render, then stop and host memory release. Gufo 0.15.0 needs the same list from a cold start. Until then the October 12 entry is the most recent set of local results on this host.
+
+Sources: [Halogen 0.18.2 changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.2/CHANGELOG.md), [Halogen 0.18.3 changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.3/CHANGELOG.md), [Gufo 0.14.0 release](https://github.com/gufo-org/gufo/releases/tag/v0.14.0) and [Gufo 0.15.0 release](https://github.com/gufo-org/gufo/releases/tag/v0.15.0).
+
 ## October 12 update
 
 `bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.2.4 digest. Model revisions, weight files, launch settings, live Pi files and host settings remain unchanged.
