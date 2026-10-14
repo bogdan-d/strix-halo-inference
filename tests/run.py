@@ -72,7 +72,8 @@ else:
     env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls),
                CACHE_ROOT=str(temp / "cache"), MODELS_DIR=str(temp / "models"),
                REQUEST_RECORD=str(temp / "payload"), CONTEXT="262144", SPECULATIVE="on",
-               MODELS_CALLS=str(temp / "models-calls"), FABRIC_CLOCK=str(clock), XRT_LIB_DIR=str(xrt))
+               MODELS_CALLS=str(temp / "models-calls"), FABRIC_CLOCK=str(clock), XRT_LIB_DIR=str(xrt),
+               MEMLOCK_KIB="unlimited")
     env.pop("NPU_MODELS", None)
 
     def run(*args, **overrides):
@@ -192,6 +193,7 @@ else:
             ("gufo", {"NPU_MODELS": "decider-0.8b"}, 2, "applies only to bin/run.sh halogen"),
             ("halogen", {"NPU_MODELS": "decider-0.8b", "MISSING_NPU": "1"}, 1, ""),
             ("halogen", {"NPU_MODELS": "decider-0.8b", "XRT_LIB_DIR": str(temp)}, 1, "Install xrt"),
+            ("halogen", {"NPU_MODELS": "decider-0.8b", "MEMLOCK_KIB": "8192"}, 1, "Raise LimitMEMLOCK"),
             ("halogen", {"NPU_MODELS": "decider-0.8b", "SUDO_FAILS": "1"}, 1, "Could not hold")):
         calls.unlink(missing_ok=True)
         result = run(engine, "start", **overrides)

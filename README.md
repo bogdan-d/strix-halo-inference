@@ -88,7 +88,12 @@ echo "0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a  halogen-
 sudo install -m 755 -o root -g root halogen-fabric-clock /usr/local/sbin/
 echo "$USER ALL=(root) NOPASSWD: /usr/local/sbin/halogen-fabric-clock hold, /usr/local/sbin/halogen-fabric-clock release" > halogen-fabric-clock.sudoers
 visudo -cf halogen-fabric-clock.sudoers && sudo install -m 440 -o root -g root halogen-fabric-clock.sudoers /etc/sudoers.d/halogen-fabric-clock
+sudo mkdir -p /etc/systemd/system/user@$(id -u).service.d
+printf '[Service]\nLimitMEMLOCK=32G\n' | sudo tee /etc/systemd/system/user@$(id -u).service.d/memlock.conf
+sudo systemctl daemon-reload
 ```
+
+The NPU's memory must be locked: the small set of `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b` asks for 5.2 GiB. Measured beside Flash, that set used about 6.2 GiB more host RAM and `decider-4b` with `wemm-embedding-4b` about 8.9 GiB. A continuously busy NPU slowed Flash decode by 5 to 7% with the small models and 11 to 12% with the 4B ones; see the [update record](docs/engine-updates.md#first-npu-run). A rootless container cannot lock more than its user, and the desktop session inherits systemd's 8 MiB default, so the drop-in raises it to 32 GiB for this user only. Log out and back in, then check `ulimit -Hl`. The launcher refuses NPU models below 4 GiB.
 
 `halogen-fabric-clock status` needs no root. `bin/run.sh halogen status` shows the configured NPU models.
 
@@ -145,7 +150,7 @@ Review updates with `git diff -- config/pins.env`. To roll back, restore the pre
 - Run only one engine at a time. Separate containers do not create additional GPU memory, and both engines need most of the host's shared memory.
 - Publish Halogen at `127.0.0.1:8731` and Gufo at `127.0.0.1:8080`, subject to checking for existing listeners. Do not expose internal engine ports.
 - Pass `/dev/kfd`, `/dev/dri` and the NPU's `/dev/accel/accel0` to every engine. The NPU device is world-readable and writable on this host, so it needs no group. Only Halogen uses it, when [NPU models](#npu-models) are named. With `crun`, preserve supplementary GPU groups. This host's `runc` path was verified with directly accessible GPU devices. If devices require group-based access and the container cannot access them, use `crun` rather than changing device permissions.
-- Halogen uses its documented host IPC setting. Both launchers request unlimited container memlock, but rootless Podman can silently clamp this to the host user's hard limit. On this host it remains 8 MiB. The GPU-backed weight allocation still worked. Optional Halogen `mlock` is not enabled. No seccomp disablement, privileged mode or writable host control mount is used. With NPU models, the host's three XRT libraries are mounted read-only, and the fabric clock is held by a root-owned host script through one narrow sudoers rule, not from the container.
+- Halogen uses its documented host IPC setting. Both launchers request unlimited container memlock, but rootless Podman silently clamps this to the host user's hard limit, raised to 32 GiB on this host for NPU models. The GPU-backed weight allocation worked even at systemd's 8 MiB default. Optional Halogen `mlock` is not enabled. No seccomp disablement, privileged mode or writable host control mount is used. With NPU models, the host's three XRT libraries are mounted read-only, and the fabric clock is held by a root-owned host script through one narrow sudoers rule, not from the container.
 - Keep existing BIOS, kernel and IOMMU settings for the first baseline. Investigate any required host tuning explicitly rather than applying it silently.
 
 ## Model storage

@@ -9,7 +9,7 @@ Use the Ryzen AI NPU for small helper models that run beside the main Qwen3.8 Fl
 - `bin/run.sh` passes `/dev/accel/accel0` to Halogen, Gufo and Strixite. All three started, passed their live checks and stopped cleanly with it. No engine loads an NPU model.
 - Only Halogen serves NPU models (0.18.3). Gufo 0.15.0 and Strixite 0.2.4 have no NPU code upstream. The device is passed to them only so later releases need no launcher change.
 - The files below are downloaded and hash-verified under `/home/bogdan/models/npu/<id>/`, which Halogen reads as `/models/npu`. `config/npu-files.tsv` lists them, and `bin/npu-manifest.sh` derives that list from the record inside the pinned Halogen image.
-- Host: `amdxdna` loaded, NPU firmware present, `iommu=pt` (the NPU needs the IOMMU on, which it is). XRT 2.21.75 is installed. The GPU fabric clock is `auto`, held only while Halogen runs NPU models.
+- Host: `amdxdna` loaded, NPU firmware present, `iommu=pt` (the NPU needs the IOMMU on, which it is). XRT 2.21.75 is installed. The GPU fabric clock is `auto`, held only while Halogen runs NPU models. The user's locked-memory limit is 32 GiB.
 - `env NPU_MODELS=<ids> bin/run.sh halogen start` loads NPU models (README, NPU models). Unset, Halogen starts as before.
 
 | Model | Task and route | Memory beside Flash (publisher) | Files |
@@ -32,7 +32,7 @@ The Flash model itself takes 81.4 GiB and leaves about 30.6 GiB of host memory a
 
 - **Which helpers earn their memory?** See the candidate uses below. Loading all five costs well over 10 GB beside Flash.
 - **Opt-in or always on?** `NPU_MODELS` is opt-in for now and keeps Halogen exactly as before when unset. Decide whether a fixed set becomes the default.
-- **Flash speed cost.** How much decode and prefill slow down while the NPU is busy, measured, not assumed.
+- **Flash speed cost.** Measured in ticket 03: with the NPU continuously busy, decode slows 5 to 7% with the small models and 11 to 12% with the 4B ones. Small set about 6.2 GiB host RAM, 4B pair about 8.9 GiB.
 - **Gufo and Strixite.** Recheck at each update whether either gained NPU support.
 
 ## Candidate uses

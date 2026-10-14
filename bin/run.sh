@@ -99,6 +99,9 @@ if [[ -n "$NPU_MODELS" ]]; then
       || { echo "NPU model $ID is not in config/npu-files.tsv. Add it with bin/npu-manifest.sh, then bin/models.sh download npu." >&2; exit 2; }
   done
   "$ROOT/bin/models.sh" check npu
+  # Rootless containers cannot lock more than the user may. NPU models need GiBs; systemd's default is 8 MiB.
+  MEMLOCK="${MEMLOCK_KIB:-$(ulimit -H -l)}"
+  [[ "$MEMLOCK" == unlimited || "$MEMLOCK" -ge 4194304 ]] || { echo "Locked-memory limit is $MEMLOCK KiB; NPU models need several GiB. Raise LimitMEMLOCK (README, NPU models)." >&2; exit 1; }
   # Distribution XRT libraries find each other at their own path, so each is mounted there and where Halogen looks.
   XRT_LIB_DIR="${XRT_LIB_DIR:-/usr/lib}"
   for LIB in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do

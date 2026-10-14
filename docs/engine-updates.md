@@ -57,7 +57,30 @@ XRT was installed from the CachyOS repositories: `xrt 1:2.21.75-14.1` and `xrt-p
 
 Halogen's `halogen-fabric-clock` script was taken from its `v0.18.3` tag (`deploy/host/halogen-fabric-clock`, SHA-256 `0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a`). It only sets the GPU's `power_dpm_force_performance_level` to `manual` and `pp_dpm_fclk` to its top level, 2000 MHz here, or sets the level back to `auto`. Halogen says holding costs about a watt. Idle package power (`amdgpu` `PPT`, which includes the CPU), averaged over 60 seconds after 10 seconds of settling, measured 16.21 W held against 13.56 W on `auto`, then 15.35 W against 13.36 W: about 2.3 W. The boot unit was therefore not enabled; `bin/run.sh` holds the clock only while Halogen runs NPU models, through a sudoers rule limited to `hold` and `release`.
 
-`NPU_MODELS` was added to the launcher and checked only with stubs (`tests/run.py`). No NPU model has been loaded yet, and the clock hold, Halogen's acceptance of the host XRT libraries and the Flash slowdown are not exercised.
+### First NPU run
+
+The first start with NPU models exited because the container could lock only 8 MiB and the small set needs 5.2 GiB. The desktop session inherits `LimitMEMLOCK=8M` from `user@1000.service`, which also capped the launcher's `--ulimit memlock=-1:-1`. A drop-in at `/etc/systemd/system/user@1000.service.d/memlock.conf` raised it to 32 GiB, effective after a reboot. The launcher now refuses NPU models below 4 GiB, because `--rm` discards the container's own error.
+
+Halogen 0.18.3 then started at native 262144 context with each set below, accepted the host XRT libraries and the held clock, checked every NPU file against its record and listed the NPU models in `/v1/models`. The Flash allocation stayed 81.4 GiB. `bin/run.sh halogen stop` released the clock, GTT returned to 0.5 GiB and locked memory to 0.1 GiB. A start without `NPU_MODELS` left the clock on `auto`. The kernel log showed no `amdxdna` errors. Requests came from [`.scratch/npu/routes.py`](../.scratch/npu/routes.py).
+
+| Set | Host RAM used beyond Halogen without NPU | Route checks |
+|---|---|---|
+| `decider-0.8b`, `embeddinggemma-2`, `qwen3guard-stream-0.6b` | about 6.2 GiB, 3.4 GiB of it locked | Spam decision yes 0.992 in 0.58 s on the first call. `/v1/systemone` picked billing 0.994 in 0.11 s. Text embeddings, 768 dimensions, scored a related pair 0.87 and an unrelated one 0.60 in 0.15 s. A solid red image was closer to "a plain red picture" than to blue, 0.72 against 0.62. The streaming guard labelled the user message and six reply chunks and sent its end summary. |
+| `decider-4b`, `wemm-embedding-4b` | about 8.9 GiB, 8.8 GiB of it locked | Spam decision yes 0.987 in 1.65 s. Text embeddings, 2560 dimensions, related 0.72 and unrelated 0.14. Red image closer to red, 0.44 against 0.31. Times are first calls. |
+
+Host RAM was compared as `free` used after the route checks against a start without NPU models. Halogen's own "host memory left" figure barely changed with NPU models (37.6 and 38.1 against 38.7 GiB), so it does not show their cost.
+
+[`.scratch/npu/slowdown.py`](../.scratch/npu/slowdown.py) alternates an uncached 26,150-token Flash prompt with a 1,024-token greedy reply, thinking off, with the NPU idle and while another client keeps it busy:
+
+| NPU load | Rounds | NPU requests per Flash run | Flash prefill | Flash decode |
+|---|---|---|---|---|
+| idle | 9 | | 1,659 to 1,677 tok/s | 72.0 to 72.3 tok/s |
+| `embeddinggemma-2`, 8 short texts per request | 3 | 97 to 101 | 1,624 to 1,631 (about -2%) | 68.5 to 68.8 (about -5%) |
+| `decider-0.8b`, 1,500-token text | 3 | 103 to 104 | 1,609 to 1,612 (about -4%) | 67.4 to 67.5 (about -7%) |
+| `decider-4b`, same text | 2 | 28 | 1,570 to 1,571 (about -6%) | 64.1 to 64.6 (about -11%) |
+| `wemm-embedding-4b`, 8 short texts | 1 | 22 | 1,546 (about -7%) | 63.6 (about -12%) |
+
+These are worst cases: the NPU never rested. Occasional helper requests cost proportionally less. Not exercised: loading both sets at once, audio embeddings, larger images, NPU memory contention between `embeddinggemma-2` and `wemm-embedding-4b`, the guard on a flagged reply, and agent or Pi workloads.
 
 ## October 12 update
 

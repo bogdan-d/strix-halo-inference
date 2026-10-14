@@ -4,13 +4,13 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] With the setting unset, the Podman arguments are unchanged; `tests/run.py` covers both cases.
 - [x] Unknown model names and missing files fail before the container starts, with a clear message.
 - [x] `HALOGEN_DOWNLOAD` stays unset and the models volume stays read-only.
-- [x] `bin/run.sh halogen status` shows which NPU models are configured. Whether Halogen reports the loaded ones is for ticket 03.
-- [ ] A real start holds the clock and a stop releases it, once ticket 01's script and sudoers rule are installed.
+- [x] `bin/run.sh halogen status` shows which NPU models are configured. Halogen exits at start when one cannot load and lists the loaded ones in `/v1/models`, so a ready server has loaded exactly those.
+- [x] A real start holds the clock and a stop releases it, once ticket 01's script and sudoers rule are installed.
 - [x] README and `docs/engine-updates.md` describe the setting and what was verified.
 
 ## Comments
