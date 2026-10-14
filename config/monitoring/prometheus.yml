@@ -57,6 +57,19 @@ scrape_configs:
       - action: labelkeep
         regex: '__name__|job|instance'
 
+  # bin/dashboard.py, which answers only while Halogen serves NPU models. Keep the port equal to DASHBOARD_PORT.
+  - job_name: npu
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:9099']
+    sample_limit: 30
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        action: keep
+        regex: 'npu_(busy_percent|power_watts|model_loaded|queued)'
+      - action: labelkeep
+        regex: '__name__|job|instance|model'
+
   - job_name: gufo
     metrics_path: /metrics
     static_configs:

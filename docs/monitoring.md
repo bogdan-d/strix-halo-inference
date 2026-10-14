@@ -36,7 +36,7 @@ This optional helper serves the same page at `http://127.0.0.1:9099/` and runs t
 Served by the helper, the page header gains:
 
 - **Monitoring:** its state and one Start or Stop button. While monitoring is off the page says so instead of reporting a query error. Start still needs the pinned images from `bin/monitor.sh pull`.
-- **Engine:** one button per engine and a Stop button. A click starts that engine with the launcher defaults, or with `CONTEXT` and `SPECULATIVE` if they were exported before starting the helper. While any engine is starting, ready or stopping the other buttons are disabled, so switching needs an explicit stop first. The starting engine shows seconds since its container started until its health check passes. Engine controls work while monitoring is off.
+- **Engine:** one button per engine, a Halogen + NPU button and a Stop button. Halogen + NPU starts Halogen with `NPU_MODELS` set to `decider-0.8b,embeddinggemma-2,qwen3guard-stream-0.6b`, or to `DASHBOARD_NPU_MODELS` if that was exported before starting the helper; hover over the button to see the set. The host setup in [NPU models](../README.md#npu-models) is still required, and Stop releases the fabric clock as `bin/run.sh halogen stop` does. A click starts that engine with the launcher defaults, or with `CONTEXT` and `SPECULATIVE` if they were exported before starting the helper. While any engine is starting, ready or stopping the other buttons are disabled, so switching needs an explicit stop first. The starting engine shows seconds since its container started until its health check passes. Engine controls work while monitoring is off.
 - **Logs:** a drawer with one tab per container that follows its log, starting from the last 100 lines. It opens on an engine's tab when that engine is started, so a failed start is visible. Scrolling up pauses following. Tabs for containers that do not exist are disabled, and a stopped container's log is gone once it is removed.
 
 Pull, update, diagnose, smoke and status stay in the terminal. A refused or failed command shows its last output line in the header; hover over it for the full output. State comes from Podman and each engine's health address every two seconds, so engines started or stopped in a terminal show up too.
@@ -45,8 +45,9 @@ The helper adds the first loopback endpoint here that acts instead of only readi
 
 - It binds `127.0.0.1` only and accepts only its own `Host` name, which defeats DNS rebinding.
 - It refuses any request a browser marks as coming from another site, requires its own `Origin` on every command, and sends no cross-origin headers. Other pages open in the browser can neither run commands nor read state or logs.
-- Each request path selects one fixed command line: `bin/run.sh <engine> start|stop|logs --follow` or `bin/monitor.sh start|stop` and `bin/monitor.sh <component> logs --follow`. No request text reaches a command. The one-engine rule stays in `bin/run.sh`; the helper relays its refusal.
+- Each request path selects one fixed command line: `bin/run.sh <engine> start|stop|logs --follow`, `env NPU_MODELS=<set> bin/run.sh halogen start` or `bin/monitor.sh start|stop` and `bin/monitor.sh <component> logs --follow`. No request text reaches a command; the NPU model set comes from the helper's environment. The one-engine rule stays in `bin/run.sh`; the helper relays its refusal.
 - It has no authentication. Any local process, under any local user, can still start or stop these engines and monitoring and read their logs through it. Do not run it on a shared host, and do not tunnel or expose the port.
+- `GET /metrics` serves NPU readings for Prometheus, described under [NPU readings](#npu-readings). Like `/state`, it is readable by local processes but not by other sites' pages.
 - Logs are streamed to the page and not stored. Closing the drawer, switching tabs or closing the page ends that log viewer. The Gufo log seen during validation held request metadata, not prompt text. The other engines and other settings were not reviewed, so treat the drawer like a terminal showing those logs.
 
 ## Stack and boundaries
@@ -72,7 +73,7 @@ Only node-exporter gets additional host mounts, all read-only:
 - `/proc/pressure` for pressure-stall information.
 - `/sys` for DRM and hwmon sensors, including their symlink targets under the device tree.
 
-There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen, Gufo and Strixite aggregate metrics over their existing loopback endpoints. The readiness probe receives only its read-only configuration and probes Gufo's `/ready` and Strixite's `/health`, without recording response bodies. Its local probe endpoint accepts caller-supplied targets, another reason not to expose this host-network service beyond loopback.
+There is no host PID namespace or whole `/proc` mount. The exporter cannot inspect host process environments through these mounts. It does not receive model weights, user directories, engine cache directories or conversation logs. The selected collectors are CPU, meminfo, vmstat, diskstats, pressure, DRM and hwmon. Filesystem, process-list and broad default collectors are not enabled. Prometheus separately scrapes reviewed Halogen, Gufo and Strixite aggregate metrics over their existing loopback endpoints, and the dashboard helper's [NPU readings](#npu-readings). The readiness probe receives only its read-only configuration and probes Gufo's `/ready` and Strixite's `/health`, without recording response bodies. Its local probe endpoint accepts caller-supplied targets, another reason not to expose this host-network service beyond loopback.
 
 The page loads no external scripts, fonts or styles and sends requests only to `127.0.0.1:9090`. Its panel definitions and queries are a JSON block inside the same file, which the offline query-policy tests read.
 
@@ -98,6 +99,20 @@ Prometheus scrapes every target every two seconds with a two-second timeout, so 
 The Collectors status names any failing collector. A missing sensor reading shows a dash, not a manufactured zero. Current values use instant queries gated on successful scrapes, so a stopped exporter does not leave its last reading looking current. Historical charts retain earlier samples and show gaps. If Prometheus cannot be reached, the page shows an error in its header and dims the last drawn readings; this is not an engine failure.
 
 All requested readings are accessible on the validated Strix Halo host without changing permissions. On another host, verify the driver and exporter semantics before trusting sensor values. In particular, native DRM exporters can report zero defaults for unsupported fields, and metric presence alone cannot establish that a different driver supports the sensor.
+
+## NPU readings
+
+The NPU section appears while Halogen serves NPU models and `bin/dashboard.py` runs, because the helper collects these readings and Prometheus scrapes them from `127.0.0.1:9099/metrics` as job `npu`. If `DASHBOARD_PORT` changes, change that target in `prometheus.yml` too. Opened as a file without the helper, the page has no NPU section.
+
+| Reading | Source and meaning |
+|---|---|
+| NPU busy | The amdxdna driver's sensor query (`DRM_AMDXDNA_QUERY_SENSORS` through `/dev/accel/accel0`), which passes on the power-management firmware's busy percentage per NPU column. The dashboard shows the mean of the eight columns; Halogen spreads its work over all of them, so they read alike. |
+| NPU power | The same query's total NPU power in watts. It is part of PPT power, not an addition to it. |
+| Models in NPU memory | Halogen's `/health` `npu.loaded` for each configured model. Large models take turns, so a served model can read no. |
+| NPU requests queued | Halogen's `/health` `npu.queued`. |
+| Locked memory | `/proc/meminfo` `Unevictable` for the whole host, where NPU models lock their memory. About 0.1 GiB is locked without them. |
+
+The firmware averages its readings. On October 14, 2026, back-to-back embedding requests read 37 to 41% busy and about 1.5 W, the decider 41 to 44% and 1.15 W. Busy dropped to zero within four seconds of the last request, while power fell off over tens of seconds. Opening the NPU device wakes it from runtime suspend for five seconds, so the helper reads the sensors only while Halogen reports NPU models and answers 503 otherwise; with NPU models stopped, the NPU suspended while Prometheus kept scraping. `xrt-smi` 2.21.75 shows only the power reading, because it asks for one sensor. Halogen's own `/metrics` has nothing about the NPU.
 
 ## Storage and overhead
 

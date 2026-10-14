@@ -8,7 +8,7 @@ _page = (ROOT / "config/monitoring/dashboard.html").read_text()
 _match = re.search(r'<script type="application/json" id="panels">(.*?)</script>', _page, re.DOTALL)
 assert _match, "dashboard.html has no panel definitions"
 CONFIG = json.loads(_match.group(1))
-SECTIONS = {section["job"]: section for section in [CONFIG["host"], *CONFIG["engines"]]}
+SECTIONS = {section["job"]: section for section in [CONFIG["host"], CONFIG["npu"], *CONFIG["engines"]]}
 
 
 def compose(section: dict, panel: dict, series: dict, expr: str, window: str) -> str:

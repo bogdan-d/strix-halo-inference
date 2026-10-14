@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix="strix-dashboard-") as directory:
 import json, os, sys, time
 a = sys.argv[1:]
 with open(os.environ["CALLS"], "a") as output:
-    output.write(json.dumps([os.path.basename(sys.argv[0]), *a]) + "\\n")
+    output.write(json.dumps([os.path.basename(sys.argv[0]), *a] + [f"NPU_MODELS={value}" for value in [os.environ.get("NPU_MODELS")] if value]) + "\\n")
 if a[-1] == "--follow":
     with open(os.environ["VIEWER"], "w") as output:
         output.write(str(os.getpid()))
@@ -47,7 +47,9 @@ else:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
-    env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls), VIEWER=str(viewer), DASHBOARD_PORT=str(port))
+    env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls), VIEWER=str(viewer), DASHBOARD_PORT=str(port),
+               DASHBOARD_NPU_MODELS="decider-0.8b")
+    env.pop("NPU_MODELS", None)
     helper = subprocess.Popen(["python3", str(temp / "bin/dashboard.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def request(method: str, path: str, **headers: str) -> tuple[int, str, list[list[str]]]:
@@ -69,7 +71,7 @@ else:
         assert request("GET", "/")[:2] == (200, "fixture page")
         status, body, _ = request("GET", "/state")
         assert status == 200 and json.loads(body) == {
-            "monitoring": "off", "logs": [],
+            "monitoring": "off", "logs": [], "npu_models": "decider-0.8b",
             "engines": {engine: {"state": "stopped", "since": 0} for engine in ("halogen", "gufo", "strixite")}}, body
         # Other sites' pages, rebound host names and requests without this page's origin never reach a command.
         for method, path, headers in (
@@ -78,15 +80,18 @@ else:
                 ("POST", "/engine/halogen/start", {}),
                 ("POST", "/engine/halogen/start", {"Origin": "http://evil.example"}),
                 ("POST", "/engine/halogen/start", {"Origin": origin, "Host": "evil.example"}),
-                ("POST", "/engine/halogen/start", {"Origin": origin, "Sec_Fetch_Site": "same-site"})):
+                ("POST", "/engine/halogen/start", {"Origin": origin, "Sec_Fetch_Site": "same-site"}),
+                ("POST", "/engine/halogen/start-npu", {"Origin": "http://evil.example"})):
             status, _, recorded = request(method, path, **headers)
             assert status == 403 and not recorded, (method, path, headers, status, recorded)
-        for method, path in (("POST", "/engine/halogen/pull"), ("POST", "/engine/other/start"), ("POST", "/engine/halogen/start/x"),
+        for method, path in (("POST", "/engine/halogen/pull"), ("POST", "/engine/other/start"), ("POST", "/engine/halogen/start/x"), ("POST", "/engine/gufo/start-npu"),
                              ("POST", "/monitoring/pull"), ("POST", "/logs/halogen"), ("GET", "/logs/grafana"),
                              ("GET", "/engine/halogen/start"), ("GET", "/../bin/run.sh")):
             status, _, recorded = request(method, path, Origin=origin)
             assert status == 404 and not recorded, (method, path, status, recorded)
-        for path, expected in (("/engine/halogen/start", ["run.sh", "halogen", "start"]), ("/engine/strixite/stop", ["run.sh", "strixite", "stop"]),
+        for path, expected in (("/engine/halogen/start", ["run.sh", "halogen", "start"]),
+                               ("/engine/halogen/start-npu", ["run.sh", "halogen", "start", "NPU_MODELS=decider-0.8b"]),
+                               ("/engine/strixite/stop", ["run.sh", "strixite", "stop"]),
                                ("/monitoring/start", ["monitor.sh", "start"]), ("/monitoring/stop", ["monitor.sh", "stop"])):
             status, body, recorded = request("POST", path, Origin=origin, Sec_Fetch_Site="same-origin")
             assert (status, body, recorded) == (200, "done\n", [expected]), (path, status, body, recorded)

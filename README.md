@@ -95,7 +95,7 @@ sudo systemctl daemon-reload
 
 The NPU's memory must be locked: the small set of `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b` asks for 5.2 GiB. Measured beside Flash, that set used about 6.2 GiB more host RAM and `decider-4b` with `wemm-embedding-4b` about 8.9 GiB. A continuously busy NPU slowed Flash decode by 5 to 7% with the small models and 11 to 12% with the 4B ones; see the [update record](docs/engine-updates.md#first-npu-run). A rootless container cannot lock more than its user, and the desktop session inherits systemd's 8 MiB default, so the drop-in raises it to 32 GiB for this user only. Log out and back in, then check `ulimit -Hl`. The launcher refuses NPU models below 4 GiB.
 
-`halogen-fabric-clock status` needs no root. `bin/run.sh halogen status` shows the configured NPU models.
+`halogen-fabric-clock status` needs no root. `bin/run.sh halogen status` shows the configured NPU models. The [dashboard helper](docs/monitoring.md#dashboard-controls) has a Halogen + NPU button for the small set and shows NPU busy, power, loaded models and locked memory while they run.
 
 ## Optional dashboard
 

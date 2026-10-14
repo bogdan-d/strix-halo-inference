@@ -76,7 +76,7 @@ body.logs { padding-bottom: 34vh; }
   <h1>Strix Halo</h1>
   <div id="helper" hidden>
     <span class="group">Monitoring <span id="monitoring" class="chip"></span><button id="monitor"></button></span>
-    <span class="group">Engine <span id="engines" class="group"></span><button id="stop">Stop</button></span>
+    <span class="group">Engine <span id="engines" class="group"></span><button id="npu">Halogen + NPU</button><button id="stop">Stop</button></span>
   </div>
   <span id="notice"></span>
   <span id="error"></span>
@@ -157,6 +157,37 @@ replaced by the panel's window, else by a window derived from the scrape interva
       {"title": "Physical disk activity", "unit": "bytes/s", "note": "Summed over whole physical devices only. Partition, loop and device-mapper counters are excluded to avoid duplicate accounting.",
        "series": [{"label": "Read", "expr": "sum by(job, instance) (rate(node_disk_read_bytes_total{job='host',device=~'nvme[0-9]+n[0-9]+|sd[a-z]+|vd[a-z]+|mmcblk[0-9]+'}[$__rate_interval]))"},
                   {"label": "Write", "expr": "sum by(job, instance) (rate(node_disk_written_bytes_total{job='host',device=~'nvme[0-9]+n[0-9]+|sd[a-z]+|vd[a-z]+|mmcblk[0-9]+'}[$__rate_interval]))"}]}
+    ],
+    "extras": []
+  },
+  "npu": {
+    "name": "NPU",
+    "job": "npu",
+    "note": "Collected by bin/dashboard.py while Halogen serves NPU models, so this section needs that helper running. Busy and power come from the SoC's power-management firmware through the amdxdna driver and are averaged there: busy follows load within a few seconds, power falls off over tens of seconds.",
+    "gates": {
+      "live": "and on(job, instance) (up{job='npu'} == 1)",
+      "host": "and on() (up{job='host'} == 1) and on() (up{job='npu'} == 1)"
+    },
+    "status": [],
+    "tiles": [
+      {"title": "NPU busy", "sub": "mean over columns", "unit": "percent", "note": "Firmware busy percentage per NPU column, averaged over the eight columns. Halogen spreads its work over all columns, so they read alike.",
+       "series": [{"label": "", "expr": "npu_busy_percent{job='npu'}"}]},
+      {"title": "NPU power", "sub": "firmware estimate", "unit": "watts", "note": "Total NPU power as the firmware reports it, averaged over recent seconds. Included in PPT power above, not added to it.",
+       "series": [{"label": "", "expr": "npu_power_watts{job='npu'}"}]},
+      {"title": "Locked memory", "sub": "host-wide Unevictable", "unit": "bytes", "gate": "host", "note": "Kernel Unevictable counter for the whole host. NPU models lock their weights and buffers here; about 0.1 GiB is locked without them.",
+       "series": [{"label": "", "expr": "node_memory_Unevictable_bytes{job='host'}", "of": "node_memory_MemTotal_bytes{job='host'}"}]},
+      {"title": "NPU requests queued", "unit": "count", "note": "Requests waiting for Halogen's NPU engine, from its /health.",
+       "series": [{"label": "", "expr": "npu_queued{job='npu'}"}]},
+      {"title": "Models in NPU memory", "unit": "flag", "note": "Configured NPU models and whether each is loaded now. Large models take turns, so one can be unloaded while still served.",
+       "series": [{"label": "{{model}}", "expr": "npu_model_loaded{job='npu'}"}]}
+    ],
+    "charts": [
+      {"title": "NPU busy", "unit": "percent", "note": "Firmware busy percentage, mean over the NPU columns.",
+       "series": [{"label": "Busy", "expr": "npu_busy_percent{job='npu'}"}]},
+      {"title": "NPU power", "unit": "watts", "note": "Firmware estimate, averaged over recent seconds. Part of PPT power, not added to it.",
+       "series": [{"label": "Power", "expr": "npu_power_watts{job='npu'}"}]},
+      {"title": "Locked memory", "unit": "bytes", "gate": "host", "note": "Host-wide Unevictable counter, which includes the NPU models' locked memory.",
+       "series": [{"label": "Unevictable", "expr": "node_memory_Unevictable_bytes{job='host'}"}]}
     ],
     "extras": []
   },
@@ -389,7 +420,7 @@ replaced by the panel's window, else by a window derived from the scrape interva
 /** @typedef {{start: number, end: number, step: number, instantWindow: string, rangeWindow: string}} Context */
 /** @typedef {{el: HTMLElement, refresh: (context: Context) => Promise<unknown>}} Mounted */
 /** @typedef {{state: "stopped"|"starting"|"ready"|"stopping", since: number}} Engine */
-/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[]}} State */
+/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string}} State */
 
 // True when bin/dashboard.py serves this page. It also runs the commands behind the buttons; opened as a file, the page only reads.
 const HELPER = location.protocol !== "file:";
@@ -401,7 +432,7 @@ const POINTS = 300;
 const COLORS = ["#5ad1c5", "#f2a65a", "#8fa8ff", "#e879a6", "#b5d86b", "#c9a0ff"];
 const WIDTH = 600, HEIGHT = 110;
 
-/** @type {{host: Section, engines: Section[]}} */
+/** @type {{host: Section, npu: Section, engines: Section[]}} */
 const config = JSON.parse(/** @type {HTMLElement} */ (document.getElementById("panels")).textContent ?? "");
 
 /** @param {string} id */
@@ -628,9 +659,11 @@ async function refresh() {
   const end = Math.floor(Date.now() / 1000 / step) * step;
   /** @type {Context} */
   const context = {start: end - span, end, step, instantWindow: `${4 * SCRAPE}s`, rangeWindow: `${Math.max(4 * SCRAPE, step + SCRAPE)}s`};
-  const up = await query("query", {query: `up{job=~"${config.engines.map(engine => engine.job).join("|")}"} == 1`});
+  // The NPU section follows the engines; its scrape is up only while Halogen serves NPU models.
+  const sections = [...config.engines, config.npu];
+  const up = await query("query", {query: `up{job=~"${sections.map(section => section.job).join("|")}"} == 1`});
   const active = new Set(up.map(sample => sample.metric.job));
-  for (const engine of config.engines) {
+  for (const engine of sections) {
     const mounted = engines.get(engine.job);
     if (active.has(engine.job) && !mounted) {
       const created = mount(engine);
@@ -641,7 +674,7 @@ async function refresh() {
       engines.delete(engine.job);
     }
   }
-  idle.hidden = engines.size > 0;
+  idle.hidden = config.engines.some(engine => engines.has(engine.job));
   await Promise.all([host, ...engines.values()].map(section => section.refresh(context)));
 }
 
@@ -705,6 +738,9 @@ function render() {
     // One engine at a time: starting another needs an explicit stop first.
     el.disabled = !state || !!running;
   }
+  const npu = /** @type {HTMLButtonElement} */ (byId("npu"));
+  npu.disabled = !state || !!running;
+  npu.title = state ? `Start Halogen with NPU models ${state.npu_models}` : "";
   const stop = /** @type {HTMLButtonElement} */ (byId("stop"));
   stop.hidden = !running;
   stop.disabled = running?.[1].state === "stopping";
@@ -807,6 +843,7 @@ if (HELPER) {
     // Open the log at once, so a failed start is visible.
     if (await act(`/engine/${engine.job}/start`)) tail(engine.job);
   })));
+  byId("npu").addEventListener("click", async () => { if (await act("/engine/halogen/start-npu")) tail("halogen"); });
   byId("tabs").append(...SOURCES.map(source => button(source.id, source.name, () => tail(source.id))));
   byId("monitor").addEventListener("click", () => act(`/monitoring/${state?.monitoring === "off" ? "start" : "stop"}`));
   byId("stop").addEventListener("click", () => { const running = active(); if (running) act(`/engine/${running[0]}/stop`); });
