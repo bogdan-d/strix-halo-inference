@@ -10,7 +10,7 @@
 | Gufo | 0.13.0 | 0.15.0 | `sha256:451341e2249d72c04f8ef159aebacbe3d14e0591888c19c77a26f3d183961936` |
 | Strixite | 0.2.4 | 0.2.4 | `sha256:23411d0de807055c97ce885b0ac60cfe17609836bb0d5a5c39d3cbb891a34876` |
 
-**Neither new image has been started on this host, and nothing below is a local result.** The interactive agent session that ran the update was itself being served by the Halogen 0.18.1 container, so stopping that engine would have ended the session, and the change was deliberately not exercised. Health, generation, tools, structured output, cancellation, metrics, stop and memory release remain unexercised for Halogen 0.18.3, and Gufo 0.15.0 is unstarted exactly as the 0.13.0 it replaces was. Every point below comes from the publishers' release notes only. The images advertise image revisions Halogen `293c940b140e` and Gufo `89d6185532ff6d5de0336000fc6ad62e869b82b6`; neither was compared with public source. Nothing was pruned from the image store: the Halogen 0.18.1 image is still in use by the running container, and the October 12 digests therefore stay available without a re-pull.
+The release notes below are publisher claims. The [local checks](#october-14-local-checks) that follow them ran after the update, from a session not served by Halogen. The images advertise image revisions Halogen `293c940b140e` and Gufo `89d6185532ff6d5de0336000fc6ad62e869b82b6`; neither was compared with public source.
 
 ### Halogen 0.18.2 and 0.18.3
 
@@ -30,9 +30,16 @@
 - **0.15.0** pins Flash-Next cache pages without compacting host memory (#589), accepts response schemas without `additionalProperties`, accepts IPv6 listen addresses, which does not change the localhost-only endpoint used here, and speeds up wide prefill kernels for Qwen Flash (#571), a publisher performance claim that was not benchmarked locally.
 - Neither release note mentions a cache or snapshot format change, so whether an existing prompt cache is reused or starts cold on 0.15.0 is unknown, as it already was for 0.13.0.
 
-### Checks deferred on purpose
+### October 14 local checks
 
-Both engines still need the usual one-at-a-time pass, and for Halogen the person performing it has to be outside the served session: native 262144 startup and its allocation, the new `HALOGEN_TEMPLATE_CHECK` line and any firmware workaround line, a bounded non-thinking generation, multi-turn recall, a forced named tool, a streamed tool with strict schema assembly, a short-decode disconnect, `/health` and `/metrics` field and name review including the four new queue names, a Prometheus scrape and dashboard render, then stop and host memory release. Gufo 0.15.0 needs the same list from a cold start. Until then the October 12 entry is the most recent set of local results on this host.
+All three engines were started one at a time at native 262144 context with `/dev/accel/accel0` newly passed in. Each passed the readiness check, `bin/run.sh ENGINE smoke` and its live API test, then released its memory on stop (GTT back to 1.5 GiB). The live tests cover a multi-turn conversation, a forced named tool, a streamed automatic tool, slot release after a short-decode disconnect and generation after that cancellation. No engine used the NPU.
+
+- **Halogen 0.18.3.** Allocation 81.4 GiB: 62.1 GiB weights, 7.2 GiB KV pool, 12.1 GiB working memory, with 30.6 GiB host memory left. The new template check passed: "the history is reusable in 6 of 6 turn shapes and the model's own reply in 4". No old-firmware workaround line appeared. The startup also warned that 12.1 GiB of host RAM was in use before it started, which it says comes out of the file cache that serves the 47.7 GiB lookup table; prefill speed was not measured. Every previously allowlisted metric name is still exported, and the two queue metrics now collected were checked through a real scrape (see [Halogen dashboard](halogen-monitoring.md)). A request queued behind a running one, whose client hung up after six seconds, left the queue as 0.18.3 claims.
+- **Halogen prompt cache.** 0.18.3 opened a new, empty cache directory under `/cache`. Earlier releases' directories, about 24 GB in four directories, are not reused and were left in place.
+- **Gufo 0.15.0.** First start on this host, loading in 62 seconds. Metrics and readiness scrapes were up. 0.15.0's component cache ignores `--cache-disk-staging-bytes` and logs `option_ignored` with a 1 MiB staging capacity. The launcher still passes the flag.
+- **Strixite 0.2.4.** Unchanged image, rechecked only because the launcher now passes the NPU device.
+
+Not exercised: Pi sessions on the new versions, strict tool schemas, structured output, long-context quality, deep-prefill cancellation, prompt-cache reuse across a restart, dashboard rendering in a browser and any NPU workload.
 
 Sources: [Halogen 0.18.2 changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.2/CHANGELOG.md), [Halogen 0.18.3 changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.3/CHANGELOG.md), [Gufo 0.14.0 release](https://github.com/gufo-org/gufo/releases/tag/v0.14.0) and [Gufo 0.15.0 release](https://github.com/gufo-org/gufo/releases/tag/v0.15.0).
 
