@@ -77,6 +77,7 @@ body.logs { padding-bottom: 34vh; }
   <div id="helper" hidden>
     <span class="group">Monitoring <span id="monitoring" class="chip"></span><button id="monitor"></button></span>
     <span class="group">Engine <span id="engines" class="group"></span><button id="npu">Halogen + NPU</button><button id="stop">Stop</button></span>
+    <span class="group">Cache <span id="caches" class="group"></span></span>
   </div>
   <span id="notice"></span>
   <span id="error"></span>
@@ -419,8 +420,8 @@ replaced by the panel's window, else by a window derived from the scrape interva
 /** @typedef {{metric: Record<string, string>, value: [number, string], values: [number, string][]}} Sample */
 /** @typedef {{start: number, end: number, step: number, instantWindow: string, rangeWindow: string}} Context */
 /** @typedef {{el: HTMLElement, refresh: (context: Context) => Promise<unknown>}} Mounted */
-/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping", since: number}} Engine */
-/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string}} State */
+/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping"|"clearing", since: number}} Engine */
+/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string, caches: Record<string, number>}} State */
 
 // True when bin/dashboard.py serves this page. It also runs the commands behind the buttons; opened as a file, the page only reads.
 const HELPER = location.protocol !== "file:";
@@ -707,6 +708,10 @@ let failure = "";
 let tab;
 /** @type {AbortController|undefined} */
 let stream;
+/** The cache button waiting for its confirming click, if any. @type {string|undefined} */
+let confirming;
+/** @type {number|undefined} */
+let unconfirm;
 const SOURCES = [...config.engines.map(engine => ({id: engine.job, name: engine.name})),
   {id: "prometheus", name: "Prometheus"}, {id: "exporter", name: "Exporter"}, {id: "probe", name: "Probe"}];
 const follow = /** @type {HTMLInputElement} */ (byId("follow"));
@@ -741,8 +746,17 @@ function render() {
   const npu = /** @type {HTMLButtonElement} */ (byId("npu"));
   npu.disabled = !state || !!running;
   npu.title = state ? `Start Halogen with NPU models ${state.npu_models}` : "";
+  for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("caches").childNodes)) {
+    const id = el.dataset.id ?? "", engine = state?.engines[id], size = state ? format(state.caches[id] ?? 0, "bytes").join(" ") : "";
+    const name = SOURCES.find(source => source.id === id)?.name;
+    el.textContent = engine?.state === "clearing" ? `${name} · clearing` : confirming === id ? `Clear ${name} ${size}?` : `${name} ${size}`;
+    el.className = confirming === id ? "on" : "";
+    // A running engine has its cache open; bin/cache.sh refuses it too.
+    el.disabled = !state || engine?.state !== "stopped" || !state.caches[id];
+    el.title = "Delete this engine's prompt cache. Each conversation then processes its whole prompt once.";
+  }
   const stop = /** @type {HTMLButtonElement} */ (byId("stop"));
-  stop.hidden = !running;
+  stop.hidden = !running || running[1].state === "clearing";
   stop.disabled = running?.[1].state === "stopping";
   for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("tabs").childNodes)) {
     el.className = el.dataset.id === tab ? "on" : "";
@@ -844,6 +858,18 @@ if (HELPER) {
     if (await act(`/engine/${engine.job}/start`)) tail(engine.job);
   })));
   byId("npu").addEventListener("click", async () => { if (await act("/engine/halogen/start-npu")) tail("halogen"); });
+  // Clearing deletes, so the first click only asks; a second click within five seconds clears.
+  byId("caches").append(...config.engines.map(engine => button(engine.job, engine.name, () => {
+    clearTimeout(unconfirm);
+    if (confirming === engine.job) {
+      confirming = undefined;
+      act(`/cache/${engine.job}/clear`);
+    } else {
+      confirming = engine.job;
+      unconfirm = setTimeout(() => { confirming = undefined; render(); }, 5000);
+      render();
+    }
+  })));
   byId("tabs").append(...SOURCES.map(source => button(source.id, source.name, () => tail(source.id))));
   byId("monitor").addEventListener("click", () => act(`/monitoring/${state?.monitoring === "off" ? "start" : "stop"}`));
   byId("stop").addEventListener("click", () => { const running = active(); if (running) act(`/engine/${running[0]}/stop`); });

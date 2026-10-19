@@ -38,7 +38,7 @@ elif a == ["gufo", "start"]:
 else:
     print("done")
 '''
-    for name in ("run.sh", "monitor.sh"):
+    for name in ("run.sh", "monitor.sh", "cache.sh"):
         (temp / "bin" / name).write_text(stub)
         (temp / "bin" / name).chmod(0o755)
     (commands / "podman").write_text("#!/bin/sh\necho '[]'\n")
@@ -47,8 +47,10 @@ else:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
+    (temp / "cache/halogen").mkdir(parents=True)
+    (temp / "cache/halogen/entry").write_bytes(b"x" * 8192)
     env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls), VIEWER=str(viewer), DASHBOARD_PORT=str(port),
-               DASHBOARD_NPU_MODELS="decider-0.8b")
+               DASHBOARD_NPU_MODELS="decider-0.8b", CACHE_ROOT=str(temp / "cache"))
     env.pop("NPU_MODELS", None)
     helper = subprocess.Popen(["python3", str(temp / "bin/dashboard.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -70,7 +72,10 @@ else:
                 time.sleep(0.1)
         assert request("GET", "/")[:2] == (200, "fixture page")
         status, body, _ = request("GET", "/state")
-        assert status == 200 and json.loads(body) == {
+        current = json.loads(body)
+        caches = current.pop("caches")
+        assert caches["halogen"] >= 8192 and caches["gufo"] == caches["strixite"] == 0, caches
+        assert status == 200 and current == {
             "monitoring": "off", "logs": [], "npu_models": "decider-0.8b",
             "engines": {engine: {"state": "stopped", "since": 0} for engine in ("halogen", "gufo", "strixite")}}, body
         # Other sites' pages, rebound host names and requests without this page's origin never reach a command.
@@ -85,6 +90,7 @@ else:
             status, _, recorded = request(method, path, **headers)
             assert status == 403 and not recorded, (method, path, headers, status, recorded)
         for method, path in (("POST", "/engine/halogen/pull"), ("POST", "/engine/other/start"), ("POST", "/engine/halogen/start/x"), ("POST", "/engine/gufo/start-npu"),
+                             ("POST", "/cache/other/clear"), ("GET", "/cache/halogen/clear"),
                              ("POST", "/monitoring/pull"), ("POST", "/logs/halogen"), ("GET", "/logs/grafana"),
                              ("GET", "/engine/halogen/start"), ("GET", "/../bin/run.sh")):
             status, _, recorded = request(method, path, Origin=origin)
@@ -92,6 +98,7 @@ else:
         for path, expected in (("/engine/halogen/start", ["run.sh", "halogen", "start"]),
                                ("/engine/halogen/start-npu", ["run.sh", "halogen", "start", "NPU_MODELS=decider-0.8b"]),
                                ("/engine/strixite/stop", ["run.sh", "strixite", "stop"]),
+                               ("/cache/gufo/clear", ["cache.sh", "gufo", "clear"]),
                                ("/monitoring/start", ["monitor.sh", "start"]), ("/monitoring/stop", ["monitor.sh", "stop"])):
             status, body, recorded = request("POST", path, Origin=origin, Sec_Fetch_Site="same-origin")
             assert (status, body, recorded) == (200, "done\n", [expected]), (path, status, body, recorded)

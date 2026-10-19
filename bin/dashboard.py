@@ -15,7 +15,9 @@ from urllib.request import ProxyHandler, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "config/monitoring/dashboard.html"
-RUN, MONITOR = str(ROOT / "bin/run.sh"), str(ROOT / "bin/monitor.sh")
+RUN, MONITOR, CACHE = str(ROOT / "bin/run.sh"), str(ROOT / "bin/monitor.sh"), str(ROOT / "bin/cache.sh")
+# Prompt caches. Keep equal to bin/run.sh and bin/cache.sh.
+CACHE_ROOT = Path(os.environ.get("CACHE_ROOT") or Path.home() / ".cache/strix-halo-inference")
 PORT = int(os.environ.get("DASHBOARD_PORT", "9099"))
 HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 ORIGINS = {f"http://{host}" for host in HOSTS}
@@ -31,12 +33,13 @@ NPU_MODELS = os.environ.get("DASHBOARD_NPU_MODELS", "decider-0.8b,embeddinggemma
 # The only commands a request can run. The path selects an entry; no request text reaches an argument.
 ACTIONS = {f"/engine/{engine}/{verb}": (engine, verb, [RUN, engine, verb]) for engine in ENGINES for verb in ("start", "stop")} | {
     "/engine/halogen/start-npu": ("halogen", "start", ["env", f"NPU_MODELS={NPU_MODELS}", RUN, "halogen", "start"])} | {
+    f"/cache/{engine}/clear": (engine, "clear", [CACHE, engine, "clear"]) for engine in ENGINES} | {
     f"/monitoring/{verb}": ("monitoring", verb, [MONITOR, verb]) for verb in ("start", "stop")}
 LOGS = {f"/logs/{engine}": [RUN, engine, "logs", "--follow"] for engine in ENGINES} | {
     f"/logs/{component}": [MONITOR, component, "logs", "--follow"] for component in COMPONENTS}
 ACTION_TIMEOUT = 180
 
-# Targets with a start or stop in flight, so their state reads as starting or stopping meanwhile.
+# Targets with a start, stop or cache clear in flight, so their state reads as starting, stopping or clearing meanwhile.
 BUSY: dict[str, str] = {}
 LOCK = threading.Lock()
 DIRECT = build_opener(ProxyHandler({}))
@@ -57,6 +60,18 @@ def healthy(url: str) -> bool:
             return response.status == 200
     except OSError:
         return False
+
+
+def disk_bytes(path: Path) -> int:
+    """Bytes on disk under path, as du counts them. Zero when it does not exist."""
+    total = 0
+    for directory, _, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(directory, name)).st_blocks * 512
+            except OSError:
+                pass
+    return total
 
 
 def state() -> dict[str, object]:
@@ -81,7 +96,8 @@ def state() -> dict[str, object]:
     monitoring = busy.get("monitoring") or {0: "off", len(COMPONENTS): "on"}.get(running, "partial")
     logs = [engine for engine in ENGINES if f"strix-halo-{engine}" in containers]
     logs += [component for component in COMPONENTS if f"strix-halo-monitor-{component}" in containers]
-    return {"monitoring": monitoring, "engines": engines, "logs": logs, "npu_models": NPU_MODELS}
+    caches = {engine: disk_bytes(CACHE_ROOT / engine) for engine in ENGINES}
+    return {"monitoring": monitoring, "engines": engines, "logs": logs, "npu_models": NPU_MODELS, "caches": caches}
 
 
 def sensors() -> list[tuple[int, float]]:
@@ -201,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
         with LOCK:
             if target in BUSY:
                 return self.reply(409, f"{target} is already {BUSY[target]}.\n")
-            BUSY[target] = "starting" if verb == "start" else "stopping"
+            BUSY[target] = {"start": "starting", "stop": "stopping", "clear": "clearing"}[verb]
         try:
             result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, timeout=ACTION_TIMEOUT)
