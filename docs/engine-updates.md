@@ -43,6 +43,10 @@ Each engine was started alone at native 262144 context with MTP on, then stopped
 
 Not exercised: Pi sessions on the new versions, images through Pi, larger or multi-image Strixite requests, `VISION=off` and `KV8=off` starts, long-context quality with the 8-bit caches, prefill or decode benchmarks, Halogen's new concurrent-request drafting and dashboard rendering.
 
+### Image cleanup
+
+The superseded Halogen 0.18.3, Gufo 0.15.0 and Strixite 0.2.4 images were removed by ID without force. No containers existed. Podman's image store fell from 21.28 GB to 12.25 GB. Rolling back requires pulling the previous digests in the October 14 table again.
+
 Sources: [Halogen changelog at v0.18.11](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.11/CHANGELOG.md), [Halogen NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.11/docs/NPU.md), [Gufo releases 0.15.1 to 0.18.0](https://github.com/gufo-org/gufo/releases), [Strixite 0.3.0](https://github.com/shawnshekari/strixite/releases/tag/v0.3.0), [0.3.1](https://github.com/shawnshekari/strixite/releases/tag/v0.3.1) and [0.4.0](https://github.com/shawnshekari/strixite/releases/tag/v0.4.0).
 
 ## October 14 update
