@@ -1,5 +1,50 @@
 # Engine updates
 
+## October 19 update
+
+`bin/update.sh` pulled all three new images by digest and atomically updated their image and version pins. The Strixite model revision moved to add its vision files. Halogen and Gufo model revisions and host settings remain unchanged. In the live Pi `models.json`, only the Strixite model's `input` changed, to text and image, with a backup beside it. The release notes were printed by the updater and are publisher claims; the [local checks](#october-19-local-checks) follow.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.3 | 0.18.11 | `sha256:a5797467d2bff173e0c661d9700292bd55eac305faff68c86261ae35385ad6ad` |
+| Gufo | 0.15.0 | 0.18.0 | `sha256:4d784ef0043efe8ca07b8e7d519903a14345b068be2b4762c4896eb449704e81` |
+| Strixite | 0.2.4 | 0.4.0 | `sha256:34c7fdd7253456aa39920f7bf074b87e08ab8663c8c6da5bac1f4a7813ebf191` |
+
+The images advertise revisions Halogen `44d9515841f5`, Gufo `6c682a2b79109591bc57b1b951f1a2413a549723` and Strixite `62ef009`; none was compared with public source.
+
+### Launch changes
+
+- **8-bit KV cache by default.** Halogen gets `HALOGEN_KV8=1` (new in 0.18.9, opt-in upstream) and Strixite `--kv-cache q8` (its own default since 0.4.0). `env KV8=off` selects the 16-bit cache on both. Halogen's notes state perplexity moved by -0.3% to +0.5%, planted-fact retrieval at 128k and 250k matched, and decode is 0.2 to 1.9% slower; with drafting on, greedy text can differ from the 16-bit cache's. It cannot be combined with `HALOGEN_COMPOSABLE_CONTEXT=1`, which the launcher does not set.
+- **Strixite images on by default.** The launcher passes `--vision on`; `env VISION=off` turns it off. `STRIXITE_REVISION` moved from `e0be897` to `b64f3a6`, which adds `vision.strixw` (898,331,648 bytes) and `Qwen3.8-Flash-Next/preprocessor_config.json`. The hashes of the six existing files are unchanged. The Strixite Pi profile now lists `image` input.
+- **NPU models recorded.** `bin/npu-manifest.sh` reran against the 0.18.11 image. The five existing models' records are unchanged, and `d3-lite` and `d3-nano` (vLLM Semantic Router's Decision 3.0 models, 21 files each, 5.9 GB together) were added and downloaded. Neither is in the dashboard's NPU set; their use is undecided.
+- **Not adopted.** Halogen's vision tower and Gufo's projector remain undownloaded. Halogen's grammar drafter, MTP gate, sampled-depth and cache-eviction changes are defaults and need no launcher setting. The `UD-Q4_K_XL` concurrency issue Halogen lists affects GGUF files on Halogen only; this launcher gives Halogen its native checkpoint and Gufo one slot. The fabric-clock script at `v0.18.11` is byte-identical to the installed one.
+
+### Cache compatibility
+
+- **Halogen** 0.18.4 changed the prompt computation order, so disk entries from 0.18.3 are not reused. 0.18.11 opened a new cache directory; four older configurations' directories, 34.0 GiB, were left in place. `HALOGEN_CACHE_PRUNE_OLD=1` would remove them at the next start.
+- **Strixite** 0.4.0 dropped its 0.2.4 prompt-cache entries at startup, logging one `prompt cache: dropping` line each, because their fingerprint lacks `kv8`.
+- **Gufo** 0.18.0 notes mention no cache format change. Reuse across the upgrade was not checked.
+
+### October 19 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped; afterward MemAvailable returned to about 119 GiB and GTT to 0.7 GiB.
+
+| Check | Halogen 0.18.11 | Gufo 0.18.0 | Strixite 0.4.0 |
+|---|---|---|---|
+| Ready and `smoke` | Pass | Pass | Pass |
+| `tests/live.py` or `tests/strixite_live.py` | Pass | Pass | Pass, disconnect release 0.253 s |
+| Allowlisted metrics still exported | 30 of 30 | 14 of 14 | 33 of 33 |
+| Image request | Not enabled | Not enabled | Pass: read a 640x200 card in 0.53 s, 147 prompt tokens, answering `Strix 4217` for `STRIX 4217` |
+
+- **Halogen memory.** With the 8-bit cache, startup reported a 4.1 GiB KV pool and 78.3 GiB in all, against 7.2 and 81.4 GiB on 0.18.3 with the 16-bit cache, leaving 39.9 GiB of host memory instead of 30.6. The template check still reports 6 of 6 turn shapes and the model's own reply in 4.
+- **Strixite memory.** 83.3 GiB of GPU buffers and 31.4 GiB MemAvailable after loading with vision on and the 8-bit cache, against 84.6 and 29.3 GiB on 0.2.3.
+- **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`, as on 0.15.0.
+- **NPU.** Halogen started with `decider-0.8b`, `embeddinggemma-2`, `qwen3guard-stream-0.6b`, `d3-lite` and `d3-nano`, checked all their files and held and released the fabric clock; Unevictable fell back to 0.1 GiB after stop. A `/v1/systemone` choice from `d3-lite` took 0.66 s on its first call but routed a double-charge complaint to `technical` over `billing`, 0.47 against 0.45. `d3-nano` named a solid red picture red at 0.999 in 1.02 s.
+
+Not exercised: Pi sessions on the new versions, images through Pi, larger or multi-image Strixite requests, `VISION=off` and `KV8=off` starts, long-context quality with the 8-bit caches, prefill or decode benchmarks, Halogen's new concurrent-request drafting and dashboard rendering.
+
+Sources: [Halogen changelog at v0.18.11](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.11/CHANGELOG.md), [Halogen NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.11/docs/NPU.md), [Gufo releases 0.15.1 to 0.18.0](https://github.com/gufo-org/gufo/releases), [Strixite 0.3.0](https://github.com/shawnshekari/strixite/releases/tag/v0.3.0), [0.3.1](https://github.com/shawnshekari/strixite/releases/tag/v0.3.1) and [0.4.0](https://github.com/shawnshekari/strixite/releases/tag/v0.4.0).
+
 ## October 14 update
 
 `bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.2.4 digest. Model revisions, weight files, launch settings, live Pi files and host settings remain unchanged. The updater printed only the selected releases' notes during this run, so the Halogen 0.18.2 and Gufo 0.14.0 notes below were read from the publishers separately. The updater now prints the notes of every stable release after the pin, and a `--check` from the October 12 pins reproduced all four sections.

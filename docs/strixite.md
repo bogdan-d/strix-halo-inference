@@ -10,7 +10,7 @@ The subsequent [sandboxed three-engine coding comparison](coding-comparison.md) 
 
 ## Pinned inputs and defaults
 
-`config/pins.env` pins release 0.2.4 to `ghcr.io/shawnshekari/strixite@sha256:23411d0de807055c97ce885b0ac60cfe17609836bb0d5a5c39d3cbb891a34876` and `wemoh/Qwen3.8-Flash-Next-strixw` to revision `e0be89740e7ac38f5ef0a911e0b91865431b7a01`. The release source is `06e45551558b1d541c59c831041f7a52468d2c52`. The image was pulled and passed basic runtime checks on October 11, 2026. Metadata correspondence is not signed provenance. Historical v0.2.3 measurements used image digest `9075d3def69d550b6c8f0b42a7795259ec02187ebf755027149f8c757d6cc738` and source `dbe7b66ed620d392d0b3b6a8a6e836f9907ffea6`.
+`config/pins.env` pins release 0.4.0 to `ghcr.io/shawnshekari/strixite@sha256:34c7fdd7253456aa39920f7bf074b87e08ab8663c8c6da5bac1f4a7813ebf191` and `wemoh/Qwen3.8-Flash-Next-strixw` to revision `b64f3a69070c68721cbbf5ffa701ecee164b0991`, which adds `vision.strixw` and `preprocessor_config.json` for image input; the other files are byte-identical to revision `e0be89740e7ac38f5ef0a911e0b91865431b7a01`. The image advertises revision `62ef009`. It passed basic runtime checks with an image on October 19, 2026 ([update record](engine-updates.md#october-19-update)). Release 0.2.4 came from source `06e45551558b1d541c59c831041f7a52468d2c52`. Metadata correspondence is not signed provenance. Historical v0.2.3 measurements used image digest `9075d3def69d550b6c8f0b42a7795259ec02187ebf755027149f8c757d6cc738` and source `dbe7b66ed620d392d0b3b6a8a6e836f9907ffea6`.
 
 `config/strixite-files.tsv` selects the publisher's six checksum-manifest files: the main strixw v4 weights with included MTP tensors, the n-gram table, tokenizer, generation configuration, model configuration and license. Total additional storage is approximately 114.1 GiB before images, partial files and cache. Existing Halogen HGN and Gufo GGUF weights are not reusable. The package belongs under `/home/bogdan/models/wemoh/Qwen3.8-Flash-Next-strixw`.
 
@@ -43,6 +43,8 @@ bin/run.sh strixite diagnose
 bin/models.sh download strixite
 bin/models.sh verify strixite
 ```
+
+Image input is on by default and needs both vision files. `env VISION=off bin/run.sh strixite start` loads no vision encoder, and image requests then get a 400. Images are `data:` URLs in `image_url` parts of user messages; remote URLs are refused. The attention cache is 8-bit by default; `env KV8=off` selects the 16-bit cache.
 
 `diagnose` runs the release's `--help` with networking disabled and exits before model allocation. It confirms the CLI can execute, not that GPU allocation or inference works. The release has no dedicated GPU diagnostic command. Downloading resumes partial files and verifies hashes before promotion. The final `verify` reads all selected files and must finish successfully before the first launch. Existing corrupt files are rejected rather than replaced. Startup only performs the fast presence and size check.
 

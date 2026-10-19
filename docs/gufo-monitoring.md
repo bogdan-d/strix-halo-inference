@@ -1,6 +1,6 @@
 # Gufo inference dashboard
 
-The current image is 0.15.0, pinned October 14. Its metrics and readiness scrapes were up during the October 14 [basic release checks](engine-updates.md), and every allowlisted name was stored. Wire types and semantics were not rechecked. 0.13.0 was never started on this host. On 0.12.0 the existing metric contracts remained compatible, and native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.11.0 and were not repeated as benchmarks.
+The current image is 0.18.0, pinned October 19. Its native endpoint still exports every allowlisted name. Under 0.15.0, metrics and readiness scrapes were up during the October 14 [basic release checks](engine-updates.md), and every allowlisted name was stored. Wire types and semantics were not rechecked. 0.13.0 was never started on this host. On 0.12.0 the existing metric contracts remained compatible, and native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed accounting and overhead measurements below were originally collected on 0.11.0 and were not repeated as benchmarks.
 
 Open [the dashboard page](../config/monitoring/dashboard.html) after starting monitoring and Gufo. Its Gufo section appears while the engine's metrics scrape is up:
 

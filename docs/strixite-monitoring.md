@@ -1,6 +1,6 @@
 # Strixite inference dashboard
 
-The current image is 0.2.4. Existing accounting semantics and queries remain compatible. Native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed measurements below used 0.2.3. The additive `strix_think_closed_for_call_total` counter is intentionally dropped by the existing allowlist. Streamed prefill progress is not a new Prometheus progress gauge.
+The current image is 0.4.0, pinned October 19. Its native endpoint still exports all 33 allowlisted names. Under 0.2.4, existing accounting semantics and queries remained compatible, and native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed measurements below used 0.2.3. The additive `strix_think_closed_for_call_total` counter is intentionally dropped by the existing allowlist. Streamed prefill progress is not a new Prometheus progress gauge.
 
 Open [the dashboard page](../config/monitoring/dashboard.html) after starting the optional monitoring stack and Strixite. Its Strixite section appears while the engine's metrics scrape is up:
 

@@ -124,7 +124,8 @@ else:
     for flag, value in (("--publish", "127.0.0.1:5300:5300"), ("--label", "io.strix-halo-inference.managed=true"),
                         ("--capacity", "262144"), ("--rope-yarn-factor", "1"), ("--mtp", "on"),
                         ("--think-nudge", "off"), ("--low-memory", "fail"), ("--prompt-cache-dir", "/cache"),
-                        ("--prompt-cache-gib", "16"), ("--prompt-cache-ram-margin-gib", "8"), ("--stop-timeout", "90")):
+                        ("--prompt-cache-gib", "16"), ("--prompt-cache-ram-margin-gib", "8"), ("--stop-timeout", "90"),
+                        ("--vision", "on"), ("--kv-cache", "q8")):
         assert launch[launch.index(flag) + 1] == value, launch
     assert f"{env['MODELS_DIR']}:/models:ro" in launch
     assert f"{env['CACHE_ROOT']}/strixite:/cache:rw" in launch
@@ -133,10 +134,15 @@ else:
     assert not any("never-forward" in arg for arg in launch)
 
     calls.unlink()
-    result = run("strixite", "start", SPECULATIVE="off", CONTEXT="65536")
+    result = run("strixite", "start", SPECULATIVE="off", CONTEXT="65536", VISION="off", KV8="off")
     assert result.returncode == 0, result
     launch = next(json.loads(line) for line in calls.read_text().splitlines() if json.loads(line)[0] == "run")
     assert launch[launch.index("--mtp") + 1] == "off" and launch[launch.index("--capacity") + 1] == "65536"
+    assert launch[launch.index("--vision") + 1] == "off" and launch[launch.index("--kv-cache") + 1] == "bf16"
+    for setting in ("KV8", "VISION"):
+        calls.unlink()
+        result = run("halogen", "start", **{setting: "yes"})
+        assert result.returncode == 2 and f"{setting} must be on or off" in result.stderr, result
     for engine, active in (("strixite", "strix-halo-halogen"), ("strixite", "strix-halo-gufo"),
                            ("halogen", "strix-halo-strixite"), ("gufo", "strix-halo-strixite")):
         calls.unlink()
@@ -172,8 +178,12 @@ else:
     assert run("halogen", "start").returncode == 0
     launch = next(call for call in recorded() if call[0] == "run")
     assert not any("NPU" in arg or "xrt" in arg for arg in launch), launch
+    assert "HALOGEN_KV8=1" in launch
     assert not any(call[0] == "sudo" for call in recorded())
     assert (temp / "models-calls").read_text() == "check halogen\n"
+    calls.unlink()
+    assert run("halogen", "start", KV8="off").returncode == 0
+    assert not any("KV8" in arg for arg in next(call for call in recorded() if call[0] == "run"))
     calls.unlink()
     result = run("halogen", "start", NPU_MODELS="decider-0.8b,embeddinggemma-2")
     assert result.returncode == 0, result

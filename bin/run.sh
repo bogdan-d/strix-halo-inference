@@ -121,6 +121,12 @@ MIN_CONTEXT=1024
 [[ "$CONTEXT" =~ ^[0-9]+$ && "$CONTEXT" -ge "$MIN_CONTEXT" && "$CONTEXT" -le 262144 ]] || { echo "CONTEXT must be $MIN_CONTEXT..262144." >&2; exit 2; }
 SPECULATIVE="${SPECULATIVE:-on}"
 case "$SPECULATIVE" in on|off) ;; *) echo 'SPECULATIVE must be on or off.' >&2; exit 2 ;; esac
+# 8-bit attention cache on Halogen and Strixite: about 0.6 of the 16-bit cache's memory. Gufo has no such setting.
+KV8="${KV8:-on}"
+case "$KV8" in on|off) ;; *) echo 'KV8 must be on or off.' >&2; exit 2 ;; esac
+# Strixite image input. On needs vision.strixw and preprocessor_config.json, which bin/models.sh fetches.
+VISION="${VISION:-on}"
+case "$VISION" in on|off) ;; *) echo 'VISION must be on or off.' >&2; exit 2 ;; esac
 ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.managed=true
   "${GPU[@]}" --publish "127.0.0.1:$PORT:$PORT"
   --volume "$MODELS_DIR:/models:ro" --volume "$CACHE_ROOT/$ENGINE:/cache:rw")
@@ -133,6 +139,7 @@ if [[ "$ENGINE" == halogen ]]; then
     # Keep each reply's end state so the next turn does not process the reply again.
     --env HALOGEN_FORK=1 --env HALOGEN_FORK_MAP=auto)
   [[ "$SPECULATIVE" == on ]] || ARGS+=(--env HALOGEN_DRAFTER_DEFAULT=0 --env HALOGEN_PLD=0)
+  [[ "$KV8" == off ]] || ARGS+=(--env HALOGEN_KV8=1)
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
   ARGS+=("--userns=keep-id:uid=1000,gid=1000" "$IMAGE" gufo serve --host 0.0.0.0 --port "$PORT" --sessions 1 llm
@@ -150,7 +157,8 @@ else
     --host 0.0.0.0 --port "$PORT" --model-id qwen3.8-flash-next
     --capacity "$CONTEXT" --rope-yarn-factor 1 --mtp "$SPECULATIVE"
     --prompt-cache-dir /cache --prompt-cache-gib 16 --prompt-cache-ram-margin-gib 8
-    --low-memory fail --think-nudge off)
+    --low-memory fail --think-nudge off --vision "$VISION")
+  if [[ "$KV8" == on ]]; then ARGS+=(--kv-cache q8); else ARGS+=(--kv-cache bf16); fi
 fi
 if [[ -n "$NPU_MODELS" ]]; then
   sudo -n "$FABRIC_CLOCK" hold || { echo "Could not hold the GPU fabric clock. Install $FABRIC_CLOCK and its sudoers rule (README, NPU models)." >&2; exit 1; }

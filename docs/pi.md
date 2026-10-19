@@ -142,7 +142,7 @@ All three models advertise `contextWindow: 262144`, matching the launcher's full
 
 If you previously installed the 32K profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
 
-If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. Leave vision disabled and input set to text until a vision tower is explicitly configured.
+If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. The Strixite profile lists `image` input, so Pi sends pasted or attached images to it; this needs Strixite's default `VISION=on`. Halogen and Gufo stay text only until their vision files are configured.
 
 ## Troubleshooting
 

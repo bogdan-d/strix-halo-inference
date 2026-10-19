@@ -104,7 +104,8 @@
           "name": "Qwen3.8 Flash Next (Strixite)",
           "reasoning": true,
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "cost": {
             "input": 0,
