@@ -258,7 +258,9 @@ replaced by the panel's window, else by a window derived from the scrape interva
          "series": [{"label": "Engine saved prompt tokens", "expr": "rate(halogen:cache_prompt_tokens_saved_total{job='halogen'}[$__rate_interval])"},
                     {"label": "Front-end cached prompt tokens", "expr": "rate(halogen:prompt_tokens_cached_total{job='halogen'}[$__rate_interval])"}]},
         {"title": "Cache evictions", "unit": "per-second", "gate": "cache", "note": "Entries the cache forgot. Not a complete breakdown of dropped, superseded, refused or full/partial matches.",
-         "series": [{"label": "Forgotten entries", "expr": "rate(halogen:cache_evicted_total{job='halogen'}[$__rate_interval])"}]}
+         "series": [{"label": "Forgotten entries", "expr": "rate(halogen:cache_evicted_total{job='halogen'}[$__rate_interval])"}]},
+        {"title": "GPU queue stalls", "sub": "share of wall time", "unit": "ratio", "note": "Seconds the kernel driver held Halogen's GPU queues evicted, per wall second, because host memory compaction or reclaim moved pages the GPU maps. Every request in flight stalls for them. Read from the kernel by Halogen; absent on a host that does not report it.",
+         "series": [{"label": "", "expr": "rate(halogen:gpu_queues_evicted_seconds_total{job='halogen'}[$__rate_interval])"}]}
       ],
       "extras": [
         {"title": "Token counters, since front-end start", "unit": "count", "note": "Current counter totals, not lifetime across restarts.",
@@ -269,6 +271,8 @@ replaced by the panel's window, else by a window derived from the scrape interva
          "series": [{"label": "", "expr": "halogen:busy_for_seconds{job='halogen'}"}]},
         {"title": "Gave up in the queue, since front-end start", "unit": "count", "note": "Requests that left the queue without starting: the client hung up or the queue timeout passed. Current counter total, not lifetime across restarts.",
          "series": [{"label": "", "expr": "halogen:queue_gave_up_total{job='halogen'}"}]},
+        {"title": "GPU queue stalls, since front-end start", "unit": "seconds", "note": "Total seconds Halogen's GPU queues were held evicted, including loading. Current counter total, not lifetime across restarts.",
+         "series": [{"label": "", "expr": "halogen:gpu_queues_evicted_seconds_total{job='halogen'}"}]},
         {"title": "Waiting for pool room", "unit": "flag", "note": "State gauge, not accumulated wait time.",
          "series": [{"label": "", "expr": "halogen:kv_pool_waiting_for_room{job='halogen'}"}]},
         {"title": "Cache entries, fresh snapshot", "unit": "count", "gate": "cache", "note": "Retained engine cache records, not entry capacity.",

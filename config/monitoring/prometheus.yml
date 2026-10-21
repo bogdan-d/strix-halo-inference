@@ -19,7 +19,7 @@ scrape_configs:
     metric_relabel_configs:
       - source_labels: [__name__]
         action: keep
-        regex: 'llamacpp:(prompt_tokens_total|prompt_seconds_total|tokens_predicted_total|tokens_predicted_seconds_total|requests_processing|requests_deferred|kv_cache_tokens|kv_cache_usage_ratio)|halogen:(requests_total|prompt_tokens_cached_total|draft_tokens_total|draft_tokens_accepted_total|kv_pool_positions|kv_pool_reserved_tokens|cache_stats_age_seconds|cache_hits_total|cache_misses_total|cache_prompt_tokens_saved_total|cache_entries|cache_bytes|cache_evicted_total|cache_disk_enabled|cache_disk_bytes|cache_disk_budget_bytes|cache_disk_hits_total|kv_pool_waiting_for_room|engine_up|busy_for_seconds|queue_wait_longest_seconds|queue_gave_up_total)'
+        regex: 'llamacpp:(prompt_tokens_total|prompt_seconds_total|tokens_predicted_total|tokens_predicted_seconds_total|requests_processing|requests_deferred|kv_cache_tokens|kv_cache_usage_ratio)|halogen:(requests_total|prompt_tokens_cached_total|draft_tokens_total|draft_tokens_accepted_total|kv_pool_positions|kv_pool_reserved_tokens|cache_stats_age_seconds|cache_hits_total|cache_misses_total|cache_prompt_tokens_saved_total|cache_entries|cache_bytes|cache_evicted_total|cache_disk_enabled|cache_disk_bytes|cache_disk_budget_bytes|cache_disk_hits_total|kv_pool_waiting_for_room|engine_up|busy_for_seconds|queue_wait_longest_seconds|queue_gave_up_total|gpu_queues_evicted_seconds_total)'
       - action: labelkeep
         regex: '__name__|job|instance'
 

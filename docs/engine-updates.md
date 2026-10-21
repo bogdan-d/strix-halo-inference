@@ -1,5 +1,52 @@
 # Engine updates
 
+## October 21 update
+
+`bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.4.0 digest. Model revisions, launch settings, live Pi files and host settings remain unchanged. The release notes were printed by the updater and are publisher claims; the [local checks](#october-21-local-checks) follow.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.11 | 0.18.13 | `sha256:2e98dc53ed4a43b5600b11a80852eedfa573f4ffc3f10c64da01245f2a3217fc` |
+| Gufo | 0.18.0 | 0.20.0 | `sha256:7d634b171e67dbe4377655b514aa4828dd36e137d187804e11a049bacd8bfd07` |
+| Strixite | 0.4.0 | 0.4.0 | `sha256:34c7fdd7253456aa39920f7bf074b87e08ab8663c8c6da5bac1f4a7813ebf191` |
+
+The images advertise revisions Halogen `a00875cbb6d1` and Gufo `0c03748a271eab895befc0d2343aa50ca4b6d836`; neither was compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.18.12** states faster prefill on both checkpoints, cheaper multi-draft verification and read-ahead on hosts with the IOMMU off. It adds `/v1/images/edits` with up to four pictures, the `halogen:gpu_queues_evicted_seconds_total` metric and `evicted_ms` on each request log line, and copies prompt-cache data through a pinned staging buffer (`HALOGEN_CACHE_STAGE=2`, default), which upstream says halves the time lost when the driver evicts GPU queues.
+- **Halogen 0.18.13** turns on `HALOGEN_ADMIT_SPLICE_MS=500`, so streaming replies keep moving while a long prompt is read in, and `HALOGEN_ADMIT_NEST=1`, so a request of up to 1,024 new tokens starts during another request's long prompt. Nesting holds about 0.33 GiB more pinned host memory and 32 MiB of GPU memory from start-up. An NPU fault now answers 503 and restarts the NPU engine, up to `HALOGEN_NPU_RESTARTS` times (default 3), instead of refusing later requests or stopping the container. Both releases state the Flash checkpoints are unchanged and temperature 0 output is byte-identical to the previous release.
+- **Gufo 0.19.0** adds `/props` with model, build, context, sessions and vision, lets sampled requests use the small MTP draft head on multi-session servers and fixes the q8_1 block sum in qwen-flash (#667). **0.20.0** adds Qwen 27B AR and DFlash2 cache continuation, answers `Expect: 100-continue` before reading the body, no longer reports whitespace between parallel tool calls as content and speeds up cache lookups and Flash-Next projections. Neither mentions a cache format change.
+
+### Launch and model changes
+
+- **No launcher change.** The admission defaults suit this launcher's single slot and need no setting; `HALOGEN_ADMIT_SPLICE_MS=0` and `HALOGEN_ADMIT_NEST=0` would restore 0.18.11's behavior. Gufo's sampled MTP change applies to multi-session servers; this launcher runs one session.
+- **NPU model sets republished.** `bin/npu-manifest.sh` reran against the 0.18.13 image with the same seven models. 103 files changed contents at unchanged paths, 4 were added (`consts.hnpb` files for `d3-lite`, `d3-nano`, `embeddinggemma-2` and `wemm-embedding-4b`) and 27 are unchanged. The 103 superseded files, 1.7 GB, were deleted after each matched its previous SHA-256, then `bin/models.sh download npu` fetched and verified the new ones. `HALOGEN_DOWNLOAD` stays unset. The fabric-clock script at `v0.18.13` is byte-identical to the installed one.
+- **Dashboard.** `halogen:gpu_queues_evicted_seconds_total` joined the Halogen allowlist, with a stall-share chart and a since-start total; see [Halogen monitoring](halogen-monitoring.md#what-each-measurement-means). The other new or still-excluded Halogen names, including `halogen:build_info`, stay out. Gufo exports no new metric names.
+
+### Cache compatibility
+
+- **Halogen** 0.18.13 opened a new cache directory; 0.18.11's, 2.3 GiB, was left in place.
+- **Gufo** cache reuse across the upgrade was not checked.
+
+### October 21 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. After Halogen stopped, MemAvailable was 115 GiB and Unevictable 0.1 GiB with the fabric clock released; after Gufo stopped, MemAvailable was 116 GiB and GTT 1.5 GiB with monitoring running.
+
+| Check | Halogen 0.18.13 | Gufo 0.20.0 |
+|---|---|---|
+| Ready and `smoke` | Pass | Pass |
+| `tests/live.py` | Pass | Pass |
+| Allowlisted metrics stored by Prometheus | 31 of 31 | 15 of 15 |
+
+- **GPU queue stalls.** The new counter read 30.9 s at the first scrape after start-up and 36.0 s after the live tests, so this host does evict the engine's GPU queues, mostly while loading.
+- **NPU.** Halogen started with `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b`, checked their republished files and that of their `qwen3-embedding-0.6b` devices against the image's record and held and released the fabric clock. A two-input `embeddinggemma-2` request returned 768-dimension vectors in 0.25 s.
+- **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`. `/props` reported `0.20.0 (0c03748)`, one slot, 262144 context and no vision.
+
+Not exercised: Strixite, already current; Pi sessions on the new versions; concurrent requests that would use splicing and nesting; the NPU restart path; multi-picture image edits; a decider request; the rendered dashboard; prefill or decode benchmarks. The superseded Halogen 0.18.11 and Gufo 0.18.0 images remain in Podman's store.
+
+Sources: [Halogen changelog at v0.18.13](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.13/CHANGELOG.md), [Gufo 0.19.0](https://github.com/gufo-org/gufo/releases/tag/v0.19.0) and [0.20.0](https://github.com/gufo-org/gufo/releases/tag/v0.20.0), [Gufo server documentation at v0.20.0](https://github.com/gufo-org/gufo/blob/v0.20.0/docs/SERVER.md).
+
 ## October 19 update
 
 `bin/update.sh` pulled all three new images by digest and atomically updated their image and version pins. The Strixite model revision moved to add its vision files. Halogen and Gufo model revisions and host settings remain unchanged. In the live Pi `models.json`, only the Strixite model's `input` changed, to text and image, with a backup beside it. The release notes were printed by the updater and are publisher claims; the [local checks](#october-19-local-checks) follow.
