@@ -26,7 +26,7 @@ The images advertise revisions Halogen `a00875cbb6d1` and Gufo `0c03748a271eab89
 
 ### Cache compatibility
 
-- **Halogen** 0.18.13 opened a new cache directory; 0.18.11's, 2.3 GiB, was left in place.
+- **Halogen** 0.18.13 opened a new cache directory. 0.18.11's, 2.3 GiB, was then deleted with the engine stopped.
 - **Gufo** cache reuse across the upgrade was not checked.
 
 ### October 21 local checks
@@ -43,7 +43,11 @@ Each engine was started alone at native 262144 context with MTP on, then stopped
 - **NPU.** Halogen started with `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b`, checked their republished files and that of their `qwen3-embedding-0.6b` devices against the image's record and held and released the fabric clock. A two-input `embeddinggemma-2` request returned 768-dimension vectors in 0.25 s.
 - **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`. `/props` reported `0.20.0 (0c03748)`, one slot, 262144 context and no vision.
 
-Not exercised: Strixite, already current; Pi sessions on the new versions; concurrent requests that would use splicing and nesting; the NPU restart path; multi-picture image edits; a decider request; the rendered dashboard; prefill or decode benchmarks. The superseded Halogen 0.18.11 and Gufo 0.18.0 images remain in Podman's store.
+Not exercised: Strixite, already current; Pi sessions on the new versions; concurrent requests that would use splicing and nesting; the NPU restart path; multi-picture image edits; a decider request; the rendered dashboard; prefill or decode benchmarks.
+
+### Image cleanup
+
+The superseded Halogen 0.18.11 and Gufo 0.18.0 images were removed by ID without force. No container used them. Podman's image store fell from 16.38 GB to 12.86 GB, as the new images share most layers. Rolling back requires pulling the previous digests in the October 19 table again.
 
 Sources: [Halogen changelog at v0.18.13](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.13/CHANGELOG.md), [Gufo 0.19.0](https://github.com/gufo-org/gufo/releases/tag/v0.19.0) and [0.20.0](https://github.com/gufo-org/gufo/releases/tag/v0.20.0), [Gufo server documentation at v0.20.0](https://github.com/gufo-org/gufo/blob/v0.20.0/docs/SERVER.md).
 
