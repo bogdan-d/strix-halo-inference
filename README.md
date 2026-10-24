@@ -77,7 +77,7 @@ Halogen and Strixite keep the attention cache in 8 bits by default, about 0.6 of
 
 Halogen can serve small models on the NPU beside the Flash model, on the same port. Gufo and Strixite cannot. Name them at start, for example `env NPU_MODELS=decider-0.8b,embeddinggemma-2 bin/run.sh halogen start --wait`. Without `NPU_MODELS` the container starts exactly as before. Which models are worth their memory is still open; see the [NPU plan](.scratch/npu/spec.md).
 
-Their files are listed in `config/npu-files.tsv` and stored under `/home/bogdan/models/npu`, the layout Halogen reads at `/models/npu`. `bin/npu-manifest.sh` derives the list from the record inside the pinned Halogen image, which Halogen uses to refuse any other file. Rerun it after a Halogen pin change and review the diff. A release can republish a model set with new contents at the same paths, and the downloader skips paths that exist, so delete the superseded files first, then run `bin/models.sh download npu`. The launcher accepts only models whose weights are listed there and checks their files before starting. The listed models are `decider-0.8b`, `decider-4b`, `embeddinggemma-2`, `qwen3guard-stream-0.6b` and `wemm-embedding-4b`, plus `d3-lite`, added October 19 and not yet assigned a use (see the [update record](docs/engine-updates.md#october-19-update)), and the text-to-speech models `qwen3-tts-0.6b-customvoice` and `qwen3-tts-1.7b-customvoice`, added October 24. Name at most one text-to-speech model per start; it speaks on `/v1/audio/speech` with nine preset voices, and only the 1.7B accepts `instructions` (see [Halogen's text to speech](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/docs/NPU.md#text-to-speech)). `HALOGEN_DOWNLOAD` stays unset, so the models volume stays read-only.
+Their files are listed in `config/npu-files.tsv` and stored under `/home/bogdan/models/npu`, the layout Halogen reads at `/models/npu`. `bin/npu-manifest.sh` derives the list from the record inside the pinned Halogen image, which Halogen uses to refuse any other file. Rerun it after a Halogen pin change and review the diff. A release can republish a model set with new contents at the same paths, and the downloader skips paths that exist, so delete the superseded files first, then run `bin/models.sh download npu`. The launcher accepts only models whose weights are listed there and checks their files before starting. The listed models are `decider-0.8b`, `decider-4b`, `embeddinggemma-2`, `qwen3guard-stream-0.6b` and `wemm-embedding-4b`, plus `d3-lite`, added October 19 and not yet assigned a use (see the [update record](docs/engine-updates.md#october-19-update)), and the text-to-speech models `qwen3-tts-0.6b-customvoice` and `qwen3-tts-1.7b-customvoice`, added October 24. `HALOGEN_DOWNLOAD` stays unset, so the models volume stays read-only.
 
 The host needs XRT and a held GPU fabric clock. XRT is the user-space half of the NPU driver and must match the host kernel's `amdxdna`, so Halogen uses the host's copy: the launcher mounts `libxrt_coreutil.so.2`, `libxrt_core.so.2` and `libxrt_driver_xdna.so.2` from `/usr/lib` read-only, at both `/usr/lib` and `/opt/xilinx/xrt/lib`. On Strix Halo, GPU and NPU work at once can hang the machine or corrupt NPU results while the fabric clock changes speed, so Halogen refuses NPU models unless it is held. Holding it measured about 2.3 W extra at idle on this host, so the launcher holds it only while Halogen runs NPU models: `start` runs `sudo -n halogen-fabric-clock hold` before the container starts, and `bin/run.sh halogen stop` releases it, also when the container has already exited. A suspend can hand the clock back to the driver; this host does not suspend, so the launcher does not handle it. Restart Halogen after a resume.
 
@@ -98,6 +98,22 @@ sudo systemctl daemon-reload
 The NPU's memory must be locked: the small set of `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b` asks for 5.2 GiB. Measured beside Flash, that set used about 6.2 GiB more host RAM and `decider-4b` with `wemm-embedding-4b` about 8.9 GiB. A continuously busy NPU slowed Flash decode by 5 to 7% with the small models and 11 to 12% with the 4B ones; see the [update record](docs/engine-updates.md#first-npu-run). A rootless container cannot lock more than its user, and the desktop session inherits systemd's 8 MiB default, so the drop-in raises it to 32 GiB for this user only. Log out and back in, then check `ulimit -Hl`. The launcher refuses NPU models below 4 GiB.
 
 `halogen-fabric-clock status` needs no root. `bin/run.sh halogen status` shows the configured NPU models. The [dashboard helper](docs/monitoring.md#dashboard-controls) has a Halogen + NPU button for the small set and shows NPU busy, power, loaded models and locked memory while they run.
+
+### Text to speech
+
+Name one text-to-speech model per start, alone or beside other NPU models. It speaks on `/v1/audio/speech` in OpenAI's request shape, so OpenAI clients work with `base_url` `http://localhost:8731/v1`:
+
+```bash
+env NPU_MODELS=qwen3-tts-1.7b-customvoice bin/run.sh halogen start --wait
+curl -s localhost:8731/v1/audio/speech -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3-tts-1.7b-customvoice","input":"Hello from the NPU.","voice":"ryan"}' -o hello.wav
+# Stream raw 24 kHz audio to the speakers as it is made
+curl -sN localhost:8731/v1/audio/speech -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3-tts-1.7b-customvoice","input":"Streaming speech.","voice":"serena","response_format":"pcm","stream":true}' \
+  | aplay -f S16_LE -r 24000 -c 1
+```
+
+The voices are `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`, `uncle_fu` and `vivian`. `input` takes up to 4,096 characters, about two and a half minutes of speech. `response_format` is `wav` or `pcm`, not mp3. Only the 1.7B accepts `instructions`, a speaking style such as `"read this like a calm audiobook narrator"`. On this host the 0.6B spoke about 1.5 times faster than real time and the 1.7B slightly faster than real time. Other NPU requests wait while one speaks. The dashboard's Halogen + NPU button starts no speech model unless `DASHBOARD_NPU_MODELS` names one. Every option is in [Halogen's text to speech](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/docs/NPU.md#text-to-speech).
 
 ## Optional dashboard
 
