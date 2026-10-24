@@ -26,7 +26,7 @@ The images advertise revisions Halogen `9a80df1a2e68` and Gufo `1fafd5ad633a2934
 
 ### Cache compatibility
 
-- **Halogen** 0.18.14 opened new cache directories; 0.18.13's is empty and was left in place.
+- **Halogen** 0.18.14 opened new cache directories. 0.18.13's held only its fingerprint and was deleted.
 - **Gufo** cache reuse across the upgrade was not checked.
 
 ### October 24 local checks
@@ -44,6 +44,10 @@ Each engine was started alone at native 262144 context with MTP on, then stopped
 - **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`. Its readiness route is `/ready` on port 8080; a check polling Halogen's port mistook a healthy start for a hang.
 
 Not exercised: Strixite, already current; Prometheus scrapes and the rendered dashboard, as monitoring was stopped; Pi sessions on the new versions; `HALOGEN_POOL_GROW` reaching its case; `HALOGEN_NPU_SPLICE`; speech beside a streaming guard; Gufo YaRN and embeddings; prefill or decode benchmarks.
+
+### Image cleanup
+
+The superseded Halogen 0.18.13 and Gufo 0.20.0 images were removed by ID without force. No container used them. Podman's image store fell from 18.86 GB to 15.34 GB. Rolling back requires pulling the previous digests in the October 21 table again.
 
 Sources: [Halogen changelog at v0.18.14](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/CHANGELOG.md), [Halogen NPU documentation at v0.18.14](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/docs/NPU.md#text-to-speech), [Gufo 0.21.0](https://github.com/gufo-org/gufo/releases/tag/v0.21.0), [0.22.0](https://github.com/gufo-org/gufo/releases/tag/v0.22.0) and [0.23.0](https://github.com/gufo-org/gufo/releases/tag/v0.23.0).
 
