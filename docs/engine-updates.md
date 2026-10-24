@@ -1,5 +1,52 @@
 # Engine updates
 
+## October 24 update
+
+`bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.4.0 digest. Model revisions, launch settings, live Pi files and host settings remain unchanged. The release notes were printed by the updater and are publisher claims; the [local checks](#october-24-local-checks) follow.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.13 | 0.18.14 | `sha256:e0c1d1b48e07c8acdd204fbdbafbb421a395a73cf704271845a1846ad1fd767f` |
+| Gufo | 0.20.0 | 0.23.0 | `sha256:ec8c3f0bf06100304f5105590cfe98d62bf21ff133e8c2dea95955eb4028ddb2` |
+| Strixite | 0.4.0 | 0.4.0 | `sha256:34c7fdd7253456aa39920f7bf074b87e08ab8663c8c6da5bac1f4a7813ebf191` |
+
+The images advertise revisions Halogen `9a80df1a2e68` and Gufo `1fafd5ad633a2934d32a2c227aa8951fa5ab22bf`; neither was compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.18.14** adds text to speech on the NPU with Qwen3-TTS-12Hz CustomVoice 0.6B and 1.7B on `/v1/audio/speech`; other NPU requests wait while one speaks. When the prompt cache lowered a request's `max_tokens`, the answer can now grow into free or idle cached memory (`HALOGEN_POOL_GROW`, on by default). Opt-in `HALOGEN_NPU_SPLICE=1` runs short NPU requests between a long one's steps. Generation is stated to be a little faster, the Flash checkpoints are unchanged and temperature 0 output is byte-identical to 0.18.13. The `decider-0.8b`, `d3-lite` and `d3-nano` sets were republished.
+- **Gufo 0.21.0** adds opt-in YaRN context extension for qwen-flash and cheaper Flash-Next sampled decoding. **0.22.0** frees RAM before writing oversized cache checkpoints to disk, gives each HIP stream its own qfn_mmq scratch arena, fixes the BF16 indexer sum order and accepts standard image `detail` values. **0.23.0** serves EmbeddingGemma 2 on `/v1/embeddings`, maps weights through a new file layer and lets lone or constrained greedy requests use the small MTP draft head. None mentions a cache format change.
+
+### Launch and model changes
+
+- **No launcher change.** The launcher sets neither `HALOGEN_POOL_GROW` nor `HALOGEN_NPU_SPLICE`, keeping upstream defaults. Gufo's YaRN and embedding features are unused.
+- **NPU models.** `bin/npu-manifest.sh` reran against the 0.18.14 image, dropping `d3-nano` and adding `qwen3-tts-0.6b-customvoice` and `qwen3-tts-1.7b-customvoice`, 26 files each. The `d3-lite`, `d3-nano` and `decider-0.8b` directories, 8.0 GiB, were deleted, then `bin/models.sh download npu` fetched and verified `d3-lite`, `decider-0.8b` and both speech models, 15.7 GiB together. The fabric-clock script at `v0.18.14` is byte-identical to the installed one.
+- **Fabric-clock sudoers rule.** The rule now names the script without arguments, so `status` also runs without a password. The script accepts only `hold`, `release` and `status`.
+- **Dashboard.** Neither engine exports a new metric name, so the allowlists and panels are unchanged.
+
+### Cache compatibility
+
+- **Halogen** 0.18.14 opened new cache directories; 0.18.13's is empty and was left in place.
+- **Gufo** cache reuse across the upgrade was not checked.
+
+### October 24 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. After each stop MemAvailable was about 115 GiB and Unevictable 0.1 MiB, and the fabric clock was back on `auto`.
+
+| Check | Halogen 0.18.14 | Gufo 0.23.0 |
+|---|---|---|
+| Ready and a chat generation | Pass | Pass |
+| `tests/live.py` | Not run | Pass |
+| Allowlisted names on `/metrics` | 31 of 31 | 15 of 15 |
+
+- **NPU.** Halogen started with `qwen3-tts-1.7b-customvoice`, `decider-0.8b` and `d3-lite`, then again with `qwen3-tts-0.6b-customvoice` alone, and checked their files against the image's record. Both deciders routed a cracked-screen question to `repairs`, in 0.64 s and 0.36 s. The 1.7B spoke 9.4 s of 24 kHz audio with `instructions` in 8.6 s and streamed 3.0 s of `pcm` in 2.8 s; the 0.6B spoke 9.8 s in 6.5 s and refused `instructions` with a 400, as documented.
+- **Host memory fragmentation.** Halogen warned at start that the host had only 327 contiguous 2 MiB blocks free (654 MiB). Start-up and the checks were unaffected.
+- **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`. Its readiness route is `/ready` on port 8080; a check polling Halogen's port mistook a healthy start for a hang.
+
+Not exercised: Strixite, already current; Prometheus scrapes and the rendered dashboard, as monitoring was stopped; Pi sessions on the new versions; `HALOGEN_POOL_GROW` reaching its case; `HALOGEN_NPU_SPLICE`; speech beside a streaming guard; Gufo YaRN and embeddings; prefill or decode benchmarks.
+
+Sources: [Halogen changelog at v0.18.14](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/CHANGELOG.md), [Halogen NPU documentation at v0.18.14](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/docs/NPU.md#text-to-speech), [Gufo 0.21.0](https://github.com/gufo-org/gufo/releases/tag/v0.21.0), [0.22.0](https://github.com/gufo-org/gufo/releases/tag/v0.22.0) and [0.23.0](https://github.com/gufo-org/gufo/releases/tag/v0.23.0).
+
 ## October 21 update
 
 `bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.4.0 digest. Model revisions, launch settings, live Pi files and host settings remain unchanged. The release notes were printed by the updater and are publisher claims; the [local checks](#october-21-local-checks) follow.
@@ -155,7 +202,7 @@ Startup allocation is unchanged at 81.4 GiB. Health, smoke, the live API test an
 
 XRT was installed from the CachyOS repositories: `xrt 1:2.21.75-14.1` and `xrt-plugin-amdxdna 1:2.21.75-2.1`. Halogen names AMD's XRT 2.25 and Ubuntu's 2.21 as tested, not Arch builds. Checked before installing, the three libraries the container loads need at most `GLIBC_2.38` and `GLIBCXX_3.4.32`, within the image's glibc 2.41 and `GLIBCXX_3.4.33`, and their other dependencies are in the image. The image itself carries no XRT.
 
-Halogen's `halogen-fabric-clock` script was taken from its `v0.18.3` tag (`deploy/host/halogen-fabric-clock`, SHA-256 `0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a`). It only sets the GPU's `power_dpm_force_performance_level` to `manual` and `pp_dpm_fclk` to its top level, 2000 MHz here, or sets the level back to `auto`. Halogen says holding costs about a watt. Idle package power (`amdgpu` `PPT`, which includes the CPU), averaged over 60 seconds after 10 seconds of settling, measured 16.21 W held against 13.56 W on `auto`, then 15.35 W against 13.36 W: about 2.3 W. The boot unit was therefore not enabled; `bin/run.sh` holds the clock only while Halogen runs NPU models, through a sudoers rule limited to `hold` and `release`.
+Halogen's `halogen-fabric-clock` script was taken from its `v0.18.3` tag (`deploy/host/halogen-fabric-clock`, SHA-256 `0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a`). It only sets the GPU's `power_dpm_force_performance_level` to `manual` and `pp_dpm_fclk` to its top level, 2000 MHz here, or sets the level back to `auto`. Halogen says holding costs about a watt. Idle package power (`amdgpu` `PPT`, which includes the CPU), averaged over 60 seconds after 10 seconds of settling, measured 16.21 W held against 13.56 W on `auto`, then 15.35 W against 13.36 W: about 2.3 W. The boot unit was therefore not enabled; `bin/run.sh` holds the clock only while Halogen runs NPU models, through a sudoers rule for that script alone, which accepts only `hold`, `release` and `status`.
 
 ### First NPU run
 
