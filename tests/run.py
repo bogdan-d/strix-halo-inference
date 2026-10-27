@@ -125,7 +125,7 @@ else:
                         ("--capacity", "262144"), ("--rope-yarn-factor", "1"), ("--mtp", "on"),
                         ("--think-nudge", "off"), ("--low-memory", "fail"), ("--prompt-cache-dir", "/cache"),
                         ("--prompt-cache-gib", "16"), ("--prompt-cache-ram-margin-gib", "8"), ("--stop-timeout", "90"),
-                        ("--vision", "on"), ("--kv-cache", "q8")):
+                        ("--vision", "on"), ("--kv-cache", "q8"), ("--total-slots", "1")):
         assert launch[launch.index(flag) + 1] == value, launch
     assert f"{env['MODELS_DIR']}:/models:ro" in launch
     assert f"{env['CACHE_ROOT']}/strixite:/cache:rw" in launch
@@ -134,11 +134,16 @@ else:
     assert not any("never-forward" in arg for arg in launch)
 
     calls.unlink()
-    result = run("strixite", "start", SPECULATIVE="off", CONTEXT="65536", VISION="off", KV8="off")
+    result = run("strixite", "start", SPECULATIVE="off", CONTEXT="65536", VISION="off", KV8="off", SLOTS="2")
     assert result.returncode == 0, result
     launch = next(json.loads(line) for line in calls.read_text().splitlines() if json.loads(line)[0] == "run")
     assert launch[launch.index("--mtp") + 1] == "off" and launch[launch.index("--capacity") + 1] == "65536"
     assert launch[launch.index("--vision") + 1] == "off" and launch[launch.index("--kv-cache") + 1] == "bf16"
+    assert launch[launch.index("--total-slots") + 1] == "2"
+    for slots in ("0", "9", "two"):
+        calls.unlink()
+        result = run("strixite", "start", SLOTS=slots)
+        assert result.returncode == 2 and "SLOTS must be 1..8" in result.stderr, result
     for setting in ("KV8", "VISION"):
         calls.unlink()
         result = run("halogen", "start", **{setting: "yes"})

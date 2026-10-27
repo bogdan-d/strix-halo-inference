@@ -32,7 +32,7 @@ bin/run.sh gufo pull
 bin/run.sh gufo diagnose
 ```
 
-The current images are Halogen 0.18.14 and Gufo 0.23.0, pinned on October 24, and Strixite 0.4.0, pinned on October 19. Gufo passed basic native-256K generation, API tools, short decode cancellation and shutdown checks on October 24; Halogen passed native-256K generation, NPU decisions, text to speech and shutdown that day, and its API tool and cancellation checks last passed on 0.18.13 on October 21; Strixite passed them on October 19, also with an image. Earlier detailed coding and monitoring measurements used older versions; see the [update record](docs/engine-updates.md) for scope. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
+The current images are Halogen 0.18.17, Gufo 0.25.0 and Strixite 0.5.0, pinned on October 27. All three passed basic native-256K generation, API tools, short decode cancellation and shutdown checks that day, and Halogen also NPU decisions and text to speech; Strixite last passed an image request on 0.4.0 on October 19. Earlier detailed coding and monitoring measurements used older versions; see the [update record](docs/engine-updates.md) for scope. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
 
 ```bash
 bin/models.sh download halogen
@@ -71,7 +71,7 @@ Use `bin/run.sh halogen start --wait` to wait for readiness and print the endpoi
 
 The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client.
 
-Halogen and Strixite keep the attention cache in 8 bits by default, about 0.6 of the 16-bit cache's memory. Use `env KV8=off` for the 16-bit cache. Gufo has no such setting. Strixite reads images by default, which needs its `vision.strixw` and `preprocessor_config.json` from `bin/models.sh download strixite`. Use `env VISION=off` to load no vision encoder; image requests then get a 400. Halogen and Gufo stay text only here: their vision files are not downloaded.
+Halogen and Strixite keep the attention cache in 8 bits by default, about 0.6 of the 16-bit cache's memory. Use `env KV8=off` for the 16-bit cache. Gufo has no such setting. Strixite reads images by default, which needs its `vision.strixw` and `preprocessor_config.json` from `bin/models.sh download strixite`. Use `env VISION=off` to load no vision encoder; image requests then get a 400. Strixite serves one conversation at a time by default; `env SLOTS=2`, up to 8, serves more at once, each able to grow to the full context. Halogen and Gufo stay text only here: their vision files are not downloaded.
 
 ## NPU models
 
@@ -81,11 +81,11 @@ Their files are listed in `config/npu-files.tsv` and stored under `/home/bogdan/
 
 The host needs XRT and a held GPU fabric clock. XRT is the user-space half of the NPU driver and must match the host kernel's `amdxdna`, so Halogen uses the host's copy: the launcher mounts `libxrt_coreutil.so.2`, `libxrt_core.so.2` and `libxrt_driver_xdna.so.2` from `/usr/lib` read-only, at both `/usr/lib` and `/opt/xilinx/xrt/lib`. On Strix Halo, GPU and NPU work at once can hang the machine or corrupt NPU results while the fabric clock changes speed, so Halogen refuses NPU models unless it is held. Holding it measured about 2.3 W extra at idle on this host, so the launcher holds it only while Halogen runs NPU models: `start` runs `sudo -n halogen-fabric-clock hold` before the container starts, and `bin/run.sh halogen stop` releases it, also when the container has already exited. A suspend can hand the clock back to the driver; this host does not suspend, so the launcher does not handle it. Restart Halogen after a resume.
 
-One-time host setup, with the script from Halogen's [`deploy/host/`](https://github.com/peonist-ai/halogen-flash-server/tree/v0.18.14/deploy/host) at the pinned release, unchanged since 0.18.3. Its boot unit is not used:
+One-time host setup, with the script from Halogen's [`deploy/host/`](https://github.com/peonist-ai/halogen-flash-server/tree/v0.18.17/deploy/host) at the pinned release, unchanged since 0.18.3. Its boot unit is not used:
 
 ```bash
 sudo pacman -S --needed xrt xrt-plugin-amdxdna
-curl -fsSLO https://raw.githubusercontent.com/peonist-ai/halogen-flash-server/v0.18.14/deploy/host/halogen-fabric-clock
+curl -fsSLO https://raw.githubusercontent.com/peonist-ai/halogen-flash-server/v0.18.17/deploy/host/halogen-fabric-clock
 echo "0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a  halogen-fabric-clock" | sha256sum -c
 sudo install -m 755 -o root -g root halogen-fabric-clock /usr/local/sbin/
 echo "$USER ALL=(root) NOPASSWD: /usr/local/sbin/halogen-fabric-clock" > halogen-fabric-clock.sudoers
@@ -113,7 +113,7 @@ curl -sN localhost:8731/v1/audio/speech -H 'Content-Type: application/json' \
   | aplay -f S16_LE -r 24000 -c 1
 ```
 
-The voices are `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`, `uncle_fu` and `vivian`. `input` takes up to 4,096 characters, about two and a half minutes of speech. `response_format` is `wav` or `pcm`, not mp3. Only the 1.7B accepts `instructions`, a speaking style such as `"read this like a calm audiobook narrator"`. On this host the 0.6B spoke about 1.5 times faster than real time and the 1.7B slightly faster than real time. Other NPU requests wait while one speaks. The dashboard's Halogen + NPU button starts no speech model unless `DASHBOARD_NPU_MODELS` names one. Every option is in [Halogen's text to speech](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.14/docs/NPU.md#text-to-speech).
+The voices are `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`, `uncle_fu` and `vivian`. `input` takes up to 4,096 characters, about two and a half minutes of speech. `response_format` is `wav` or `pcm`, not mp3. Only the 1.7B accepts `instructions`, a speaking style such as `"read this like a calm audiobook narrator"`. On this host the 0.6B spoke about 1.5 times faster than real time and the 1.7B slightly faster than real time. Short NPU requests, such as a decision of up to 1,024 tokens, run between a speech request's steps; other NPU requests wait while one speaks. The dashboard's Halogen + NPU button starts no speech model unless `DASHBOARD_NPU_MODELS` names one. Every option is in [Halogen's text to speech](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.17/docs/NPU.md#text-to-speech).
 
 ## Optional dashboard
 

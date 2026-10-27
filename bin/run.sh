@@ -127,6 +127,9 @@ case "$KV8" in on|off) ;; *) echo 'KV8 must be on or off.' >&2; exit 2 ;; esac
 # Strixite image input. On needs vision.strixw and preprocessor_config.json, which bin/models.sh fetches.
 VISION="${VISION:-on}"
 case "$VISION" in on|off) ;; *) echo 'VISION must be on or off.' >&2; exit 2 ;; esac
+# Strixite conversations served at once. Each slot can grow to a full-capacity K/V state.
+SLOTS="${SLOTS:-1}"
+[[ "$SLOTS" =~ ^[1-8]$ ]] || { echo 'SLOTS must be 1..8.' >&2; exit 2; }
 ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.managed=true
   "${GPU[@]}" --publish "127.0.0.1:$PORT:$PORT"
   --volume "$MODELS_DIR:/models:ro" --volume "$CACHE_ROOT/$ENGINE:/cache:rw")
@@ -157,7 +160,7 @@ else
     --host 0.0.0.0 --port "$PORT" --model-id qwen3.8-flash-next
     --capacity "$CONTEXT" --rope-yarn-factor 1 --mtp "$SPECULATIVE"
     --prompt-cache-dir /cache --prompt-cache-gib 16 --prompt-cache-ram-margin-gib 8
-    --low-memory fail --think-nudge off --vision "$VISION")
+    --low-memory fail --think-nudge off --vision "$VISION" --total-slots "$SLOTS")
   if [[ "$KV8" == on ]]; then ARGS+=(--kv-cache q8); else ARGS+=(--kv-cache bf16); fi
 fi
 if [[ -n "$NPU_MODELS" ]]; then

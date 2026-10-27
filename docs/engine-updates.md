@@ -1,5 +1,56 @@
 # Engine updates
 
+## October 27 update
+
+`bin/update.sh` pulled all three new images by digest and atomically updated their image and version pins. Model revisions, live Pi files and host settings remain unchanged. The release notes were printed by the updater and are publisher claims; the [local checks](#october-27-local-checks) follow.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.14 | 0.18.17 | `sha256:e30d6bf9a325d75fb4904c108745df7d77dc8e25ae3b2ce9b9007e55d70757d7` |
+| Gufo | 0.23.0 | 0.25.0 | `sha256:27552f26358eb6e245d8f8d060ff91793a34df0db8af708265e024abe79cba44` |
+| Strixite | 0.4.0 | 0.5.0 | `sha256:f0d3211f05c65036673d00bcf9daa69e83fe7ea12018c9b4810cd57ba7568293` |
+
+The images advertise revisions Halogen `8a87b980bf0d`, Gufo `16e8ed477710914481d65702acc1e67a86aede32` and Strixite `b175d27`; none was compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.18.15** turns on the reply-end keep (`HALOGEN_FORK_MAP=auto`) and short NPU requests between a long NPU job's steps (`HALOGEN_NPU_SPLICE`) by default. It adds an answer guard that keeps long answers from ending inside a code block or on a heading (`HALOGEN_ANSWER_GUARD`), an out-of-memory score of 500 for its processes, a startup count of NPU model host memory and a 4 GiB host-memory floor for the NPU engine. A client that leaves while queued is no longer prefilled (#204), a speech request the NPU cannot fit no longer stops every NPU model, and `/detokenize` no longer stalls the server. **0.18.16** turns the automatic keep off by default again after a stall of up to ten minutes (#207) and a fault in sliding a conversation aside (#208). **0.18.17** stops a full KV pool from writing one conversation's turn over rows another kept, which with any keep in use could answer with another conversation's turn (#208), stops a resumed conversation waiting on its own kept reply (#207), accepts Claude Code's `tool_reference` blocks on `/v1/messages`, parses tool-call markup inside string arguments as written and reports input modalities on `/v1/models`. The Flash checkpoints are unchanged.
+- **Gufo 0.24.0** accepts image inputs for embeddings and repeated `--served-model-name`, accepts neutral llama.cpp sampler fields and runs EmbeddingGemma 2 attention on matrix cores. **0.25.0** bounds Qwen image resolution for `detail: low`, truncates over-length embedding inputs on request, batches concurrent embeddings and fills Qwen's device-resident weights from the shard file (#794). A Qwen cache-boundary change was added and reverted in the same release. None mentions a cache format change.
+- **Strixite 0.5.0** serves several conversations at once (`--total-slots`, default 2) with batched decode, maps K/V pages as conversations grow and never releases them before restart, and states 10 to 12% faster prefill and flat to 4% faster decode. It adds `--chunk-shared` and `--log-level` and states that prompt-cache entries from 0.4 stay valid.
+
+### Launch and model changes
+
+- **Strixite slots.** The launcher now passes `--total-slots 1`, keeping one conversation at a time as on 0.4.0 and as Halogen's `HALOGEN_KV_SLOTS=1` and Gufo's `--sessions 1`. `env SLOTS=2`, up to 8, changes it per start. `tests/run.py` checks the default, the override and the refusal of values outside 1 to 8.
+- **Halogen keep.** The launcher still sets `HALOGEN_FORK=1` and `HALOGEN_FORK_MAP=auto`, so 0.18.15's and 0.18.16's default changes do not apply here, and 0.18.17's two keep fixes do. The log confirms at most four automatic keeps. The answer guard and NPU splice keep their new upstream defaults.
+- **NPU models.** `bin/npu-manifest.sh` reran against the 0.18.17 image; `config/npu-files.tsv` is unchanged. The fabric-clock script at `v0.18.17` is byte-identical to the installed one.
+- **Dashboard.** All allowlisted metric names are still exported. Strixite adds `strix_slots`, `strix_verify_batches_total` and `strix_verify_batch_runs_total`, which the allowlist drops.
+
+### Cache compatibility
+
+- **Halogen** 0.18.17 opened new cache directories. 0.18.14's, about 0.2 GiB, remain on disk.
+- **Gufo** cache reuse across the upgrade was not checked.
+- **Strixite** started with an empty cache directory, so the stated 0.4 compatibility was not exercised.
+
+### October 27 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. MemAvailable was 108 GiB before the first start. After each stop it was 114 to 115 GiB, Unevictable at most 0.3 MiB and kernel GTT about 1.6 GiB, and the fabric clock was back on `auto`.
+
+| Check | Halogen 0.18.17 | Gufo 0.25.0 | Strixite 0.5.0 |
+|---|---|---|---|
+| Ready and a chat generation | Pass | Pass | Pass |
+| `tests/live.py` or `tests/strixite_live.py` | Pass, 4 fragments | Pass, 4 fragments | Pass, 22 fragments, release 0.252 s |
+| Allowlisted names on `/metrics` | 31 of 31 | 15 of 15 | 33 of 33 |
+| Startup allocation | 78.3 GiB | 89.09 GiB on the GPU | 79.3 GiB of GPU buffers |
+
+- **Halogen NPU.** Halogen started with `qwen3-tts-1.7b-customvoice`, `decider-0.8b` and `d3-lite`, checked their files against the image's record and stated up to about 12.2 GiB of host memory for them, with no warning that the host could not hold them. The 1.7B spoke 7.7 s of 24 kHz audio with `instructions` in 7.0 s. A `decider-0.8b` choice through `/v1/chat/completions` took 0.88 s alone and 0.11 s while a 13 s speech request ran, so the splice let it in. It routed a cracked phone screen to `technical`, not `repairs`; the prompt differed from October 24's. A decision without a question in the system message or schema description gets a 400.
+- **Strixite slots.** With `SLOTS=2` the server reported `strix_slots 2` and 80.2 GiB of GPU buffers, 0.9 GiB more than one slot, and MemAvailable after loading fell from 27.1 to 26.2 GiB. Two concurrent requests both completed in two batched verify runs.
+- **Host memory.** Halogen warned that 14 to 17 GiB of host RAM was in use before it started and that only 237 to 274 contiguous 2 MiB blocks were free. Startup took about 28 s and the checks were unaffected.
+- **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`.
+
+Not exercised: Strixite image input; Pi sessions on the new versions; prompt-cache restoration across the upgrade; Prometheus scrapes and the rendered dashboard, as monitoring was stopped; Halogen's answer guard reaching its case, the keep under a full KV pool and the out-of-memory path; Gufo's embedding changes; two Strixite slots at depth; prefill or decode benchmarks.
+
+Sources: [Halogen changelog at v0.18.17](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.17/CHANGELOG.md), [Gufo 0.24.0](https://github.com/gufo-org/gufo/releases/tag/v0.24.0) and [0.25.0](https://github.com/gufo-org/gufo/releases/tag/v0.25.0), [Strixite 0.5.0](https://github.com/shawnshekari/strixite/releases/tag/v0.5.0).
+
 ## October 24 update
 
 `bin/update.sh` pulled the new Halogen and Gufo images by digest and atomically updated their image and version pins. Strixite `latest` still resolves to the pinned 0.4.0 digest. Model revisions, launch settings, live Pi files and host settings remain unchanged. The release notes were printed by the updater and are publisher claims; the [local checks](#october-24-local-checks) follow.
