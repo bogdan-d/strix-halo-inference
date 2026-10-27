@@ -1,7 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-exec python - "$ROOT" "$@" <<'PY'
+#!/usr/bin/env python3
+"""Update digest-pinned upstream images and show their release notes."""
 import argparse
 import fcntl
 import json
@@ -136,12 +134,12 @@ def inspect_image(engine: str, prefix: str, current: str, pinned_version: str) -
 
 
 def main() -> None:
-    root = Path(sys.argv[1])
-    parser = argparse.ArgumentParser(prog="bin/update.sh", description="Update digest-pinned upstream images and show their release notes.")
+    root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(prog="bin/update.py", description=__doc__)
     parser.add_argument("--check", action="store_true", help="Inspect only, without pulling images or writing files")
     parser.add_argument("--pull", action="store_true", help="Pull all three resolved images even when their pins are unchanged")
     parser.add_argument("--fresh-cache", action="store_true", help="Archive all three engine prompt caches. Engines must be stopped")
-    args = parser.parse_args(sys.argv[2:])
+    args = parser.parse_args()
     if args.check and (args.pull or args.fresh_cache):
         parser.error("--check cannot be combined with --pull or --fresh-cache")
 
@@ -225,4 +223,3 @@ try:
 except (OSError, ValueError, subprocess.SubprocessError) as error:
     print(f"Update failed: {error}", file=sys.stderr)
     sys.exit(1)
-PY

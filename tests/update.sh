@@ -4,7 +4,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP="$(mktemp -d)"
 trap 'rm --preserve-root=all --one-file-system -r -- "$TEMP"' EXIT
 mkdir -p -- "$TEMP/bin" "$TEMP/config" "$TEMP/commands" "$TEMP/cache/halogen" "$TEMP/cache/gufo" "$TEMP/cache/strixite"
-cp -- "$ROOT/bin/update.sh" "$TEMP/bin/update.sh"
+cp -- "$ROOT/bin/update.py" "$TEMP/bin/update.py"
 cp -- "$ROOT/config/pins.env" "$TEMP/config/pins.env"
 cp -- "$ROOT/config/pins.env" "$TEMP/expected.env"
 export FIXTURE_ROOT="$TEMP" CACHE_ROOT="$TEMP/cache"
@@ -60,7 +60,7 @@ else:
 PY
 chmod +x "$TEMP/commands/"{skopeo,curl,podman}
 
-"$TEMP/bin/update.sh" --check > "$TEMP/output"
+"$TEMP/bin/update.py" --check > "$TEMP/output"
 cmp -- "$TEMP/config/pins.env" "$TEMP/expected.env"
 [[ ! -e "$TEMP/config/.update.lock" && ! -e "$TEMP/pulls" ]]
 grep -q 'Selected changelog' "$TEMP/output"
@@ -81,7 +81,7 @@ p.write_text(re.sub(r'^GUFO_VERSION=.*$','GUFO_VERSION=0.12.0',text,flags=re.M))
 PY
 cp -- "$TEMP/config/pins.env" "$TEMP/before.env"
 for ENGINE in gufo strixite; do
-  if FAIL_PULL="$ENGINE" "$TEMP/bin/update.sh" > "$TEMP/output" 2>&1; then
+  if FAIL_PULL="$ENGINE" "$TEMP/bin/update.py" > "$TEMP/output" 2>&1; then
     echo 'Failed pull was accepted' >&2; exit 1
   fi
   cmp -- "$TEMP/config/pins.env" "$TEMP/before.env"
@@ -90,7 +90,7 @@ done
 printf 'preserve me\n' > "$TEMP/cache/halogen/marker"
 printf 'trial cache\n' > "$TEMP/cache/strixite/marker"
 for ENGINE in halogen gufo strixite; do
-  if ACTIVE="strix-halo-$ENGINE" "$TEMP/bin/update.sh" --fresh-cache > "$TEMP/output" 2>&1; then
+  if ACTIVE="strix-halo-$ENGINE" "$TEMP/bin/update.py" --fresh-cache > "$TEMP/output" 2>&1; then
     echo 'Active engine allowed cache rotation' >&2; exit 1
   fi
   grep -q 'Stop the active engine' "$TEMP/output"
@@ -98,7 +98,7 @@ for ENGINE in halogen gufo strixite; do
   [[ -f "$TEMP/cache/halogen/marker" && -f "$TEMP/cache/strixite/marker" ]]
 done
 
-"$TEMP/bin/update.sh" --fresh-cache > "$TEMP/output"
+"$TEMP/bin/update.py" --fresh-cache > "$TEMP/output"
 cmp -- "$TEMP/config/pins.env" "$TEMP/expected.env"
 [[ ! -e "$TEMP/cache/halogen" && ! -e "$TEMP/cache/gufo" && ! -e "$TEMP/cache/strixite" ]]
 [[ "$(find "$TEMP/cache" -path '*/halogen/marker' -type f | wc -l)" == 1 ]]
@@ -119,7 +119,7 @@ p=Path(sys.argv[1])
 p.write_text(re.sub(r'^'+sys.argv[3]+r'_VERSION=.*$', sys.argv[3]+'_VERSION=999.0.0', Path(sys.argv[2]).read_text(), flags=re.M))
 PY
 cp -- "$TEMP/config/pins.env" "$TEMP/before.env"
-if "$TEMP/bin/update.sh" > "$TEMP/output" 2>&1; then
+if "$TEMP/bin/update.py" > "$TEMP/output" 2>&1; then
   echo 'Version downgrade was accepted' >&2; exit 1
 fi
 grep -q "Refusing ${ENGINE,,} downgrade" "$TEMP/output"
