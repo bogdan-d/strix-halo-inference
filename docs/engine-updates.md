@@ -27,7 +27,7 @@ The images advertise revisions Halogen `8a87b980bf0d`, Gufo `16e8ed477710914481d
 
 ### Cache compatibility
 
-- **Halogen** 0.18.17 opened new cache directories. 0.18.14's, about 0.2 GiB, remain on disk.
+- **Halogen** 0.18.17 opened new cache directories. 0.18.14's two, about 0.2 GiB and fingerprinted with its engine build, were deleted.
 - **Gufo** cache reuse across the upgrade was not checked.
 - **Strixite** started with an empty cache directory, so the stated 0.4 compatibility was not exercised.
 
@@ -47,7 +47,11 @@ Each engine was started alone at native 262144 context with MTP on, then stopped
 - **Host memory.** Halogen warned that 14 to 17 GiB of host RAM was in use before it started and that only 237 to 274 contiguous 2 MiB blocks were free. Startup took about 28 s and the checks were unaffected.
 - **Gufo** still logs `option_ignored` for `--cache-disk-staging-bytes`.
 
-Not exercised: Strixite image input; Pi sessions on the new versions; prompt-cache restoration across the upgrade; Prometheus scrapes and the rendered dashboard, as monitoring was stopped; Halogen's answer guard reaching its case, the keep under a full KV pool and the out-of-memory path; Gufo's embedding changes; two Strixite slots at depth; prefill or decode benchmarks.
+Not exercised: Strixite image input; Pi sessions on the new versions; prompt-cache restoration across the upgrade; Prometheus scrapes and the rendered dashboard, as monitoring was stopped; Halogen's answer guard reaching its case, the keep under a full KV pool and the out-of-memory path; Gufo's embedding changes; two Strixite slots at depth; prefill or decode benchmarks. Strixite is not in use, so further Strixite testing, including `SLOTS=2` in a Pi session, is deferred.
+
+### Image cleanup
+
+The superseded Halogen 0.18.14, Gufo 0.23.0 and Strixite 0.4.0 images were removed by digest without force. No container used them. Podman's image store fell from 19.3 GB to 15.34 GB. Rolling back requires pulling the previous digests in the October 24 table again.
 
 Sources: [Halogen changelog at v0.18.17](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.17/CHANGELOG.md), [Gufo 0.24.0](https://github.com/gufo-org/gufo/releases/tag/v0.24.0) and [0.25.0](https://github.com/gufo-org/gufo/releases/tag/v0.25.0), [Strixite 0.5.0](https://github.com/shawnshekari/strixite/releases/tag/v0.5.0).
 
