@@ -73,6 +73,23 @@ The default is one active request with the full native 262,144-token capacity, c
 
 Halogen and Strixite keep the attention cache in 8 bits by default, about 0.6 of the 16-bit cache's memory. Use `env KV8=off` for the 16-bit cache. Gufo has no such setting. Strixite reads images by default, which needs its `vision.strixw` and `preprocessor_config.json` from `bin/models.sh download strixite`. Use `env VISION=off` to load no vision encoder; image requests then get a 400. Strixite serves one conversation at a time by default; `env SLOTS=2`, up to 8, serves more at once, each able to grow to the full context. Halogen and Gufo stay text only here: their vision files are not downloaded.
 
+### Host memory fragmentation
+
+Halogen warns at start when the host has few contiguous 2 MiB blocks free. Its pinned weights and KV pool need them, and on a fragmented host each large allocation stalls to compact memory; Halogen states startup can then take tens of minutes at 100% of one core. On October 24 and 27 it warned with 237 to 327 blocks free and still started in about 28 s.
+
+The usual cause here is the file cache left by reading model files: after an engine stops, the cached pages stay scattered through RAM, so free memory is in small pieces. Desktop applications, transparent huge pages set to `always` and memory the kernel cannot move, such as GPU driver buffers and pinned NPU memory, add to it. `vm.compaction_proactiveness` is `0` on this host, CachyOS's setting rather than the kernel default of 20, so the kernel compacts only when an allocation stalls, never in the background. Check the state with `cat /proc/buddyinfo`: in the `Normal` row, the last two columns count free 2 MiB and 4 MiB blocks.
+
+A reboot is not needed. If Halogen warns, stop it, compact and start again:
+
+```bash
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+```
+
+Compaction is harmless and takes seconds. Two further options are not applied, because they change host settings:
+
+- `sudo sysctl vm.compaction_proactiveness=20` keeps memory compacted in the background, at a small CPU cost. Persist it with a file in `/etc/sysctl.d/` if it helps.
+- `echo 3 | sudo tee /proc/sys/vm/drop_caches` frees the file cache as well, but Halogen reads its 47.7 GiB lookup table through that cache, so the first prompts afterwards read from disk and run slower.
+
 ## NPU models
 
 Halogen can serve small models on the NPU beside the Flash model, on the same port. Gufo and Strixite cannot. Name them at start, for example `env NPU_MODELS=decider-0.8b,embeddinggemma-2 bin/run.sh halogen start --wait`. Without `NPU_MODELS` the container starts exactly as before. Which models are worth their memory is still open; see the [NPU plan](.scratch/npu/spec.md).
