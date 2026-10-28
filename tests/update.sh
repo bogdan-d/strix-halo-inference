@@ -63,10 +63,8 @@ chmod +x "$TEMP/commands/"{skopeo,curl,podman}
 "$TEMP/bin/update.py" --check > "$TEMP/output"
 cmp -- "$TEMP/config/pins.env" "$TEMP/expected.env"
 [[ ! -e "$TEMP/config/.update.lock" && ! -e "$TEMP/pulls" ]]
-grep -q 'Selected changelog' "$TEMP/output"
-grep -q 'STRIXITE selected release notes' "$TEMP/output"
-if grep -q 'Older changelog' "$TEMP/output"; then
-  echo 'Printed changes for the wrong release' >&2; exit 1
+if grep -q 'Release notes' "$TEMP/output"; then
+  echo 'Printed release notes for a current pin' >&2; exit 1
 fi
 
 # Make the image pins older than the verified fixture to exercise a real pin transition,
@@ -80,6 +78,13 @@ text=re.sub(r'^(HALOGEN_IMAGE|GUFO_IMAGE|STRIXITE_IMAGE)=(.*?)@sha256:[0-9a-f]{6
 p.write_text(re.sub(r'^GUFO_VERSION=.*$','GUFO_VERSION=0.12.0',text,flags=re.M))
 PY
 cp -- "$TEMP/config/pins.env" "$TEMP/before.env"
+"$TEMP/bin/update.py" --check > "$TEMP/output"
+cmp -- "$TEMP/config/pins.env" "$TEMP/before.env"
+grep -q 'Selected changelog' "$TEMP/output"
+grep -q 'STRIXITE selected release notes' "$TEMP/output"
+if grep -q 'Older changelog' "$TEMP/output"; then
+  echo 'Printed changes for the wrong release' >&2; exit 1
+fi
 for ENGINE in gufo strixite; do
   if FAIL_PULL="$ENGINE" "$TEMP/bin/update.py" > "$TEMP/output" 2>&1; then
     echo 'Failed pull was accepted' >&2; exit 1

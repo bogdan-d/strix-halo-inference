@@ -174,8 +174,9 @@ def main() -> None:
             if prefix + "_IMAGE" not in pins or prefix + "_VERSION" not in pins:
                 raise ValueError(f"Missing image or version pin for {engine}")
             image = inspect_image(engine, prefix, pins[prefix + "_IMAGE"], pins[prefix + "_VERSION"])
-            for version in versions_to_report(upstream, pins[prefix + "_VERSION"], image.version):
-                release_notes(upstream, version)
+            if image.current != image.reference:
+                for version in versions_to_report(upstream, pins[prefix + "_VERSION"], image.version):
+                    release_notes(upstream, version)
             images.append(image)
         if args.check:
             print("Check only. No images pulled, pins written or caches changed.")

@@ -1,5 +1,46 @@
 # Engine updates
 
+## October 28 update
+
+`bin/update.py` pulled the new Gufo image by digest and atomically updated its image and version pins. Halogen 0.18.17 and Strixite 0.5.0 were already current. Model revisions, launch settings, live Pi files and host settings remain unchanged. The release notes are publisher claims; the [local checks](#october-28-local-checks) follow.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Gufo | 0.25.0 | 0.26.0 | `sha256:c0df630a7048fed5722e19d5f031464b0fb04156071a0a3191dff226c14cd91e` |
+
+The image advertises revision `78d741856d0063825482660e1b1081184419c7a8`, not compared with public source.
+
+### What changed upstream
+
+**Gufo 0.26.0** removes a lossy chunked DeltaNet prefill for qwen-flash (#850) and adds a faster chunked prefill with stream overlap (#758). The notes do not say which earlier releases used the lossy path, so earlier Gufo results may or may not be affected. It keeps Qwen weights in device memory when the heap has room (#708), accepts more than 128 function tools, drains a request before the loading responder closes, and adds native audio embeddings, llama-server's `/apply-template`, a way to turn the RAM cache off through `--cache-ram-bytes` and EmbeddingGemma 2 prompt selection by name. None mentions a cache format change.
+
+### Launch and model changes
+
+- **No launcher change.** The existing Gufo flags were accepted. The new features are unused.
+- **Updater output.** `bin/update.py` now prints release notes only for engines whose pin changes. `tests/update.sh` checks that a current pin prints none and that outdated pins print the right releases.
+
+### October 28 local checks
+
+Gufo was started alone at native 262144 context with MTP on, then stopped. MemAvailable was 108 GiB before the start; after the stop it was 114 GiB, Unevictable 0.1 MiB and kernel GTT 1.8 GiB.
+
+| Check | Gufo 0.26.0 |
+|---|---|
+| Ready and a chat generation | Pass |
+| `tests/live.py` | Pass, 4 fragments |
+| Allowlisted names on `/metrics` | 15 of 15 |
+| Startup GPU allocation | 89.10 GiB, against 89.09 GiB on 0.25.0 |
+
+- **Weights in device memory.** The startup allocation and MemAvailable while serving, about 22 GiB, are unchanged from 0.25.0, so #708 changed nothing visible at this context.
+- Gufo still logs `option_ignored` for `--cache-disk-staging-bytes`.
+
+Not exercised: deep prefill, where #850 and #758 apply, and its speed or output against 0.25.0; Pi sessions; cache reuse across the upgrade; the new embedding, audio and template features.
+
+### Image cleanup
+
+The superseded Gufo 0.25.0 image was removed by digest without force. No container used it. Podman's image store fell from 17.25 GB to 11.89 GB. Rolling back requires pulling the previous digest in the October 27 table again.
+
+Source: [Gufo 0.26.0](https://github.com/gufo-org/gufo/releases/tag/v0.26.0).
+
 ## October 27 update
 
 `bin/update.sh` pulled all three new images by digest and atomically updated their image and version pins. Model revisions, live Pi files and host settings remain unchanged. The release notes were printed by the updater and are publisher claims; the [local checks](#october-27-local-checks) follow.
