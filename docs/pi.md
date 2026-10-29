@@ -144,6 +144,10 @@ If you previously installed the 32K profiles, explicitly update both local provi
 
 If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. The Strixite profile lists `image` input, so Pi sends pasted or attached images to it; this needs Strixite's default `VISION=on`. Halogen and Gufo stay text only until their vision files are configured.
 
+## Engine features outside this profile
+
+The October 29 engine update leaves these Pi profiles unchanged. Gufo 0.27.0 adds per-request `cache_persist: false`, but the profile does not send it: `supportsStore: false` refers to OpenAI `store` and does not disable Gufo disk caching. An opt-out must be sent on each applicable request; it neither clears existing checkpoints nor disables RAM reuse. Pi also does not request or display Gufo's new generated-token probabilities. Halogen 0.18.18's literal tool-tag parsing fix applies to this Chat Completions setup, while its Claude Code deferred-tool cache fix concerns a different client flow. See the [feature gaps and validation status](engine-updates.md#features-we-do-not-use-or-validate-yet) before adopting those features.
+
 ## Troubleshooting
 
 - **Connection refused:** the selected container is stopped, crashed or listening on the other engine's port. Check `bin/run.sh ENGINE status` and `bin/run.sh ENGINE logs` from this checkout.

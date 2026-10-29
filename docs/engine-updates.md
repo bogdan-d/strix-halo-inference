@@ -1,5 +1,54 @@
 # Engine updates
 
+## October 29 update
+
+`bin/update.py` pulled Halogen 0.18.18 and Gufo 0.27.0 by digest and atomically updated their image and version pins. Strixite 0.5.0 was already current. Model revisions and launch settings are unchanged. No inference engine was running before the update. The new pins are installed but not locally validated for inference; see [the checks and remaining validation](#october-29-checks-and-remaining-validation).
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.17 | 0.18.18 | `sha256:d6cb2a7d20211da675cd1f104a02f4bf4cb60e29afffbaadf8b0d495d332cc8a` |
+| Gufo | 0.26.0 | 0.27.0 | `sha256:af997f31d5a825ad02fd44cbb6744e71a21df6149c02c5ed3bb0bb843b3f0013` |
+
+The images advertise revisions Halogen `d2c67670fe03` and Gufo `de15fdb91f6992f09a2514dabd6d6a8e5f8a2efc`. The advertised revisions were not independently compared with the shipped binaries. Previous image digests remain in the October 27 and 28 records; no image cleanup or prompt-cache rotation was performed.
+
+### What changed upstream
+
+- **Halogen 0.18.18** preserves cached prompts when Claude Code loads deferred tools, including MCP tools; fixes admission of short requests after a paused reply changes state during a long prefill (#214); and preserves literal closing tool tags inside string arguments (#216). It loads ggml-org's `IQ4_NL` GGUF with its `Q4_0` lookup table (#217), suppresses a noisy second-token progress log and improves model links. Upstream states unchanged Flash checkpoints, speed and temperature-zero output apart from the fixes. Our native `.hgn` checkpoint needs no replacement. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.18/CHANGELOG.md).
+- **Gufo 0.27.0** adds per-request disk-persistence control and generated-token probabilities. It bounds draft-ID remapping and block selection, preserves YaRN during batched MTP cache catch-up, fixes Q8_0 inject/alpha/beta execution and prefill scratch sizing, and retries failed unbuffered weight reads through buffered reads. Per-stream Flash-Next scratch now grows from smaller blocks. Prefill changes retain fused attention beyond 262,144 visible tokens and combine small K-quant GEMM work into one masked pass. MiniMax H3 gains Windows support and its Windows archive packaging is fixed. These are publisher changes, not local speed or memory measurements. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.27.0).
+
+### Features we do not use or validate yet
+
+| Feature | Current local handling | What remains |
+|---|---|---|
+| Gufo per-request disk opt-out | Pi does not send `cache_persist`; normal disk caching stays enabled. `supportsStore: false` in the profile concerns OpenAI `store`, not this flag. | Decide whether an opt-out belongs in a separate profile or per-request control, then check the transmitted flag and disk writes. |
+| Gufo generated-token probabilities | Pi, `tests/live.py` and the dashboard neither request nor display them. | Use a direct API request or add client support when needed; verify streaming and buffered responses. |
+| Halogen literal tool-tag arguments | The fix applies automatically to our Chat Completions route. The live test assembles strict JSON but uses only a simple `status` argument. | Exercise file/heredoc arguments containing closing tags, streamed and buffered, without executing the returned calls. |
+| Halogen deferred tool-search cache reuse | Our documented client is Pi over Chat Completions, not Claude Code's deferred-tool Messages flow. No `ENABLE_TOOL_SEARCH=false` workaround is configured in this repo. | A Claude Code session that loads MCP tools incrementally must validate cache reuse separately. |
+| Halogen pause/resume scheduling during long prefill | One slot, automatic reply keeps and upstream retry-grace defaults remain. The live test checks disconnect-to-idle within 30 seconds. | Retry resumption and short-request admission beside deep prefill are not covered by that test. |
+| Halogen official GGUF loading | The launcher selects the existing native `.hgn` package; it exposes no GGUF selection. | An explicit alternative-model trial would need pinned files, a launcher change and validation. |
+| Gufo YaRN and attention above native context | The launcher caps context at 262,144 and does not enable YaRN. | Extended-context quality, memory and MTP catch-up remain untested; the new beyond-native attention path is outside our configuration. |
+| Gufo disk-staging budget | The launcher still passes a 2 GiB `--cache-disk-staging-bytes` value, which 0.26.0 logged as ignored. | Recheck 0.27.0 startup; the flag must not be treated as an enforced memory cap. |
+| Other Gufo routes and controls | No MiniMax/Windows deployment, embedding service, image/audio embedding inputs, `/apply-template` client, or RAM-cache-off mode is configured. These include still-unused additions from earlier releases. | Provision and validate separately if needed; this update adds no new models, routes to Pi, or launcher controls. |
+
+For direct Gufo Chat Completions requests, `"cache_persist": false` suppresses that request's disk checkpoints. It still allows RAM reuse and reading existing disk checkpoints; a later unflagged request with the same prefix can persist its own state. Omitted/null defaults to true, and the applied boolean is echoed in responses. This is not cache deletion or a private-session guarantee. The installed Pi 1.4.0 source forwards arbitrary `samplingParams` into Chat payloads, so the flag could be configured there, but that path was source-inspected only and the checked-in/live profiles were not changed. [Gufo prompt-cache contract](https://github.com/gufo-org/gufo/blob/v0.27.0/docs/SERVER.md#prompt-cache).
+
+Gufo Chat requests accept `"logprobs": true` and optional `"top_logprobs": 0..20`; results appear in each choice's `logprobs.content`, including streamed chunks. They describe generated tokens using raw target-model probabilities before sampling controls, not prompt tokens, and add work when requested. Responses uses `include: ["message.output_text.logprobs"]` for visible output. [Gufo probability contract](https://github.com/gufo-org/gufo/blob/v0.27.0/docs/SERVER.md#generated-token-log-probabilities).
+
+### Model, memory and cache implications
+
+- **Existing quantization.** Header inspection of the selected Gufo GGUFs found all 168 trunk inject/alpha/beta tensors already F32, and two Q8_0 inject tensors in the MTP sidecar. The fix does not require replacing the trunk weights. It also changes the draft inject execution path, so unchanged output is not assumed. The upstream warning excludes the official MTP inject tensors. [Q8_0 fix](https://github.com/gufo-org/gufo/commit/7b94a6a3fc52de630c15a822a0659a3e25f46bf7).
+- **Scratch memory.** Gufo's per-stream scratch starts at 16 MiB instead of 256 MiB and grows in blocks retained for stable graph addresses. That may reduce small draft-stream overhead; it is not a fixed total-memory saving or evidence that near-capacity workloads fit. [Allocation change](https://github.com/gufo-org/gufo/commit/1a6655fcb1c63f7e1e8aae7394e9c903b25ad91f).
+- **Cache compatibility.** Neither release announces a cache-format migration. No cache files were removed or archived, and cross-version restoration remains untested. Halogen's build-specific namespaces can leave old directories consuming space outside the new namespace's 16 GiB limit.
+- **Monitoring.** Existing allowlists and panels are unchanged. They do not collect Gufo's persistence acknowledgement or token probabilities. The new images' native metric endpoints and Prometheus scrapes still need checking.
+
+### October 29 checks and remaining validation
+
+All three configured digests are present locally with matching OCI versions and Linux AMD64 metadata. `bin/npu-manifest.sh` reran against the new Halogen image: all 166 selected file records are unchanged, so no NPU weight refresh is required. The offline `tests/update.sh` and `python tests/run.py` checks passed without warnings, covering update transactions and launcher policy rather than compatibility with the new binaries. `git diff --check` passed. The update leaves weights, live Pi files and host settings unchanged. The versioned Halogen fabric-clock helper has SHA-256 `0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a`, identical to the installed helper; no host-script replacement is needed.
+
+Live checks were deferred: before pulling, MemAvailable was about 80 GiB, falling to about 79 GiB during the pull. Previous native-262144 startup allocations were 78.3 GiB for Halogen and 89.10 GiB for Gufo, with roughly 108 GiB available before those rollouts. These are different accounting views, not an exact admission formula, but leave insufficient conservative headroom for this validation. No applications were closed or host memory settings changed to force the tests.
+
+Once headroom is restored, start each updated engine alone at native context with MTP, check readiness and a real generation (`bin/run.sh ENGINE start --wait`, `bin/run.sh ENGINE smoke`), run `python tests/live.py ENGINE`, inspect startup warnings and the metric allowlist, then stop and verify memory release before switching. Halogen NPU requests also need a separate check if used. The last successful baseline checks remain Halogen 0.18.17 on October 27 and Gufo 0.26.0 on October 28. New-feature cases listed above, Pi sessions, cache restoration, deep-prefill cancellation and performance benchmarks were not exercised on the October 29 pins.
+
 ## October 28 update
 
 `bin/update.py` pulled the new Gufo image by digest and atomically updated its image and version pins. Halogen 0.18.17 and Strixite 0.5.0 were already current. Model revisions, launch settings, live Pi files and host settings remain unchanged. The release notes are publisher claims; the [local checks](#october-28-local-checks) follow.
