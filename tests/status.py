@@ -53,6 +53,13 @@ with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on"):
         assert "Engine allocation: unavailable" in output
         assert "startup log, not live" not in output
         assert "pinned weights" in output
+    for line, weights in (("62.1 GiB of weights locked in RAM, ", "weights 62.1, "),
+                          ("62.9 GiB of weights locked in RAM (0.8 of them the vision tower's), ", "weights 62.9 (vision tower 0.8), ")):
+        output = io.StringIO()
+        logs = f"startup [   2.5 s] memory: {line}4.1 GiB of KV pool, 12.2 GiB of working memory, 79.2 GiB in all"
+        with patch.object(status, "command", return_value=logs), redirect_stdout(output):
+            status.show_allocations("halogen", "strix-halo-halogen")
+        assert f"79.2 GiB total; {weights}KV 4.1" in output.getvalue(), output.getvalue()
     result, output = check("gufo", {"status": "loading"})
     assert result == 1 and "not ready" in output
     result, output = check("gufo", error=URLError("unreachable"))

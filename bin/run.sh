@@ -124,9 +124,12 @@ case "$SPECULATIVE" in on|off) ;; *) echo 'SPECULATIVE must be on or off.' >&2; 
 # 8-bit attention cache on Halogen and Strixite: about 0.6 of the 16-bit cache's memory. Gufo has no such setting.
 KV8="${KV8:-on}"
 case "$KV8" in on|off) ;; *) echo 'KV8 must be on or off.' >&2; exit 2 ;; esac
-# Strixite image input. On needs vision.strixw and preprocessor_config.json, which bin/models.sh fetches.
-VISION="${VISION:-on}"
+# Image input: on by default for Strixite, opt-in for Halogen. bin/models.sh fetches both engines' vision files.
+DEFAULT_VISION=off
+[[ "$ENGINE" != strixite ]] || DEFAULT_VISION=on
+VISION="${VISION:-$DEFAULT_VISION}"
 case "$VISION" in on|off) ;; *) echo 'VISION must be on or off.' >&2; exit 2 ;; esac
+[[ "$ENGINE" != gufo || "$VISION" == off ]] || { echo 'VISION=on applies only to Halogen and Strixite.' >&2; exit 2; }
 # Strixite conversations served at once. Each slot can grow to a full-capacity K/V state.
 SLOTS="${SLOTS:-1}"
 [[ "$SLOTS" =~ ^[1-8]$ ]] || { echo 'SLOTS must be 1..8.' >&2; exit 2; }
@@ -143,6 +146,7 @@ if [[ "$ENGINE" == halogen ]]; then
     --env HALOGEN_FORK=1 --env HALOGEN_FORK_MAP=auto)
   [[ "$SPECULATIVE" == on ]] || ARGS+=(--env HALOGEN_DRAFTER_DEFAULT=0 --env HALOGEN_PLD=0)
   [[ "$KV8" == off ]] || ARGS+=(--env HALOGEN_KV8=1)
+  [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/$REPO/qwen38-flash-next-vision.hgn")
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
   ARGS+=("--userns=keep-id:uid=1000,gid=1000" "$IMAGE" gufo serve --host 0.0.0.0 --port "$PORT" --sessions 1 llm

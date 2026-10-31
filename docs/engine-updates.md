@@ -31,6 +31,23 @@ Each engine was started alone at native 262144 context with MTP on, then stopped
 
 Halogen now also exports `halogen:strict_tool_requests_total` and `halogen:strict_tools_unenforced_total`, and Gufo exports `gufo_spec_lookup_tokens_total` and `gufo_spec_lookup_accepted_tokens_total`. All four are now collected: Halogen's in a strict-tools dashboard panel, Gufo's as lookup series on the speculative throughput chart. Halogen logs a FastAPI `on_event` deprecation warning from its own `serve_api.py`, which is harmless. Gufo 0.28.0 still logged `--cache-disk-staging-bytes` as ignored, with a 1 MiB staging capacity, as every release since 0.15.0 has. The launcher no longer passes it, and `status` no longer reports a staging limit. NPU models, images, Pi sessions, cache restoration, deep-prefill cancellation and performance benchmarks were not exercised.
 
+### Halogen image input
+
+The October 31 changes also make Halogen's vision tower available. `config/halogen-files.tsv` now lists `qwen38-flash-next-vision.hgn` (897,916,416 bytes) at the pinned model revision, and `env VISION=on bin/run.sh halogen start` passes it as `HALOGEN_VISION_TOWER`. Without it the launcher passes no tower, `/health` reports `vision.enabled: false`, and an image request gets a 400 naming the flag. `VISION=on` is refused for Gufo. `status` now parses the startup allocation line the tower changes.
+
+Checked on October 31 at native context with MTP on:
+
+| Check | Halogen 0.18.22, `VISION=on` |
+|---|---|
+| Startup allocation | 79.2 GiB, of which 0.8 GiB is the tower, against 78.3 GiB without it |
+| First image | About 1 GiB less MemAvailable and 0.35 GiB more GTT, the tower's scratch |
+| 1280x800 test image, buffered | 2.9 seconds, 1,034 prompt tokens. Transcribed "ORCHID 4471" and "blue square below" exactly and named both shapes' colors and sides, but placed the caption below the square instead of above it |
+| Same request, streamed | 0.9 seconds with the image prefix reused, text identical to the buffered reply |
+| `tests/live.py` | Pass, 4 fragments |
+| Default start | `vision.enabled: false`, 78.3 GiB, a valid image refused with a 400 |
+
+That start also logged Halogen's warning that the host had only 734 MiB of contiguous free 2 MiB blocks; see the README on compacting memory. Large or many images, image tool calls, schemas on image requests and Pi image input were not exercised.
+
 ## October 29 update
 
 `bin/update.py` pulled Halogen 0.18.18 and Gufo 0.27.0 by digest and atomically updated their image and version pins. Strixite 0.5.0 was already current. Model revisions and launch settings are unchanged. No inference engine was running before the update. The new pins are installed but not locally validated for inference; see [the checks and remaining validation](#october-29-checks-and-remaining-validation).

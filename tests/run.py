@@ -184,11 +184,20 @@ else:
     launch = next(call for call in recorded() if call[0] == "run")
     assert not any("NPU" in arg or "xrt" in arg for arg in launch), launch
     assert "HALOGEN_KV8=1" in launch
+    assert not any("VISION" in arg for arg in launch), launch
     assert not any(call[0] == "sudo" for call in recorded())
     assert (temp / "models-calls").read_text() == "check halogen\n"
     calls.unlink()
     assert run("halogen", "start", KV8="off").returncode == 0
     assert not any("KV8" in arg for arg in next(call for call in recorded() if call[0] == "run"))
+    calls.unlink()
+    assert run("halogen", "start", VISION="on").returncode == 0
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert "HALOGEN_VISION_TOWER=/models/peonist-ai/halogen-qwen3.8-flash-next/qwen38-flash-next-vision.hgn" in launch
+    calls.unlink()
+    result = run("gufo", "start", VISION="on")
+    assert result.returncode == 2 and "VISION=on applies only to Halogen and Strixite" in result.stderr, result
+    assert not any(call[0] == "run" for call in recorded())
     calls.unlink()
     result = run("halogen", "start", NPU_MODELS="decider-0.8b,embeddinggemma-2")
     assert result.returncode == 0, result

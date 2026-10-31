@@ -79,9 +79,11 @@ def show_allocations(engine: str, name: str) -> None:
     try:
         logs = command("podman", "logs", "--tail", "1000", name)
         if engine == "halogen":
-            match = re.search(r"memory: ([0-9.]+) GiB of weights locked in RAM, ([0-9.]+) GiB of KV pool, ([0-9.]+) GiB of working memory, ([0-9.]+) GiB in all", logs)
+            # With a vision tower the weights figure names the tower's share; its scratch comes at the first image.
+            match = re.search(r"memory: ([0-9.]+) GiB of weights locked in RAM(?: \(([0-9.]+) of them the vision tower's\))?, ([0-9.]+) GiB of KV pool, ([0-9.]+) GiB of working memory, ([0-9.]+) GiB in all", logs)
             if match:
-                weights, kv, working, total = match.groups()
+                weights, tower, kv, working, total = match.groups()
+                weights = f"{weights} (vision tower {tower})" if tower else weights
                 print(f"Engine allocation (startup log, not live): {total} GiB total; weights {weights}, KV {kv}, working {working} GiB")
                 return
         elif engine == "gufo":
