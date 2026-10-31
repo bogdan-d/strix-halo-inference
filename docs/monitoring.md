@@ -59,7 +59,7 @@ The helper adds the first loopback endpoint here that acts instead of only readi
 | node-exporter | 1.12.1 | `127.0.0.1:9100` | None |
 | blackbox-exporter | 0.29.0 | `127.0.0.1:9115` | None |
 
-Images come from Prometheus's official registry. Exact digests are in [monitoring pins](../config/monitoring/pins.env). The launcher uses installed images only. Run `pull` before the first start, or after deliberately changing those pins. `bin/update.sh` still updates engine images only, not this monitoring stack. Image changes require an explicit monitoring stop and restart. Back up monitoring data before version changes because older images may not understand migrated databases.
+Images come from Prometheus's official registry. Exact digests are in [monitoring pins](../config/monitoring/pins.env). The launcher uses installed images only. Run `pull` before the first start, or after deliberately changing those pins. `bin/update.py` still updates engine images only, not this monitoring stack. Image changes require an explicit monitoring stop and restart. Back up monitoring data before version changes because older images may not understand migrated databases.
 
 All three containers use rootless Podman, read-only root filesystems, dropped capabilities and no-new-privileges. Only Prometheus has a writable data volume. Its container user is mapped to the host user with `keep-id`, without changing host permissions. There are no privileged containers, GPU device grants, Podman socket mounts or whole-host filesystem mounts.
 
