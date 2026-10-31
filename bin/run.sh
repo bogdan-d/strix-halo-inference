@@ -149,7 +149,7 @@ elif [[ "$ENGINE" == gufo ]]; then
     --model "/models/$REPO/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf"
     --served-model-name qwen3.8-flash-next --context "$CONTEXT"
     --cache-ram-bytes 2147483648 --cache-disk /cache
-    --cache-disk-bytes 17179869184 --cache-disk-staging-bytes 2147483648)
+    --cache-disk-bytes 17179869184)
   if [[ "$SPECULATIVE" == on ]]; then
     ARGS+=(--speculative mtp --mtp-model "/models/$REPO/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf")
   else

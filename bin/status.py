@@ -41,20 +41,19 @@ def show_configuration(engine: str, container: dict) -> None:
         mtp = "off" if env.get("HALOGEN_DRAFTER_DEFAULT") == "0" else "engine default (see readiness or logs)"
         disk = env.get("HALOGEN_CACHE_DISK_GIB")
         disk_limit = f"{disk} GiB" if disk is not None else "unavailable"
-        ram_limit = staging = None
+        ram_limit = None
         print(f"Configured NPU models: {env.get('HALOGEN_NPU_MODELS') or 'none'}")
     elif engine == "gufo":
         context = setting(args, "--context")
         mtp = setting(args, "--speculative") or "unavailable"
         disk_limit = gib(setting(args, "--cache-disk-bytes"))
         ram_limit = setting(args, "--cache-ram-bytes")
-        staging = setting(args, "--cache-disk-staging-bytes")
     else:
         context = setting(args, "--capacity")
         mtp = setting(args, "--mtp") or "unavailable"
         disk = setting(args, "--prompt-cache-gib")
         disk_limit = f"{disk} GiB" if disk is not None else "unavailable"
-        ram_limit = staging = None
+        ram_limit = None
         print(f"Configured YaRN factor: {setting(args, '--rope-yarn-factor') or 'unavailable'}")
         print(f"Configured thinking nudge: {setting(args, '--think-nudge') or 'unavailable'}")
         margin = setting(args, "--prompt-cache-ram-margin-gib")
@@ -63,7 +62,7 @@ def show_configuration(engine: str, container: dict) -> None:
     print(f"Configured context: {context or 'unavailable'} tokens")
     print(f"Configured speculation: {mtp}")
     print(f"Cache disk limit: {disk_limit}")
-    print(f"Cache RAM limit: {gib(ram_limit)}; staging limit: {gib(staging)}")
+    print(f"Cache RAM limit: {gib(ram_limit)}")
     print("Cache RAM usage: unavailable")
     mount = next((m for m in container.get("Mounts", []) if m.get("Destination") == "/cache"), None)
     if mount:
