@@ -146,7 +146,7 @@ If you override the launcher with a smaller `CONTEXT`, reduce the matching insta
 
 ## Engine features outside this profile
 
-The October 29 engine update leaves these Pi profiles unchanged. Gufo 0.27.0 adds per-request `cache_persist: false`, but the profile does not send it: `supportsStore: false` refers to OpenAI `store` and does not disable Gufo disk caching. An opt-out must be sent on each applicable request; it neither clears existing checkpoints nor disables RAM reuse. Pi also does not request or display Gufo's new generated-token probabilities. Halogen 0.18.18's literal tool-tag parsing fix applies to this Chat Completions setup, while its Claude Code deferred-tool cache fix concerns a different client flow. See the [feature gaps and validation status](engine-updates.md#features-we-do-not-use-or-validate-yet) before adopting those features.
+The October 29 engine update leaves these Pi profiles unchanged. Gufo 0.27.0 adds per-request `cache_persist: false`, but the profile does not send it: `supportsStore: false` refers to OpenAI `store` and does not disable Gufo disk caching. An opt-out must be sent on each applicable request; it neither clears existing checkpoints nor disables RAM reuse. Pi also does not request or display Gufo's new generated-token probabilities. Halogen 0.18.18's literal tool-tag parsing fix applies to this Chat Completions setup, while its Claude Code deferred-tool cache fix concerns a different client flow. The October 31 update to Halogen 0.18.22 and Gufo 0.28.0 also leaves them unchanged; 0.18.19 fixes two 0.18.18 tool-call regressions on this route. See the [feature gaps and validation status](engine-updates.md#features-we-do-not-use-or-validate-yet) before adopting those features.
 
 ## Troubleshooting
 

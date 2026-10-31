@@ -1,5 +1,36 @@
 # Engine updates
 
+## October 31 update
+
+`bin/update.py` pulled Halogen 0.18.22 and Gufo 0.28.0 by digest and atomically updated their image and version pins. Strixite 0.5.0 was already current. Model revisions, launch settings, live Pi files and host settings are unchanged. Both updated engines passed the [local checks](#october-31-local-checks), which also cover the October 29 pins' deferred validation.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.18 | 0.18.22 | `sha256:273714ccb64dabb7fac0418ee1b6dd83eb57d2fd44cf286eb68a7c694a27c203` |
+| Gufo | 0.27.0 | 0.28.0 | `sha256:29b231d7d296c7de56cf3412a6bb40002b43f12b04e225885bd54a06a652db7d` |
+
+The images advertise revisions Halogen `7be7fa7c7d59` and Gufo `33731145678c1e3edb1ad05f3224d2d08f1c3983`, not compared with public source. Previous digests remain in the October 29 record; no image cleanup or prompt-cache rotation was performed.
+
+### What changed upstream
+
+- **Halogen 0.18.19** fixes two 0.18.18 tool-call regressions (#221): text after a finished call holding another closing tag was folded into its last argument, and a parameterless call was dropped when another call followed, failing forced `tool_choice` with a 502. It also removes the 64-image request limit, returns the Anthropic API's own over-context message on `/v1/messages`, rounds a `HALOGEN_KV_POOL_POSITIONS` that is not a multiple of 256 up instead of refusing to start, and fixes an image request racing a concurrent prompt read. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.19/CHANGELOG.md).
+- **Halogen 0.18.20** speeds decoding with two or three concurrent requests, enforces JSON schemas and strict tools on requests with images, and names the host XRT version when it is older than the new 2.20 floor. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.20/CHANGELOG.md).
+- **Halogen 0.18.21 and 0.18.22** add user-supplied LiquidAI LFM3-1.7B and d1-2B NPU models, the latter on a new `/v1/systemone` route, and let long NPU requests run between tokens of an NPU generation. Upstream states unchanged Flash checkpoints and byte-identical temperature-zero Flash output across all four releases. [0.18.21](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.21/CHANGELOG.md), [0.18.22](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.22/CHANGELOG.md).
+- **Gufo 0.28.0** adds video embedding inputs and a per-request EmbeddingGemma 2 image budget, streams Qwen-Image weights from safetensors files and tunes Qwen3.8-27B verification GEMMs. None touches our Flash-Next configuration. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.28.0).
+
+### October 31 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. MemAvailable was about 121 GiB before each start and after each stop, with Unevictable 32 KiB and kernel GTT about 0.6 GiB once stopped. `tests/update.sh`, `python tests/run.py` and `git diff --check` passed. `bin/npu-manifest.sh` left all 166 NPU file records unchanged. The v0.18.22 fabric-clock helper has the same SHA-256 as the installed one, and host XRT 2.21.75 meets 0.18.20's floor.
+
+| Check | Halogen 0.18.22 | Gufo 0.28.0 |
+|---|---|---|
+| Ready and a chat generation | Pass | Pass |
+| `tests/live.py`, including the forced tool call | Pass, 4 fragments | Pass, 4 fragments |
+| Allowlisted names on `/metrics` | 31 of 31 | 15 of 15 |
+| Startup GPU allocation | 78.3 GiB, as on 0.18.17 | 89.10 GiB, as on 0.26.0 |
+
+Halogen now also exports `halogen:strict_tool_requests_total` and `halogen:strict_tools_unenforced_total`, and Gufo exports `gufo_spec_lookup_tokens_total` and `gufo_spec_lookup_accepted_tokens_total`; none is collected. Halogen logs a FastAPI `on_event` deprecation warning from its own `serve_api.py`, which is harmless. Gufo 0.28.0 still logs `--cache-disk-staging-bytes` as ignored, with a 1 MiB staging capacity. NPU models, images, Pi sessions, cache restoration, deep-prefill cancellation and performance benchmarks were not exercised.
+
 ## October 29 update
 
 `bin/update.py` pulled Halogen 0.18.18 and Gufo 0.27.0 by digest and atomically updated their image and version pins. Strixite 0.5.0 was already current. Model revisions and launch settings are unchanged. No inference engine was running before the update. The new pins are installed but not locally validated for inference; see [the checks and remaining validation](#october-29-checks-and-remaining-validation).
@@ -27,7 +58,7 @@ The images advertise revisions Halogen `d2c67670fe03` and Gufo `de15fdb91f6992f0
 | Halogen pause/resume scheduling during long prefill | One slot, automatic reply keeps and upstream retry-grace defaults remain. The live test checks disconnect-to-idle within 30 seconds. | Retry resumption and short-request admission beside deep prefill are not covered by that test. |
 | Halogen official GGUF loading | The launcher selects the existing native `.hgn` package; it exposes no GGUF selection. | An explicit alternative-model trial would need pinned files, a launcher change and validation. |
 | Gufo YaRN and attention above native context | The launcher caps context at 262,144 and does not enable YaRN. | Extended-context quality, memory and MTP catch-up remain untested; the new beyond-native attention path is outside our configuration. |
-| Gufo disk-staging budget | The launcher still passes a 2 GiB `--cache-disk-staging-bytes` value, which 0.26.0 logged as ignored. | Recheck 0.27.0 startup; the flag must not be treated as an enforced memory cap. |
+| Gufo disk-staging budget | The launcher still passes a 2 GiB `--cache-disk-staging-bytes` value, which 0.26.0 and 0.28.0 logged as ignored. | The flag must not be treated as an enforced memory cap; consider dropping it from the launcher. |
 | Other Gufo routes and controls | No MiniMax/Windows deployment, embedding service, image/audio embedding inputs, `/apply-template` client, or RAM-cache-off mode is configured. These include still-unused additions from earlier releases. | Provision and validate separately if needed; this update adds no new models, routes to Pi, or launcher controls. |
 
 For direct Gufo Chat Completions requests, `"cache_persist": false` suppresses that request's disk checkpoints. It still allows RAM reuse and reading existing disk checkpoints; a later unflagged request with the same prefix can persist its own state. Omitted/null defaults to true, and the applied boolean is echoed in responses. This is not cache deletion or a private-session guarantee. The installed Pi 1.4.0 source forwards arbitrary `samplingParams` into Chat payloads, so the flag could be configured there, but that path was source-inspected only and the checked-in/live profiles were not changed. [Gufo prompt-cache contract](https://github.com/gufo-org/gufo/blob/v0.27.0/docs/SERVER.md#prompt-cache).
