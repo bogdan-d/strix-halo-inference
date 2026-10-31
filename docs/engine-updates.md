@@ -29,7 +29,7 @@ Each engine was started alone at native 262144 context with MTP on, then stopped
 | Allowlisted names on `/metrics` | 31 of 31 | 15 of 15 |
 | Startup GPU allocation | 78.3 GiB, as on 0.18.17 | 89.10 GiB, as on 0.26.0 |
 
-Halogen now also exports `halogen:strict_tool_requests_total` and `halogen:strict_tools_unenforced_total`, and Gufo exports `gufo_spec_lookup_tokens_total` and `gufo_spec_lookup_accepted_tokens_total`; none is collected. Halogen logs a FastAPI `on_event` deprecation warning from its own `serve_api.py`, which is harmless. Gufo 0.28.0 still logged `--cache-disk-staging-bytes` as ignored, with a 1 MiB staging capacity, as every release since 0.15.0 has. The launcher no longer passes it, and `status` no longer reports a staging limit. NPU models, images, Pi sessions, cache restoration, deep-prefill cancellation and performance benchmarks were not exercised.
+Halogen now also exports `halogen:strict_tool_requests_total` and `halogen:strict_tools_unenforced_total`, and Gufo exports `gufo_spec_lookup_tokens_total` and `gufo_spec_lookup_accepted_tokens_total`. All four are now collected: Halogen's in a strict-tools dashboard panel, Gufo's as lookup series on the speculative throughput chart. Halogen logs a FastAPI `on_event` deprecation warning from its own `serve_api.py`, which is harmless. Gufo 0.28.0 still logged `--cache-disk-staging-bytes` as ignored, with a 1 MiB staging capacity, as every release since 0.15.0 has. The launcher no longer passes it, and `status` no longer reports a staging limit. NPU models, images, Pi sessions, cache restoration, deep-prefill cancellation and performance benchmarks were not exercised.
 
 ## October 29 update
 
