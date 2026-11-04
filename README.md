@@ -9,6 +9,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Podman setup patterns from the existing toolbox](docs/podman-reference.md).
 - [Local validation results and limitations](docs/validation.md).
 - [Engine updates](docs/engine-updates.md), with current pins, release changes, unused features and the scope of local validation.
+- [Models each engine supports](docs/engine-models.md) beyond our Flash-Next setup, including Halogen's NPU models, with what is provisioned here.
 - [Pi coding agent setup for all three engines](docs/pi.md), including model-card sampling, thinking controls and 256K compaction settings.
 - [Medium versus xhigh for routine coding](docs/thinking-comparison.md), with local exploratory results and a repeatable Pi comparison.
 - [Sandboxed three-engine coding comparison](docs/coding-comparison.md), with matched tasks, strict tool arguments, memory-release checks and a repeatable smoke gate.
@@ -92,7 +93,7 @@ Compaction is harmless and takes seconds. Two further options are not applied, b
 
 ## NPU models
 
-Halogen can serve small models on the NPU beside the Flash model, on the same port. Gufo and Strixite cannot. Name them at start, for example `env NPU_MODELS=decider-0.8b,embeddinggemma-2 bin/run.sh halogen start --wait`. Without `NPU_MODELS` the container starts exactly as before. Which models are worth their memory is still open; see the [NPU plan](.scratch/npu/spec.md).
+Halogen can serve small models on the NPU beside the Flash model, on the same port. Gufo and Strixite cannot. Name them at start, for example `env NPU_MODELS=decider-0.8b,embeddinggemma-2 bin/run.sh halogen start --wait`. Without `NPU_MODELS` the container starts exactly as before. Which models are worth their memory is still open; see the [NPU plan](.scratch/npu/spec.md). Every NPU model Halogen supports is listed in [Models each engine supports](docs/engine-models.md#npu-models).
 
 Their files are listed in `config/npu-files.tsv` and stored under `/home/bogdan/models/npu`, the layout Halogen reads at `/models/npu`. `bin/npu-manifest.sh` derives the list from the record inside the pinned Halogen image, which Halogen uses to refuse any other file. Rerun it after a Halogen pin change and review the diff. A release can republish a model set with new contents at the same paths, and the downloader skips paths that exist, so delete the superseded files first, then run `bin/models.sh download npu`. The launcher accepts only models whose weights are listed there and checks their files before starting. The listed models are `decider-0.8b`, `decider-4b`, `embeddinggemma-2`, `qwen3guard-stream-0.6b` and `wemm-embedding-4b`, plus `d3-lite`, added October 19 and not yet assigned a use (see the [update record](docs/engine-updates.md#october-19-update)), and the text-to-speech models `qwen3-tts-0.6b-customvoice` and `qwen3-tts-1.7b-customvoice`, added October 24. `HALOGEN_DOWNLOAD` stays unset, so the models volume stays read-only.
 
