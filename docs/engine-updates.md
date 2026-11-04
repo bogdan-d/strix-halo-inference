@@ -1,5 +1,35 @@
 # Engine updates
 
+## November 4 update
+
+`bin/update.py` pulled Halogen 0.18.23 and Gufo 0.29.0 by digest and atomically updated their image and version pins. Gufo 0.28.1 was pinned on November 3 without being started. Strixite 0.5.0 was already current. Model revisions, launch settings, live Pi files and host settings are unchanged. Both updated engines passed the [local checks](#november-4-local-checks). Superseded Halogen and Gufo images up to 0.28.0 were removed on November 3.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.22 | 0.18.23 | `sha256:b53c96edc042b1d9570cda2771c5002527f94d6aca0c8704a4475aa621d355ff` |
+| Gufo | 0.28.0, then 0.28.1 (`sha256:faaa6e21afb903bea20cbc893aa30239146e68e0252d412a7ff4932a26f236b8`) | 0.29.0 | `sha256:9d77753a051fc8bf08eeaea45457ac186d211a0d8b647d9b55fac60cdc781792` |
+
+The images advertise revisions Halogen `0b28c4c51cfe` and Gufo `883f67b609b2ca38c437d0cb6672fc7577f89362`, not compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.18.23** fixes a reply that, when the model ended its turn inside reasoning, went on to write an invented user turn (#232), and a tool string argument quoting `</parameter>`, `</function>` and `</tool_call>` that was cut short with the rest leaking into the answer (#227). Concurrent decoding is 1.1 to 3.4% faster for 0.43 GiB more device memory, the server runs a warm-up request before reporting ready, and sampled tokens are now drawn from the exact requested distribution, so seeded sampled replies may differ. It adds LiquidAI LFM3-VL-2B, LFM3-Audio-2B and LFM3-Omni-2B NPU models, not used here. Upstream states unchanged Flash checkpoints and byte-identical temperature-zero Flash output apart from the two fixes. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.18.23/CHANGELOG.md).
+- **Gufo 0.28.1** keeps Flash-Next prefill rows independent of the pass route (#875) and ends MTP chains at the first unconfident draft (#882). [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.28.1).
+- **Gufo 0.29.0** rebuilds Flash-Next prefill around 16,384-row passes for lone prompts with fused DeltaNet kernels (#933, #895, #890), fuses part of batched decode (#894) and verifies long prompt-lookup copies in one pass (#961). Fixes widen BF16 HC inject rows to F32 (#950), restore serving concurrency (#953), correct session byte accounting (#993) and keep cached requests alive without snapshot headroom (#954). YaRN now scales with the context a session holds (#905); the launcher still passes `--rope-yarn-factor 1`. Serving drops API-key auth (#957), answers `GET /` with health and reports `reasoning_tokens`. The breaking change concerns upstream CI only. Most of the rest moves models into extensions. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.29.0).
+
+### November 4 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. MemAvailable was 114.7 GiB before Halogen started, 117.1 GiB after it stopped and 119.9 GiB after Gufo stopped, with Unevictable 48 KiB and kernel GTT about 0.9 GiB once stopped. Gufo first failed to start because an unrelated Docker container held port 8080; Docker containers were stopped before it ran. `tests/update.sh`, `python tests/run.py`, `tests/halogen_metrics.py`, `tests/gufo_metrics.py` and `git diff --check` passed. `bin/npu-manifest.sh` left all 166 NPU file records unchanged. The v0.18.23 fabric-clock helper has the same SHA-256 as the installed one, and host XRT is 2.21.75.
+
+| Check | Halogen 0.18.23 | Gufo 0.29.0 |
+|---|---|---|
+| Ready and a chat generation | Pass | Pass |
+| `tests/live.py`, including the forced tool call | Pass, 4 fragments | Pass, 4 fragments |
+| Allowlisted names on `/metrics` | 33 of 33 | 17 of 17 |
+| Startup GPU allocation | 78.8 GiB, against 78.3 GiB on 0.18.22 | 89.11 GiB, against 89.10 GiB on 0.28.0 |
+
+Halogen logged its warm-up (one 15-token request, 0.79 seconds) and the FastAPI `on_event` deprecation warning seen before. With the Docker containers still running, it also warned that 10.4 GiB of host RAM was in use before it started and that only 239 contiguous free 2 MiB blocks remained; see the README on compacting memory. Gufo logged no warnings. NPU models, images, Pi sessions, cache restoration, deep-prefill cancellation, the #227 and #232 fixes and performance benchmarks were not exercised.
+
 ## October 31 update
 
 `bin/update.py` pulled Halogen 0.18.22 and Gufo 0.28.0 by digest and atomically updated their image and version pins. Strixite 0.5.0 was already current. Model revisions, launch settings, live Pi files and host settings are unchanged. Both updated engines passed the [local checks](#october-31-local-checks), which also cover the October 29 pins' deferred validation.

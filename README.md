@@ -32,7 +32,7 @@ bin/run.sh gufo pull
 bin/run.sh gufo diagnose
 ```
 
-The current images are Halogen 0.18.22 and Gufo 0.28.0, pinned on October 31, and Strixite 0.5.0, pinned on October 27. Halogen and Gufo passed basic generation, API tools, short decode cancellation and shutdown checks on October 31. Strixite 0.5.0 passed those checks on October 27; its last image request used 0.4.0 on October 19. Earlier detailed coding and monitoring measurements also used older versions; see the [update record and unused features](docs/engine-updates.md#october-31-update) for scope. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
+The current images are Halogen 0.18.23 and Gufo 0.29.0, pinned on November 4, and Strixite 0.5.0, pinned on October 27. Halogen and Gufo passed basic generation, API tools, short decode cancellation and shutdown checks on November 4. Strixite 0.5.0 passed those checks on October 27; its last image request used 0.4.0 on October 19. Earlier detailed coding and monitoring measurements also used older versions; see the [update record and unused features](docs/engine-updates.md#november-4-update) for scope. `config/pins.env` records the current immutable image digests, release versions and model revisions. `config/*-files.tsv` records SHA-256, byte size and relative path for each selected file. Downloads use curl, resume `.partial` files and validate hashes before promoting them to final filenames. Downloading a whole upstream repository would fetch unnecessary alternative quantizations, so these manifests select only the required files.
 
 ```bash
 bin/models.sh download halogen
@@ -98,11 +98,11 @@ Their files are listed in `config/npu-files.tsv` and stored under `/home/bogdan/
 
 The host needs XRT and a held GPU fabric clock. XRT is the user-space half of the NPU driver and must match the host kernel's `amdxdna`, so Halogen uses the host's copy: the launcher mounts `libxrt_coreutil.so.2`, `libxrt_core.so.2` and `libxrt_driver_xdna.so.2` from `/usr/lib` read-only, at both `/usr/lib` and `/opt/xilinx/xrt/lib`. On Strix Halo, GPU and NPU work at once can hang the machine or corrupt NPU results while the fabric clock changes speed, so Halogen refuses NPU models unless it is held. Holding it measured about 2.3 W extra at idle on this host, so the launcher holds it only while Halogen runs NPU models: `start` runs `sudo -n halogen-fabric-clock hold` before the container starts, and `bin/run.sh halogen stop` releases it, also when the container has already exited. A suspend can hand the clock back to the driver; this host does not suspend, so the launcher does not handle it. Restart Halogen after a resume.
 
-One-time host setup, with the script from Halogen's [`deploy/host/`](https://github.com/peonist-ai/halogen-flash-server/tree/v0.18.22/deploy/host) at the pinned release, unchanged since 0.18.3. Its boot unit is not used:
+One-time host setup, with the script from Halogen's [`deploy/host/`](https://github.com/peonist-ai/halogen-flash-server/tree/v0.18.23/deploy/host) at the pinned release, unchanged since 0.18.3. Its boot unit is not used:
 
 ```bash
 sudo pacman -S --needed xrt xrt-plugin-amdxdna
-curl -fsSLO https://raw.githubusercontent.com/peonist-ai/halogen-flash-server/v0.18.22/deploy/host/halogen-fabric-clock
+curl -fsSLO https://raw.githubusercontent.com/peonist-ai/halogen-flash-server/v0.18.23/deploy/host/halogen-fabric-clock
 echo "0dbd47c15f1002e0a8997ec7070e96f3e009125068eab8eccbbd49424a594f5a  halogen-fabric-clock" | sha256sum -c
 sudo install -m 755 -o root -g root halogen-fabric-clock /usr/local/sbin/
 echo "$USER ALL=(root) NOPASSWD: /usr/local/sbin/halogen-fabric-clock" > halogen-fabric-clock.sudoers
