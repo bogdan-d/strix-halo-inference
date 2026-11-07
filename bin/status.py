@@ -91,6 +91,11 @@ def show_allocations(engine: str, name: str) -> None:
             if match:
                 print(f"Engine GPU allocation (startup log, not live): {gib(int(match[1]) * 2**20)}")
                 return
+        elif engine == "strixite":
+            match = re.search(r"after loading \(GPU buffers ([0-9.]+) GiB, n-gram row cache ([0-9.]+) GiB\)", logs)
+            if match:
+                print(f"Engine allocation (startup log, not live): {match[1]} GiB of GPU buffers; n-gram row cache {match[2]} GiB in host RAM")
+                return
         print("Engine allocation: unavailable (no measured startup allocation in recent logs)")
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         print(f"Engine allocation: unavailable ({error})")

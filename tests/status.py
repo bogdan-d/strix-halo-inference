@@ -60,6 +60,11 @@ with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on"):
         with patch.object(status, "command", return_value=logs), redirect_stdout(output):
             status.show_allocations("halogen", "strix-halo-halogen")
         assert f"79.2 GiB total; {weights}KV 4.1" in output.getvalue(), output.getvalue()
+    output = io.StringIO()
+    logs = "startup: memory: MemAvailable 29.4 GiB after loading (GPU buffers 79.3 GiB, n-gram row cache 3.0 GiB) less 4.1 GiB held"
+    with patch.object(status, "command", return_value=logs), redirect_stdout(output):
+        status.show_allocations("strixite", "strix-halo-strixite")
+    assert "79.3 GiB of GPU buffers; n-gram row cache 3.0 GiB" in output.getvalue(), output.getvalue()
     result, output = check("gufo", {"status": "loading"})
     assert result == 1 and "not ready" in output
     result, output = check("gufo", error=URLError("unreachable"))

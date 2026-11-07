@@ -2,7 +2,7 @@
 
 ## November 7 update
 
-`bin/update.py` pulled Halogen 0.19.1, Gufo 0.31.0 and Strixite 0.7.0 by digest and atomically updated their image and version pins. The launcher no longer mounts host XRT for NPU models, because Halogen 0.19.1 carries its own. Model revisions, other launch settings, live Pi files and host settings are unchanged. All three engines passed the [local checks](#november-7-local-checks). Superseded images were not removed, and no prompt cache was rotated.
+`bin/update.py` pulled Halogen 0.19.1, Gufo 0.31.0 and Strixite 0.7.0 by digest and atomically updated their image and version pins. The launcher no longer mounts host XRT for NPU models, because Halogen 0.19.1 carries its own. Model revisions, other launch settings, live Pi files and host settings are unchanged. All three engines passed the [local checks](#november-7-local-checks). The superseded Halogen 0.18.23, Gufo 0.29.0 and Strixite 0.5.0 images were removed afterwards, and no prompt cache was rotated.
 
 | Engine | Previous | Current | Current image digest |
 |---|---|---|---|

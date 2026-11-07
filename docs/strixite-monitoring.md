@@ -1,6 +1,6 @@
 # Strixite inference dashboard
 
-The current image is 0.7.0, pinned November 7. Its native endpoint still exports all 33 allowlisted names, checked directly on November 7 with Prometheus not running; see the [update record](engine-updates.md#november-7-local-checks). The endpoint also exports names for 0.6.0's K/V budget (`strix_kv_generation_*`, `strix_kv_renewals_total`, `strix_kv_renew_failures_total`) and 0.7.0's resume points (`strix_prompt_cache_points`, `strix_prompt_cache_point_hits_total`); the allowlist drops them. Under 0.2.4, existing accounting semantics and queries remained compatible, and native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed measurements below used 0.2.3. The additive `strix_think_closed_for_call_total` counter is intentionally dropped by the existing allowlist. Streamed prefill progress is not a new Prometheus progress gauge.
+The current image is 0.7.0, pinned November 7. Its native endpoint still exports all 33 allowlisted names, checked directly on November 7 with Prometheus not running; see the [update record](engine-updates.md#november-7-local-checks). Names added since, for 0.6.0's K/V budget and 0.7.0's resume points, are listed under [exported but not collected](#exported-but-not-collected). Under 0.2.4, existing accounting semantics and queries remained compatible, and native scrape and independent readiness passed the [basic release checks](engine-updates.md). Detailed measurements below used 0.2.3. The additive `strix_think_closed_for_call_total` counter is intentionally dropped by the existing allowlist. Streamed prefill progress is not a new Prometheus progress gauge.
 
 Open [the dashboard page](../config/monitoring/dashboard.html) after starting the optional monitoring stack and Strixite. Its Strixite section appears while the engine's metrics scrape is up:
 
@@ -43,6 +43,21 @@ Semantics were checked against release source `dbe7b66ed620d392d0b3b6a8a6e836f99
 Counters reset when the engine process restarts. Background cache and backend row-operation counters advance as operations occur, unlike request-finalized generation totals. Cached disk occupancy can reappear after restart without preserving counter values. Prompt-phase timing includes preparation/restoration overhead, so the last prefill rate is not a pure kernel benchmark. The configured 16 GiB disk cap is documented, not invented as a native metric. The 8 GiB RAM margin is not a cache cap or a desktop reservation.
 
 No current-request token progression, time-to-first-token or inter-token distributions, total GPU/RAM allocation, indexer timing, native disk-cap gauge or pending cache-write gauge is exported by this pin. Host memory, GTT, disk and GPU sensors remain on the host dashboard and are separate accounting views, not additive quantities or guaranteed headroom.
+
+## Exported but not collected
+
+The 0.7.0 endpoint exports these names, which the allowlist drops. Descriptions follow the endpoint's own help text, read on November 7. Read them directly with `curl -s localhost:5300/metrics | grep NAME` while Strixite runs.
+
+| Name | Meaning | Why it is not collected |
+|---|---|---|
+| `strix_kv_generation_used`, `strix_kv_generation_capacity` | Per-slot switch budget: one generation spent per conversation switch, 1024 at native context with one slot | Carries a `slot` label the relabeling removes. `/health` reports the same budget as `kv_budget` |
+| `strix_parked_generation_used`, `strix_parked_generation_capacity` | Shared budget for parking conversations, one spent per park | Same budget, also in `/health` |
+| `strix_kv_renewals_total` | Renewals: the server rebuilt its working state on the loaded model as the budget neared its end, a pause of seconds | Rare at one slot. `/health` reports the count |
+| `strix_kv_renew_failures_total` | Failed renewals. None runs again in that process, and new conversations are refused once the budget runs out | `/health` turns `degraded` with the reason, which `bin/run.sh strixite status` prints. Restart Strixite |
+| `strix_prompt_cache_points`, `strix_prompt_cache_point_hits_total` | Resume points held in RAM, and requests resumed from one because a client edited an older message | Shows whether a client's edits benefit. A one-off read answers that |
+| `strix_verify_alone_total` | Verify steps run alone because their conversation holds an image | Matters only with several slots and images |
+
+Older names also left out include `strix_think_closed_for_call_total` and the vision, PLE timing and per-rule cache counters.
 
 ## Collection and privacy
 
