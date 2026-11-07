@@ -1,5 +1,43 @@
 # Engine updates
 
+## November 7 update
+
+`bin/update.py` pulled Halogen 0.19.1, Gufo 0.31.0 and Strixite 0.7.0 by digest and atomically updated their image and version pins. The launcher no longer mounts host XRT for NPU models, because Halogen 0.19.1 carries its own. Model revisions, other launch settings, live Pi files and host settings are unchanged. All three engines passed the [local checks](#november-7-local-checks). Superseded images were not removed, and no prompt cache was rotated.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.18.23 | 0.19.1 | `sha256:7ab5c3dfd77acb2387603f1807069cac3494e678f413c0670745ba2df74c0f0e` |
+| Gufo | 0.29.0 | 0.31.0 | `sha256:9a6e2d43ca00d8d1c89453ebf456e975fd197ef54d648ba0d1b4a8bcc0917f24` |
+| Strixite | 0.5.0 (`sha256:f0d3211f05c65036673d00bcf9daa69e83fe7ea12018c9b4810cd57ba7568293`) | 0.7.0 | `sha256:8eb565146ed6e7d32310e6506dacb5144498639d2cc2ae8246c235a12156472b` |
+
+The images advertise revisions Halogen `85b2b0c37d5d`, Gufo `be7bd3be303f6d0f6c24f8ef544d0798b4281684` and Strixite `0945ce8`, not compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.19.0** makes whole-file rewrites about 30% faster and Edit calls about 20% faster by letting prompt lookup follow the file it copies, listens on IPv6 as well as IPv4 (#231), refuses unknown keys on `/v1/systemone` with a 422 (#234), and fixes long LFM3 prompts, NPU restarts at the host memory floor and NPU error codes (#235). It adds an opt-in agent guard preview, `HALOGEN_AGENT_GUARD=watch|hold`, run by a new `halogen-spotter-0.6b` NPU model, not used here. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.19.0/CHANGELOG.md).
+- **Halogen 0.19.1** ships XRT 2.25.37 with its NPU plugin in the image, so the NPU needs only the host's driver and firmware; a mounted host XRT still replaces it. A tool schema that is not an object now gets a 400 instead of a 500 that held a generation slot until restart (#243). It adds `ignore_eos` on `/v1/completions` for benchmarks and drops the FastAPI `on_event` warning. Upstream states unchanged Flash checkpoints and byte-identical temperature-zero Flash output across both releases. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.19.1/CHANGELOG.md).
+- **Gufo 0.30.0** removes the legacy continuation cache (#1014) in favour of the component cache, fixes capacity-limited Flash-Next prefill steps (#1016) and tool argument schemas beside arrays without items (#1012), and captures prompt checkpoints inside prefill passes (#963). [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.30.0).
+- **Gufo 0.31.0** adds sliding-window cache components and extension hooks, and opens tensorless GGUF split shards (#1021). None changes our Flash-Next configuration. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.31.0).
+- **Strixite 0.6.0** hands a switched slot's K/V pages to the prompt cache without copying and renews its working state in seconds when a slot's switch budget (`kv-generations`, auto by default) runs low, reported on `/health`. The default prompt-cache RAM margin rises from 4 to 5 GiB; the launcher passes 8. It fixes shared decode steps after one conversation held an image (#29). [Release notes](https://github.com/shawnshekari/strixite/releases/tag/v0.6.0).
+- **Strixite 0.7.0** keeps resume points at each reply and user message (`prompt-cache-points`, 16), so an edited old message costs only what follows it, adds `logit_bias`, accepts the `developer` role (#28) and reads the expert count from the weights (#35). Prompt-cache entries from 0.5 stay valid. [Release notes](https://github.com/shawnshekari/strixite/releases/tag/v0.7.0).
+
+### November 7 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. MemAvailable was 116.0 GiB before the first start and 116.0 to 117.2 GiB after each stop, with Unevictable 116 KiB and kernel GTT about 1.1 GiB. `tests/update.sh`, `python tests/run.py` and `git diff --check` passed. `bin/npu-manifest.sh` left all 166 NPU file records unchanged. The v0.19.1 fabric-clock helper has the same SHA-256 as the installed one.
+
+| Check | Halogen 0.19.1 | Gufo 0.31.0 | Strixite 0.7.0 |
+|---|---|---|---|
+| Ready and a chat generation | Pass | Pass | Pass |
+| `tests/live.py` or `tests/strixite_live.py` | Pass, 4 fragments | Pass, 4 fragments | Pass, 22 fragments, release 0.253 s |
+| Allowlisted names on `/metrics` | 33 of 33 | 17 of 17 | 33 of 33 |
+| Startup allocation | 78.8 GiB, as on 0.18.23 | 89.11 GiB on the GPU, as on 0.29.0 | 79.3 GiB of GPU buffers, as on 0.5.0 |
+
+- **Halogen NPU without host XRT.** Halogen started with `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b` and logged the kernel's own `amdxdna` driver with the image's XRT 2.25.37. Two related sentences scored 0.82 and an unrelated one 0.55 on 768-dimension embeddings in 0.21 s, and `decider-0.8b` answered a spam question with `yes` in 0.44 s. A Flash chat generation passed with the NPU models loaded. After stop the fabric clock was back on `auto`, and the kernel log had no `amdxdna` errors. The host's XRT 2.21.75 packages remain installed but unused.
+- **Gufo cache.** After the update the Gufo cache directory held only a new `v2` store under schema `component-cache-v1`, so prompt state cached under 0.29.0 was not restored.
+- **Logs.** Halogen logged its warm-up and no warnings. The FastAPI deprecation warning is gone. Gufo's only warning was the disconnect `tests/live.py` causes on purpose. Strixite's only warning was the open tool call `tests/strixite_live.py` cuts short on purpose.
+
+Images, Pi sessions, the agent guard, Strixite resume points and renewal, deep-prefill cancellation and performance benchmarks were not exercised.
+
 ## November 4 update
 
 `bin/update.py` pulled Halogen 0.18.23 and Gufo 0.29.0 by digest and atomically updated their image and version pins. Gufo 0.28.1 was pinned on November 3 without being started. Strixite 0.5.0 was already current. Model revisions, launch settings, live Pi files and host settings are unchanged. Both updated engines passed the [local checks](#november-4-local-checks). Superseded Halogen and Gufo images up to 0.28.0 were removed on November 3.

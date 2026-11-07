@@ -69,7 +69,7 @@ esac
 
 [[ "$(podman info --format '{{.Host.Security.Rootless}}')" == true ]] || { echo 'Use rootless Podman, not sudo.' >&2; exit 1; }
 # The NPU is passed to every engine so NPU features need no launcher change. Halogen uses it only when
-# NPU_MODELS is set, which also needs host XRT and a held fabric clock (README, NPU models).
+# NPU_MODELS is set, which also needs a held fabric clock (README, NPU models). The image carries XRT.
 GPU=(--device /dev/kfd --device /dev/dri --device /dev/accel/accel0 --ulimit memlock=-1:-1)
 if [[ "$(podman info --format '{{.Host.OCIRuntime.Name}}')" == crun ]]; then
   GPU+=(--group-add keep-groups)
@@ -102,12 +102,6 @@ if [[ -n "$NPU_MODELS" ]]; then
   # Rootless containers cannot lock more than the user may. NPU models need GiBs; systemd's default is 8 MiB.
   MEMLOCK="${MEMLOCK_KIB:-$(ulimit -H -l)}"
   [[ "$MEMLOCK" == unlimited || "$MEMLOCK" -ge 4194304 ]] || { echo "Locked-memory limit is $MEMLOCK KiB; NPU models need several GiB. Raise LimitMEMLOCK (README, NPU models)." >&2; exit 1; }
-  # Distribution XRT libraries find each other at their own path, so each is mounted there and where Halogen looks.
-  XRT_LIB_DIR="${XRT_LIB_DIR:-/usr/lib}"
-  for LIB in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
-    SOURCE="$(readlink -f -- "$XRT_LIB_DIR/$LIB")" && [[ -f "$SOURCE" ]] || { echo "Host XRT library $XRT_LIB_DIR/$LIB is missing. Install xrt and xrt-plugin-amdxdna." >&2; exit 1; }
-    NPU+=(--volume "$SOURCE:/opt/xilinx/xrt/lib/$LIB:ro" --volume "$SOURCE:$XRT_LIB_DIR/$LIB:ro")
-  done
   NPU+=(--env "HALOGEN_NPU_MODELS=$NPU_MODELS")
 fi
 mkdir -p -- "$CACHE_ROOT/$ENGINE"
