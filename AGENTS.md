@@ -20,7 +20,7 @@ Issues and specs live as local Markdown under `.scratch/<feature>/`. Before read
 
 ### Triage labels
 
-Use the five default triage roles. Before triaging tickets, read `docs/agents/triage-labels.md`.
+Use the five default triage roles, plus `resolved` for completed issues. Before triaging tickets, read `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
