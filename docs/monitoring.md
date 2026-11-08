@@ -31,7 +31,7 @@ The component comes before `logs`. Snapshot logs include the last 100 lines. Fol
 bin/dashboard.py
 ```
 
-This optional helper serves the same page at `http://127.0.0.1:9099/` and runs the commands behind its buttons. It is one Python file using only the standard library and runs on the host, not in a container, because it has to call Podman through the existing launchers. It runs in the foreground and nothing starts it at login. `Ctrl+C` stops only the helper; engines and monitoring keep running. Set `DASHBOARD_PORT` to use another port.
+This optional helper serves the same page at `http://127.0.0.1:9099/` and runs the commands behind its buttons. It is one Python file using only the standard library and runs on the host, not in a container, because it has to call Podman through the existing launchers. It runs in the foreground and nothing starts it at login. `Ctrl+C` stops only the helper; engines and monitoring keep running. Set `DASHBOARD_PORT` to use another port. [Desktop shortcuts](desktop-shortcuts.md) start and stop it from the KDE desktop instead.
 
 Served by the helper, the page header gains:
 
