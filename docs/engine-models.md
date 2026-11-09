@@ -1,8 +1,8 @@
 # Models each engine supports
 
-All three engines are configured here for Qwen3.8-Flash-Next only. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 7, 2026, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in `config/*-files.tsv`, and only those the [update record](engine-updates.md) names have been run here.
+All three engines are configured here for Qwen3.8-Flash-Next only. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 9, 2026, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in `config/*-files.tsv`, and only those the [update record](engine-updates.md) names have been run here.
 
-## Halogen 0.19.1
+## Halogen 0.20.1
 
 Halogen runs one model on the GPU, Flash-Next, and small models on the NPU beside it, on the same port. The launcher passes NPU models with `NPU_MODELS`; see the [README](../README.md#npu-models).
 
@@ -12,13 +12,13 @@ Halogen runs one model on the GPU, Flash-Next, and small models on the NPU besid
 |---|---|
 | Native v2 `.hgn` checkpoint, 62.1 GiB, plus the FP8 n-gram table, 47.7 GiB | Provisioned and used |
 | Vision tower `qwen38-flash-next-vision.hgn` | Provisioned, opt-in with `VISION=on` |
-| GGUF of the same model, read directly: unsloth `UD-IQ4_XS` and `UD-Q4_K_XL`, bartowski `IQ4_XS`, mradermacher `i1-IQ4_XS`, `Q4_K_M`/`Q4_K_S`, ggml-org `IQ4_NL` | Not configured; the launcher selects only the `.hgn` package. Gufo's `UD-Q4_K_XL` shards are already on disk. [GGUF guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.19.1/docs/gguf.md) |
+| GGUF of the same model, read directly: unsloth `UD-IQ4_XS` and `UD-Q4_K_XL`, bartowski `IQ4_XS`, mradermacher `i1-IQ4_XS`, `Q4_K_M`/`Q4_K_S`, ggml-org `IQ4_NL` | Not configured; the launcher selects only the `.hgn` package. Gufo's `UD-Q4_K_XL` shards are already on disk. [GGUF guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.1/docs/gguf.md) |
 
-A separate preview image, `0.18.14-flint-preview`, serves RecursiveSI's Flint, a 40B mixture-of-experts model, instead of Flash-Next. It is not pinned or used here. [Flint preview](https://github.com/peonist-ai/halogen-flash-server/blob/v0.19.1/README.md#flint-preview).
+A separate preview image, `0.18.14-flint-preview`, serves RecursiveSI's Flint, a 40B mixture-of-experts model, instead of Flash-Next. It is not pinned or used here. [Flint preview](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.1/README.md#flint-preview).
 
 ### NPU models
 
-Each named model is fetched from its own `peonist-ai/halogen-npu-*` repository. `HALOGEN_DOWNLOAD` stays unset here, so only models whose files are in `config/npu-files.tsv` can start. [NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.19.1/docs/NPU.md).
+Each named model is fetched from its own `peonist-ai/halogen-npu-*` repository. `HALOGEN_DOWNLOAD` stays unset here, so only models whose files are in `config/npu-files.tsv` can start. [NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.1/docs/NPU.md).
 
 | Model | Base model | Use, route | Provisioned |
 |---|---|---|---|
@@ -52,10 +52,11 @@ These load from a path under `/models`, converted at first start. On our read-on
 | LiquidAI LFM3-VL-2B or a fine-tune, new in 0.18.23 | Chat with pictures and video |
 | LiquidAI LFM3-Audio-2B or a fine-tune, new in 0.18.23 | Speech in, speech out, `/v1/audio/transcriptions` and `/v1/audio/speech` |
 | LiquidAI LFM3-Omni-2B, new in 0.18.23 | Pictures, video with sound, speech in, and text or speech out, on one model id |
+| `ATH-MaaS/OvisOCR3`, Apache 2.0, new in 0.20.0 | Document pages to Markdown, with tables as HTML and formulas as LaTeX, served as `OvisOCR3` on the chat routes; one or two pictures a request, about 20 seconds a typical page. The image ships only its NPU programs, and the launcher's `NPU_MODELS` takes model ids, not the `/models/OvisOCR3` path it needs. [Guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.1/docs/NPU.md#your-own-ovisocr3) |
 
-## Gufo 0.31.0
+## Gufo 0.33.0
 
-Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.31.0/docs/models/README.md).
+Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.33.0/docs/models/README.md).
 
 | Model | Weights | Use | Provisioned |
 |---|---|---|---|

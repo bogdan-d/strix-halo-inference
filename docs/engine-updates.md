@@ -1,5 +1,40 @@
 # Engine updates
 
+## November 9 update
+
+`bin/update.py` pulled Halogen 0.20.1 and Gufo 0.33.0 by digest and atomically updated their image and version pins. Strixite 0.7.0 was already current. The launcher no longer sets `HALOGEN_FORK=1`, the upstream default since 0.18.15, or `HALOGEN_FORK_MAP=auto`, retired in 0.20.1 in favour of a built-in reply-end cache. Model revisions, other launch settings, live Pi files and host settings are unchanged. Both updated engines passed the [local checks](#november-9-local-checks). After the checks, the superseded Halogen 0.19.1 and Gufo 0.31.0 images were removed by digest, and `bin/cache.sh` cleared the Halogen and Gufo prompt caches, which held only the test runs' state.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.19.1 | 0.20.1 | `sha256:66dac8dac25bf15f2b63a684bbe3953036045172d881525600ea41d45e5acc73` |
+| Gufo | 0.31.0 | 0.33.0 | `sha256:cf76a084e33e638ec4d934afaf9534aad591a5f2ddd951576bd63a9792b7d601` |
+
+The images advertise revisions Halogen `9f38fe7ba960` and Gufo `77dff828be02a498e9951694f31b024e7ac87119`, not compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.20.0** moves the image to ROCm 10.1, which upstream measured at about 9 to 15% less package energy while generating at the same speed, and reads Flash-Next prompts 2 to 6% faster. Temperature-zero output can differ from 0.19.1 in the last bits. It fixes a GPU memory fault from strict tool calls under concurrency and a `/v1/completions` tokenization mismatch at the reuse point. It adds document parsing on the NPU with a user-supplied OvisOCR3 checkpoint, not provisioned here; see [models](engine-models.md#checkpoints-you-supply-on-the-npu). [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.0/CHANGELOG.md).
+- **Halogen 0.20.1** caches the end of each reply in the RAM prompt cache by default, about 112 MiB a conversation, so a follow-up that sends the reply back unchanged resumes from it. This retires `HALOGEN_FORK_MAP=auto`; a configuration that still sets it starts and logs that it is ignored. When the model ends its turn inside its reasoning, the server now closes the reasoning and lets the model answer. A routine KV-pool growth line moves from stderr to stdout. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.1/CHANGELOG.md).
+- **Gufo 0.32.0** splits prompt passes by layers on Flash-Next so other sessions keep decoding, and deprecates `--prefill-chunk`, which the launcher does not use. It overlaps the shared expert with routed experts on Flash-Next decode, accepts `$schema` and type unions in strict schemas, refuses a RAM cache the host cannot hold with a message instead of `bad_alloc`, and adds `/tokenize`. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.32.0).
+- **Gufo 0.33.0** measures the Flash-Next decode shared-expert overlap before using it, fixes component-cache eviction and snapshot copies, and speeds up DeepSeek V4 Flash. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.33.0).
+
+### November 9 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. A ComfyUI container from another project was stopped first. MemAvailable was 114.0 GiB before the first start and 114.4 to 116.3 GiB after each stop, with Unevictable at most 252 KiB and kernel GTT 2.0 to 2.4 GiB, against about 1.1 GiB on November 7. `tests/update.sh`, `python tests/run.py` and `git diff --check` passed. `bin/npu-manifest.sh` left all 166 NPU file records unchanged. The v0.20.1 fabric-clock helper has the same SHA-256 as the installed one.
+
+| Check | Halogen 0.20.1 | Gufo 0.33.0 |
+|---|---|---|
+| Ready and a chat generation | Pass | Pass |
+| `tests/live.py` | Pass, 4 fragments | Pass, 4 fragments |
+| Allowlisted names on `/metrics` | 33 of 33 | 17 of 17 |
+| Startup allocation | 78.7 GiB, 78.8 on 0.19.1 | 89.12 GiB on the GPU, 89.11 on 0.31.0 |
+
+- **Halogen reply-end cache.** Without the fork settings, a 197-token reply sent back with a new question reused 220 of the second turn's 240 prompt tokens, so the whole first turn came from cache. The changed settings started the disk cache in a new directory.
+- **Halogen NPU on ROCm 10.1.** Halogen started with `decider-0.8b`, `embeddinggemma-2` and `qwen3guard-stream-0.6b` and logged the kernel's `amdxdna` driver with the image's XRT 2.25.37. `decider-0.8b` answered a spam question with `yes` at 0.992 in 0.59 s, two related sentences scored 0.87 and an unrelated one 0.60 on 768-dimension embeddings in 0.06 s, and the streaming guard labelled a 465-character Flash reply in six chunks, none flagged. A Flash chat generation passed with the NPU models loaded. After stop the fabric clock was back on `auto`, and the kernel log had no `amdxdna` or `amdgpu` messages.
+- **Logs.** Halogen warned at start that 11.0 GiB of host RAM was in use and that free memory held only 220 contiguous 2 MiB blocks; startup still took 22.5 s. Gufo logged no lines above INFO.
+
+OvisOCR3, images, Pi sessions, the strict-tool concurrency fix, reasoning closed at end of turn, Gufo's layer-split prefill beside a second session, power draw and performance benchmarks were not exercised. Strixite was not restarted.
+
 ## November 7 update
 
 `bin/update.py` pulled Halogen 0.19.1, Gufo 0.31.0 and Strixite 0.7.0 by digest and atomically updated their image and version pins. The launcher no longer mounts host XRT for NPU models, because Halogen 0.19.1 carries its own. Model revisions, other launch settings, live Pi files and host settings are unchanged. All three engines passed the [local checks](#november-7-local-checks). The superseded Halogen 0.18.23, Gufo 0.29.0 and Strixite 0.5.0 images were removed afterwards, and no prompt cache was rotated.
