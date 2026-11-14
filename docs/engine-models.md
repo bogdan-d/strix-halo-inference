@@ -56,7 +56,7 @@ These load from a path under `/models`, converted at first start. On our read-on
 
 ## Gufo 0.34.0
 
-Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.34.0/docs/models/README.md).
+Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.34.0/docs/models/README.md). Smaller Flash-Next quants, measured memory by context and MTP, and community extensions are collected in [Gufo memory, smaller quants and extensions](gufo-extensions.md).
 
 | Model | Weights | Use | Provisioned |
 |---|---|---|---|
