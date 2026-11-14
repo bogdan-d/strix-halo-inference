@@ -30,13 +30,15 @@ Tensor formats read from the GGUF headers with HTTP range requests, at Unsloth r
 
 Every quant bundles the same 26.82 GiB IQ4_NL n-gram table.
 
+A second scan on November 15 at the same revision also found GGML `Q2_0` on two down-expert layers of `UD-IQ4_XS`, which the format column omits, and read `UD-IQ3_XXS` (83.6 GB): gate/up experts IQ2_S on 26 layers, IQ3_XXS on 21 and IQ4_XS on 1; down experts IQ4_NL on 45 layers and `Q2_0` on 3. Outside the experts it differs from `UD-IQ4_XS` in two places: `token_embd` and all 36 `ssm_out` tensors are Q6_K, where `UD-IQ4_XS` has IQ4_XS and Q8_0. The `UD-IQ4_XS` shards are byte-identical at `084c631a` (the extension's pin, below), `d9620119` and `f5d175de`.
+
 ### Unsloth Dynamic 3.1
 
 Unsloth replaced the GGUFs with Dynamic 3.1 builds on November 4, claiming about 10 to 15% higher accuracy and up to 50% fewer tokens than other quants of the same size. All four `UD-Q4_K_XL` shards changed (about 104 GiB to download); the shared Q8_0 MTP head did not. Gufo's docs and CI now use revision `d96201194f103c906994f283f504209dc8d2a10c` and state that tensor types and shapes are unchanged, so moving to it changes quality, not memory. The n-gram table now sits in its own shard and can be swapped for Q8_0 or BF16 (Gufo does not read Q5_1); Gufo has no `--ple` option, so a swap follows Unsloth's [engram guide](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/blob/main/engram/README.md) with `set_split.py`.
 
 ### Community options
 
-[storm1er/flash-next-iq-gufo-extension](https://github.com/storm1er/flash-next-iq-gufo-extension), MIT, is the preferred route. It loads into stock Gufo 0.34.0 (extension API 0.3) and serves the Unsloth IQ family, UD 3.1 and the October export, with MTP, `--mmproj` and continuation checkpoints. It covers every UD 3.1 expert format, including GGML `Q2_0`. Its README reports 80.8 GiB of device memory for UD 3.1 `UD-IQ4_XS` with two sessions, and 46 to 60 tok/s decoding at 174K depth with MTP. In the 0.34.0 container, installing from a Git or registry source fails with an SSL error, so it needs a local copy or the publisher's CI image with the extension compiled in. Registry review is pending in [gufo-extension#11](https://github.com/gufo-org/gufo-extension/pull/11); once merged, `gufo extension install flash_next_iq` installs a reviewed revision.
+[storm1er/flash-next-iq-gufo-extension](https://github.com/storm1er/flash-next-iq-gufo-extension), MIT, is the route that keeps stock Gufo. Version 0.2.0 loads into Gufo 0.34.0 (extension API 0.3) and serves Unsloth's `UD-IQ4_XS` only, as the UD 3.1 file and the October export, with MTP, `--mmproj` and continuation checkpoints. Its expert kernels cover every UD 3.1 expert format, including GGML `Q2_0`, but its device upload rejects a Q6_K token embedding ([`device_model.cpp`](https://github.com/storm1er/flash-next-iq-gufo-extension/blob/9ce08cef17151aca3751ea2528765902054c54c4/src/kernels/rocm/device_model.cpp), read on November 15, not run), so it cannot serve UD 3.1 `UD-IQ3_XXS`, which stores `token_embd` as Q6_K. Its README reports 80.8 GiB of device memory for UD 3.1 `UD-IQ4_XS` with two sessions, and 46 to 60 tok/s decoding at 174K depth with MTP. It uses Unsloth's standalone Q8_0 MTP head (4.1 GB) rather than the `shared` head on disk; whether it accepts the shared head was not checked. In the 0.34.0 container, installing from a Git or registry source fails with an SSL error because the image's Git has no CA bundle; the README's fix is to mount the host's bundle and set `GIT_SSL_CAINFO` and `SSL_CERT_FILE`, and a local copy or the publisher's CI image avoids the problem. The README also says the weight upload fails under Docker unless the container runs as root, and that rootless Podman with `--userns=keep-id`, which the launcher here uses, is untested. Registry review is pending in [gufo-extension#11](https://github.com/gufo-org/gufo-extension/pull/11); once merged, `gufo extension install flash_next_iq` installs a reviewed revision.
 
 [johandevlabs/gufo-iq4_xs](https://github.com/johandevlabs/gufo-iq4_xs), MIT, is a fork of Gufo 0.33.0 with the same goal, published as `ghcr.io/johandevlabs/gufo-toolboxes/gufo-runtime:edge`. It lacks the 0.34.0 fixes and uses a moving tag. Its README reports, at 262144 context with MTP and images:
 
@@ -47,11 +49,16 @@ Unsloth replaced the GGUFs with Dynamic 3.1 builds on November 4, claiming about
 | October `UD-IQ4_XS` | `38bb39ee` | 93.7 GB | 88.8% | 0.119 | 59.8 GiB | — |
 | October `UD-IQ3_XXS` | `38bb39ee` | 82.0 GB | 85.5% | 0.186 | 50.2 GiB | — |
 
-It reports 33 to 34 tok/s decoding without MTP and 42 to 50 tok/s with MTP on mixed text, on a 96 GB GMKtec Evo-X2. Compared with Gufo's 89.12 GiB here, UD 3.1 `UD-IQ3_XXS` would leave about 24 GiB more free, and about 14 GiB more than Halogen, at the cost of roughly one next token in nine differing from `UD-Q4_K_XL`.
+It reports 33 to 34 tok/s decoding without MTP and 42 to 50 tok/s with MTP on mixed text, on a 96 GB GMKtec Evo-X2. Compared with Gufo's 89.12 GiB here, UD 3.1 `UD-IQ3_XXS` would leave about 24 GiB more free, and about 14 GiB more than Halogen, at the cost of roughly one next token in nine differing from `UD-Q4_K_XL`. Only the fork runs `UD-IQ3_XXS`. With the extension the choice is `UD-IQ4_XS`, which by its README sits about 8 GiB below stock Gufo (80.8 GiB with two sessions against 89.12 GiB with one here) and about 2 GiB above Halogen.
 
 ### Trial plan
 
-When a fast connection is available: download UD 3.1 `UD-IQ3_XXS` at Gufo's revision into a new manifest beside the existing `UD-Q4_K_XL` files, install `flash_next_iq` into stock Gufo 0.34.0 (from the registry if #11 has merged), then run the usual checks and record the startup allocation, `tests/live.py` and a quality comparison against `UD-Q4_K_XL`. The `UD-IQ3_XXS` header scan has not been run; the extension's format list covers its expected formats.
+When a fast connection is available, there are two routes with different savings:
+
+1. **Stock Gufo with the extension, `UD-IQ4_XS`, about 8 GiB saved.** Download UD 3.1 `UD-IQ4_XS` and the standalone Q8_0 MTP head into a new manifest beside the existing `UD-Q4_K_XL` files and install `flash_next_iq` into stock Gufo 0.34.0, from the registry if #11 has merged and otherwise from a local copy. Confirm first that the weight upload works under the launcher's rootless Podman. Then run the usual checks and record the startup allocation with one session, `tests/live.py` and a quality comparison against `UD-Q4_K_XL`.
+2. **The fork, `UD-IQ3_XXS`, about 24 GiB saved.** This needs johandevlabs' image, which is Gufo 0.33.0 behind a moving tag: pin it by digest and treat it as a separate engine build. Recheck the extension before choosing it; if a later version accepts a Q6_K token embedding, `UD-IQ3_XXS` moves to route 1.
+
+For an abliterated model on route 1, see [abliterated builds](abliterated-models.md#what-each-engine-reads).
 
 ## Extensions
 
@@ -63,7 +70,7 @@ Found on GitHub on November 15, 2026. API versions are from each repository's `e
 
 | Extension | Adds | API | Registry |
 |---|---|---|---|
-| [storm1er/flash-next-iq-gufo-extension](https://github.com/storm1er/flash-next-iq-gufo-extension) | Flash-Next Unsloth IQ quants | `>= 0.3.0` | Pending, #11 |
+| [storm1er/flash-next-iq-gufo-extension](https://github.com/storm1er/flash-next-iq-gufo-extension) | Flash-Next Unsloth `UD-IQ4_XS` | `>= 0.3.0` | Pending, #11 |
 | [gufo-org/lfm3-gufo-extension](https://github.com/gufo-org/lfm3-gufo-extension) | LFM3 1.7B text, LFM3-VL 2B, LFM3-Audio 2B, d1-Omni 2B | `>= 0.3.4` at 0.6.0 | Yes, but the reviewed 0.4.0 targets API 0.2 |
 | [gufo-extensions/nemotron](https://github.com/gufo-extensions/nemotron) | Nemotron family | `>= 0.3.0` | No |
 | [gufo-extensions/nemotron_asr](https://github.com/gufo-extensions/nemotron_asr) | Nemotron 3.5 streaming speech to text | `>= 0.3.0` | No |
