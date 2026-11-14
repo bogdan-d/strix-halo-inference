@@ -10,7 +10,7 @@ The subsequent [sandboxed three-engine coding comparison](coding-comparison.md) 
 
 ## Pinned inputs and defaults
 
-`config/pins.env` pins release 0.5.0 to `ghcr.io/shawnshekari/strixite@sha256:f0d3211f05c65036673d00bcf9daa69e83fe7ea12018c9b4810cd57ba7568293` and `wemoh/Qwen3.8-Flash-Next-strixw` to revision `b64f3a69070c68721cbbf5ffa701ecee164b0991`, which adds `vision.strixw` and `preprocessor_config.json` for image input; the other files are byte-identical to revision `e0be89740e7ac38f5ef0a911e0b91865431b7a01`. The image advertises revision `b175d27`. It passed basic runtime checks on October 27, 2026 ([update record](engine-updates.md#october-27-update)); image input last passed on 0.4.0 on October 19. Release 0.2.4 came from source `06e45551558b1d541c59c831041f7a52468d2c52`. Metadata correspondence is not signed provenance. Historical v0.2.3 measurements used image digest `9075d3def69d550b6c8f0b42a7795259ec02187ebf755027149f8c757d6cc738` and source `dbe7b66ed620d392d0b3b6a8a6e836f9907ffea6`.
+`config/pins.env` pins release 0.7.0 to `ghcr.io/shawnshekari/strixite@sha256:8eb565146ed6e7d32310e6506dacb5144498639d2cc2ae8246c235a12156472b` and `wemoh/Qwen3.8-Flash-Next-strixw` to revision `b64f3a69070c68721cbbf5ffa701ecee164b0991`, which adds `vision.strixw` and `preprocessor_config.json` for image input; the other files are byte-identical to revision `e0be89740e7ac38f5ef0a911e0b91865431b7a01`. The image advertises revision `0945ce8`. It passed basic runtime checks on November 7, 2026 ([update record](engine-updates.md#november-7-local-checks)); image input last passed on 0.4.0 on October 19. Release 0.2.4 came from source `06e45551558b1d541c59c831041f7a52468d2c52`. Metadata correspondence is not signed provenance. Historical v0.2.3 measurements used image digest `9075d3def69d550b6c8f0b42a7795259ec02187ebf755027149f8c757d6cc738` and source `dbe7b66ed620d392d0b3b6a8a6e836f9907ffea6`.
 
 `config/strixite-files.tsv` selects the publisher's six checksum-manifest files: the main strixw v4 weights with included MTP tensors, the n-gram table, tokenizer, generation configuration, model configuration and license. Total additional storage is approximately 114.1 GiB before images, partial files and cache. Existing Halogen HGN and Gufo GGUF weights are not reusable. The package belongs under `/home/bogdan/models/wemoh/Qwen3.8-Flash-Next-strixw`.
 
@@ -68,7 +68,7 @@ The launcher passes the existing GPU devices and requests unlimited memlock, whi
 
 ## Local allocation and smoke results
 
-Measured October 11, 2026 using v0.2.3 and the unchanged model revision above, not the current v0.2.4 image. The six selected files passed download-time SHA-256 checks and a separate full final-file verification. The image's `--help` and inference ran under rootless runc with ordinary GPU device access. No security, device permission, kernel, BIOS or IOMMU changes were needed. The endpoint was published only at `127.0.0.1:5300`.
+Measured October 11, 2026 using v0.2.3 and the unchanged model revision above, not the current image. The six selected files passed download-time SHA-256 checks and a separate full final-file verification. The image's `--help` and inference ran under rootless runc with ordinary GPU device access. No security, device permission, kernel, BIOS or IOMMU changes were needed. The endpoint was published only at `127.0.0.1:5300`.
 
 | Observation | Local result |
 |---|---|
