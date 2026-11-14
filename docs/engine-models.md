@@ -2,6 +2,8 @@
 
 All three engines are configured here for Qwen3.8-Flash-Next only. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 9, 2026, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in `config/*-files.tsv`, and only those the [update record](engine-updates.md) names have been run here.
 
+Abliterated Flash-Next builds for each engine, with picks and compatibility notes, are collected in [abliterated builds](abliterated-models.md).
+
 ## Halogen 0.20.4
 
 Halogen runs one model on the GPU, Flash-Next, and small models on the NPU beside it, on the same port. The launcher passes NPU models with `NPU_MODELS`; see the [README](../README.md#npu-models).
