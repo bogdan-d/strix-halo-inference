@@ -17,6 +17,19 @@ case "$ENGINE" in
 esac
 MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
 DEST="$MODELS_DIR/$REPO"
+# Optional Hugging Face token for gated repositories and higher rate limits: HF_TOKEN from the environment, else from the ignored .env.
+if [[ "$ACTION" == download && -z "${HF_TOKEN:-}" && -f "$ROOT/.env" ]]; then
+  HF_TOKEN="$(sed -n -E "s/^HF_TOKEN=[\"']?([^\"'[:space:]]*)[\"']?[[:space:]]*$/\1/p" "$ROOT/.env" | tail -n 1)"
+fi
+# The header is read from a file descriptor so the token stays out of the process list. curl sends a custom
+# Authorization header only to the original host, not to the CDN that Hugging Face redirects file downloads to.
+hf_curl() {
+  if [[ -n "${HF_TOKEN:-}" ]]; then
+    curl --header @<(printf 'Authorization: Bearer %s\n' "$HF_TOKEN") "$@"
+  else
+    curl "$@"
+  fi
+}
 if [[ "$ACTION" == download ]]; then
   mkdir -p -- "$DEST"
   exec 9>"$DEST/.download.lock"
@@ -31,7 +44,7 @@ while IFS=$'\t' read -r HASH SIZE FILE FILE_REPO FILE_REVISION; do
   if [[ "$ACTION" == download && ! -f "$TARGET" ]]; then
     mkdir -p -- "$(dirname -- "$TARGET")"
     echo "Downloading $SOURCE"
-    curl --fail --location --retry 5 --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
+    hf_curl --fail --location --retry 5 --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
       --continue-at - --output "$TARGET.partial" \
       "https://huggingface.co/$SOURCE"
     [[ "$(stat -c %s -- "$TARGET.partial")" == "$SIZE" ]] || { echo "Wrong download size: $FILE" >&2; exit 1; }

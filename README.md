@@ -42,6 +42,8 @@ bin/models.sh download gufo
 
 Downloads can take a long time. Repeating the command verifies existing final files and resumes incomplete files. A size or checksum mismatch fails without replacing the existing file. `bin/models.sh verify ENGINE` performs a full hash check. Launches use `check`, a fast presence and size check, rather than reading hundreds of gigabytes before every start.
 
+Downloads are anonymous unless a Hugging Face token is available, which gated repositories need and which raises rate limits. `bin/models.sh download` takes `HF_TOKEN` from the environment, otherwise from an `HF_TOKEN=` line in the ignored `.env` at the repository root; see `.env.example`. A read-only or fine-grained read token is enough. The token is sent only to `huggingface.co`, not to the CDN that serves the redirected files, and never into engine containers, which download nothing.
+
 Start one engine, wait for its readiness endpoint, then test and stop it:
 
 ```bash
