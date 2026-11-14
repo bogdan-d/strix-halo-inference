@@ -1,5 +1,41 @@
 # Engine updates
 
+## November 14 update
+
+`bin/update.py` pulled Halogen 0.20.4 and Gufo 0.34.0 by digest and atomically updated their image and version pins. Strixite 0.7.0 was already current. Launch settings, model revisions, live Pi files and host settings are unchanged. `bin/npu-manifest.sh` against the 0.20.4 image changed only the 16 `d3-lite/devices/` files, republished with new contents at the same paths (`peonist-ai/halogen-npu-d3-lite` revision `2def562` to `8919811`); the `d3-lite` weights, tokenizer and picture files are unchanged. The 16 superseded files were deleted, then `bin/models.sh download npu` fetched them and verified all 166 NPU files. Both updated engines passed the [local checks](#november-14-local-checks). After the checks, the superseded Halogen 0.20.1 and Gufo 0.33.0 images were removed by digest, and `bin/cache.sh` cleared the Halogen and Gufo prompt caches, which held only the test runs' state.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.20.1 | 0.20.4 | `sha256:70445bcf7acff8f1fe11396a97b866ed30dca31caf5fac62049127658080e07f` |
+| Gufo | 0.33.0 | 0.34.0 | `sha256:49b1fce40cb43e33c46d91595e300cb320cdec768fcd976f8c8da24b402fc133` |
+
+The images advertise revisions Halogen `0abf69e68c0e` and Gufo `2845939b2a7d61243d407c8816c6d42652512e50`, not compared with public source.
+
+### What changed upstream
+
+- **Halogen 0.20.2** is up to about 1% faster with several requests generating at once and up to about 4% sooner to the first token on long conversations, and starts NPU decisions on long prompts sooner. `d3-lite` answers 14 to 18% faster on the NPU; its scores can differ in the last digits. The Flash checkpoints are unchanged. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.2/CHANGELOG.md).
+- **Halogen 0.20.3** makes `d3-nano`, not provisioned here, 7 to 9% faster on the NPU. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.3/CHANGELOG.md).
+- **Halogen 0.20.4** reads a short follow-up message to a cached conversation 15 to 50% faster; at temperature 0 such a turn can occasionally differ from 0.20.3 where two tokens were nearly tied. Throughput past 8 concurrent requests rises about 10 to 20%, which does not apply at this launcher's `HALOGEN_KV_SLOTS=1`. With `tool_choice: "none"` in a conversation that already holds tool calls, the server now answers in prose instead of returning raw `<tool_call>` markup (#253), as Open WebUI 0.13 sends to end a tool loop. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.4/CHANGELOG.md).
+- **Gufo 0.34.0** decodes EmbeddingGemma 2 audio in Rust and drops libsndfile and soxr, marked breaking; the launcher serves no Gufo embeddings. It deprecates `--draft-tokens`, `--min-draft-tokens` and `--draft-policy`, which the launcher does not use. Fixes cover Flash-Next MTP backoff recovery after batch observations, continuing after a re-tokenized answer, refusing prompts over the host prompt-state budget, disk-cache admission and validation, and tool-call numbers and nested defaults. It reduces CPU overhead in sampling and n-gram lookups and speeds up batched Qwen3.8 steps. Its Qwen3.8-27B model pin (#1167) does not affect Flash-Next. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.34.0).
+
+### November 14 local checks
+
+Each engine was started alone at native 262144 context with MTP on, then stopped. MemAvailable was 112.5 GiB before the first start, 113.8 GiB after the Halogen stop and 115.8 GiB after the Gufo stop, with Unevictable 116 KiB and kernel GTT 1.3 to 1.8 GiB. `tests/update.sh`, `python tests/run.py` and `git diff --check` passed. The v0.20.4 fabric-clock helper has the same SHA-256 as the installed one.
+
+| Check | Halogen 0.20.4 | Gufo 0.34.0 |
+|---|---|---|
+| Ready and a chat generation | Pass | Pass |
+| `tests/live.py` | Pass, 4 fragments | Pass, 4 fragments |
+| Allowlisted names on `/metrics` | 33 of 33 | 17 of 17 |
+| Startup allocation | 78.7 GiB, as on 0.20.1 | 89.12 GiB on the GPU, as on 0.33.0 |
+| `tool_choice: "none"` after a failed tool call, 3 tries at temperature 0.7 | Prose each time | Raw `<tool_call>` markup each time |
+
+- **Halogen NPU.** Halogen started with `d3-lite`, `decider-0.8b` and `embeddinggemma-2` and was ready in 12.9 s. On a double-charge complaint, `d3-lite` chose `billing` at 0.86 with a refund probability of 0.98 in 0.07 s, and `decider-0.8b` chose `billing` at 0.999 with 0.996 in 0.08 s. Two related sentences scored 0.82 and an unrelated one 0.55 on 768-dimension embeddings in 0.09 s. After stop the fabric clock was back on `auto`, and the kernel log had no `amdxdna` or `amdgpu` messages.
+- **Gufo `tool_choice: "none"`.** Gufo 0.34.0 still returns the model's tool call as raw markup in the reply text when a conversation already holds a tool call. Gufo 0.33.0, rerun with a temporary cache directory, did the same, so this is not a regression. Clients that end a tool loop with `tool_choice: "none"`, such as Open WebUI 0.13, can show XML on Gufo.
+- **Logs and memory.** Neither engine logged warnings. Halogen no longer warned about host RAM in use at start, and reported 324 contiguous 2 MiB blocks free, against 220 on November 9. While Gufo ran, MemAvailable was about 24 GiB and 4.2 GiB of swap was in use, against 8 MiB before; swap stayed in use after the stop.
+
+The faster short follow-up turns, `d3-lite` speed against 0.20.1, Gufo's MTP backoff recovery, images, Pi sessions, power draw and performance benchmarks were not exercised. Strixite was not restarted.
+
 ## November 9 update
 
 `bin/update.py` pulled Halogen 0.20.1 and Gufo 0.33.0 by digest and atomically updated their image and version pins. Strixite 0.7.0 was already current. The launcher no longer sets `HALOGEN_FORK=1`, the upstream default since 0.18.15, or `HALOGEN_FORK_MAP=auto`, retired in 0.20.1 in favour of a built-in reply-end cache. Model revisions, other launch settings, live Pi files and host settings are unchanged. Both updated engines passed the [local checks](#november-9-local-checks). After the checks, the superseded Halogen 0.19.1 and Gufo 0.31.0 images were removed by digest, and `bin/cache.sh` cleared the Halogen and Gufo prompt caches, which held only the test runs' state.
