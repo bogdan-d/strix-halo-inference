@@ -1,5 +1,69 @@
 # Engine updates
 
+## November 15: Gufo IQ4_XS extension trial
+
+Ticket 05 adds `iq4-xs` and `iq4-xs-abliterated` beside the existing Q4_K_XL profiles. Both new profiles run on the unchanged Gufo 0.34.0 image with the optional `flash_next_iq` module, one session, native 262144 context and MTP enabled. They allocate 72.64 GiB against Q4_K_XL’s 89.12 GiB, a 16.49 GiB reduction (about 18.5%). The default remains Q4_K_XL. Select the new profiles in the dashboard or with:
+
+```bash
+bin/run.sh gufo start --weights iq4-xs --wait
+bin/run.sh gufo stop
+bin/run.sh gufo start --weights iq4-xs-abliterated --wait
+```
+
+### Pins and installation
+
+The [stock manifest](../config/weights/gufo-iq4-xs.tsv) pins Unsloth UD 3.1 at `d96201194f103c906994f283f504209dc8d2a10c`. Upstream sizes and hashes were rechecked before downloading. Shards 1–3 and the standalone Q8_0 MTP head downloaded and passed SHA-256 verification; shard 4 was reflinked from the existing Q4_K_XL n-gram shard and independently hash-verified. The four shards total 93,672,359,738 bytes (87.24 GiB). The final profiles reuse the existing shared Q8_0 MTP head, whose hash was also checked. The standalone head remains on disk as a trial reference; its pin and hash are recorded in [ticket 05](../.scratch/abliterated-trials/issues/05-gufo-extension-ud-iq4xs.md).
+
+The extension is version 0.2.0 at [source revision `9ce08cef17151aca3751ea2528765902054c54c4`](https://github.com/storm1er/flash-next-iq-gufo-extension/tree/9ce08cef17151aca3751ea2528765902054c54c4), committed as `GUFO_IQ_REVISION`. [Registry PR #11](https://github.com/gufo-org/gufo-extension/pull/11) was still open with no reviews. After inspecting its build recipe, registration/probe and loading paths, the user explicitly approved installing this unreviewed native source. It compiled inside the pinned Gufo image with rootless `--userns=keep-id:uid=1000,gid=1000`, no network, a read-only root filesystem and source mount, temporary `/tmp`, and only its extension store writable on the host. No GPU devices, models or host home were mounted into the build. A separate read-only invocation of `gufo extension list` reported `flash_next_iq 0.2.0 [installed, ready]`.
+
+Gufo recorded source digest `1eac21ac3d8cb142e6ab51bfd9389b8799f24f928dc3564c238ed29e959a9671`; the installed module SHA-256 is `0534b572c4c45177a6db41568ef3e484591c51c21ea6e07c3db535775110560d`. Build logs, source-file hashes, model metadata, trial scripts and results remain outside Git under `$HOME/.cache/strix-halo-inference/trials/gufo-iq4-xs`. [The extension guide](gufo-extensions.md#iq4_xs-profiles-on-this-host) records the install command.
+
+The module store is `CACHE_ROOT/gufo-extensions/IMAGE_SHA256/SOURCE_REVISION`. Only profiles declaring `extension: flash_next_iq` mount it, read-only, at `/extensions`. Normal Q4_K_XL starts load no community module. An image or source-pin change selects a fresh store; missing installations disable the profile and fail before container creation. Gufo additionally checks its module build identity. Prompt-cache clearing does not touch the extension store. Rootless weight upload worked without changing the container user, GPU permissions or host settings.
+
+### Shared MTP head
+
+The standalone and shared files have exactly the same 32 draft-block tensors, including types, shapes and SHA-256 of every tensor’s contents. Only the standalone file contains its own `output.weight` and `token_embd.weight`. A separate shared-head run passed readiness, real generation, conversation, streamed tools, cancellation and generation after cancellation. Both heads reported exactly 74,381 MiB of GPU allocation, and both decode samples accepted 239 of 380 draft tokens. The smaller shared file therefore did not save the anticipated 1.3 GiB of GPU memory in this extension; both final profiles use it to reuse the existing companion.
+
+### Abliteration and file verification
+
+The existing huihui script, patch and key at revision `cbc7fba13f1939ac3fa42b18d77ccf43847d74ef` were hash-verified again. Patching ran in Bubblewrap without network or home access, with read-only inputs and only the new output directory writable. The command was:
+
+```text
+patch-unsloth-Qwen3.8-Flash-Next-dec.py --input-path /in --patch-path /patch/patch-unsloth-all --output-path /out --start-layer 0 --end-layer 48 --ablate-experts 2
+```
+
+`/in` was the pinned `UD-IQ4_XS` directory and `/out` was `huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patched-unsloth-UD-IQ4_XS-d9620119` under `/home/bogdan/models`. The existing isolated Python environment supplied NumPy and tqdm, with `gguf-py` loaded explicitly from llama.cpp revision `18b74fa41dcac1f55ae1371fe58153f7225941f6`. That source knows GGML Q2_0, used by `blk.8.ffn_down_exps.weight` and `blk.10.ffn_down_exps.weight`; PyPI gguf 0.19.0 does not.
+
+Exactly 96 tensors changed: 36 Q8_0 `ssm_out`, 48 Q8_0 `ffn_down_shexp`, and 12 Q6_K `attn_output`. There were no missing patch entries or dtype-mismatch copies. The 180 unused donor entries are expected because the patch also contains alternative formats. The verifier checked all 1,224 tensor names, types, shapes and bytes, plus all metadata: every intended target changed and no other tensor did. It now compares in 8 MiB chunks to avoid allocating a 28.8 GB temporary array for the n-gram tensor; chunk-boundary checks and the full file comparison passed. Verification was restarted with that bounded comparator after patching completed.
+
+The metadata-only first shard is its original bytes plus six zero alignment bytes (10,946,624 bytes total). Only data shard 2 changed; shards 3 and 4 are byte-identical to stock. The [patched manifest](../config/weights/gufo-iq4-xs-abliterated.tsv) records all output hashes and the verified shared MTP companion. No existing model file was overwritten or deleted.
+
+### Local results
+
+Both IQ4_XS variants passed smoke generation and `tests/live.py gufo`: conversation, forced tools, streamed automatic tools with four argument fragments, disconnect slot release and generation after cancellation. Both copied all five case-sensitive identifiers. Stock refused all five short control probes; the patched model answered all five. These are opening-text refusal classifications from 96-token responses, not checks of the accuracy or completeness of the answers. Raw prompts and replies stay outside Git.
+
+| Check | UD 3.1 Q4_K_XL | Stock IQ4_XS | Abliterated IQ4_XS |
+|---|---|---|---|
+| Startup allocation | 89.12 GiB | 72.64 GiB | 72.64 GiB |
+| MemAvailable at status | 23.61 GiB | 41.48 GiB with shared MTP | 41.08 GiB |
+| Decode, two 400-token requests | 43.87 / 41.58 tok/s, ticket 01 | 46.55 / 49.74 tok/s with shared MTP | 47.44 / 47.44 tok/s |
+| Exact identifiers | 5/5, ticket 01 | 5/5 | 5/5 |
+| Refusal probes answered | 0/5, ticket 01 | 0/5 | 5/5 |
+| Matched sandboxed Pi coding runs | 4/4 | 4/4 | 4/4 |
+| Recovered intermediate bash-tool errors in Pi | 1 | 3 | 3 |
+
+Decode uses Gufo’s `timings.predicted_per_second`, the same hash-table explanation prompt, thinking off and temperature zero. Stock IQ4_XS with the standalone head reached 48.15 and 48.79 tok/s; the final shared-head results are in the table. Abliterated runs accepted 241 of 362 draft tokens. These short samples have different generated text and draft acceptance, and background file hashing overlapped part of the shared-head check, so they do not establish a broad speed ranking. Startup took about 50–54 seconds for IQ4_XS with uncontrolled file-cache warmth.
+
+The quality comparison reused `tests/thinking_tasks.py` through `tests/thinking.py::trial`: the env-parser and CSV-filter tasks, each once with thinking off and medium, using Pi 1.5.2. All 12 runs passed independent final checks, preserved the check file, completed normally and passed the strict streamed-JSON guard. The seven intermediate bash-tool errors were recovered; these counts do not distinguish intentional failing baseline tests from implementation mistakes. Pi and generated tools ran inside the existing Bubblewrap boundary with only their synthetic workspace writable, temporary provider/settings files and shared host networking for localhost inference. Live Pi configuration was untouched. Stock IQ4_XS’s coding runs used the standalone head; the byte-identical draft block in the shared head was validated separately above. Downloads, compilation or patch I/O overlapped parts of the coding runs, so their elapsed times are not used to rank the weights.
+
+### Warnings, limits and final state
+
+Compilation succeeded with 207 warning diagnostic lines, including repeated host/device reports: 67 unused symbols/parameters, 44 incomplete initializers, 38 signedness comparisons, 22 GNU variadic-macro notices, 10 CUDA pragma-compatibility notices, 8 internal-declaration notices, 6 Q2_0 enum-switch notices and 12 loop-unrolling diagnostics. The pinned upstream source was left unchanged and the full log is retained. The launcher printed its existing non-crun runtime notice; loading worked with the existing permissions. No warning or error was logged by the three IQ4_XS inference runs.
+
+The smaller profiles are ready for local use and the short checks show no coding regression on these two tasks. General coding quality, perplexity/KL, image inputs, long-context retrieval, near-capacity prompts and deep-prefill cancellation were not evaluated. Native 256K allocation is not a long-context quality result. The extension remains unreviewed upstream and is enabled only for the explicit IQ profiles.
+
+The dashboard helper was restarted with its original environment and confirmed all four Gufo profiles available, including the actual running `iq4-xs-abliterated` label. Launcher, manifest/download and dashboard helper tests passed; browser rendering was not repeated. After the final stop, no managed inference container remained, MemAvailable was about 114.7 GiB and GTT about 1.18 GiB across all GPU users. About 5.0 GiB remained in swap from host activity; no cache dropping, swap clearing or host tuning was performed. The dashboard remains running and monitoring remains off.
+
 ## November 15: HT43 abliterated trial
 
 The `abliterated-ht43` Halogen profile selects `qwen38-flash-next-ht43-abliterated.hgn` from Quat3rnion revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`: 57,618,253,824 bytes, SHA-256 `2beaad7b6d5107d7abfa866b33b47287160a68b9fc45b86020dbaa884955329c`. Size and hash were rechecked against Hugging Face metadata before downloading. The profile shares r2's pinned tokenizer, vision tower and n-gram files, with its own prompt cache. Its [manifest](../config/weights/halogen-abliterated-ht43.tsv) pins all nine files. Stock `default` and `abliterated-r2` remain explicit alternatives; the default is unchanged.

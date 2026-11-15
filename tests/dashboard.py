@@ -78,7 +78,8 @@ else:
         status, body, _ = request("GET", "/state")
         current = json.loads(body)
         weights = current.pop("weights")
-        assert [entry["id"] for entry in weights["gufo"]] == ["default", "abliterated"]
+        assert [entry["id"] for entry in weights["gufo"]] == ["default", "abliterated", "iq4-xs", "iq4-xs-abliterated"]
+        assert not weights["gufo"][-1]["available"]
         caches = current.pop("caches")
         assert caches["halogen"] >= 8192 and caches["gufo"] == caches["strixite"] == 0, caches
         assert status == 200 and current == {

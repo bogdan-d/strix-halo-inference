@@ -167,6 +167,9 @@ if [[ "$ENGINE" == halogen ]]; then
   [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/${WEIGHT_PATHS[0]%/*}/qwen38-flash-next-vision.hgn")
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
+  if [[ -n "${WEIGHT_PATHS[2]:-}" ]]; then
+    ARGS+=(--volume "${WEIGHT_PATHS[2]}:/extensions:ro" --env GUFO_EXTENSIONS_DIR=/extensions)
+  fi
   ARGS+=("--userns=keep-id:uid=1000,gid=1000" "$IMAGE" gufo serve --host 0.0.0.0 --port "$PORT" --sessions 1 llm
     --model "/models/$GUFO_MODEL"
     --served-model-name qwen3.8-flash-next --context "$CONTEXT"

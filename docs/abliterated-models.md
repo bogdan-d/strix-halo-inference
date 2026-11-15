@@ -11,10 +11,11 @@ The Halogen and Strixite picks and the Gufo alternative derive from orcarouter's
 | Halogen (first choice for abliterated use) | [Quat3rnion HT43](https://huggingface.co/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated), revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, file `qwen38-flash-next-ht43-abliterated.hgn` | 57,618,253,824 bytes, SHA-256 `2beaad7b6d5107d7abfa866b33b47287160a68b9fc45b86020dbaa884955329c` | [Validated here on 0.20.4](engine-updates.md#november-15-ht43-abliterated-trial); 70.2 GiB total allocation |
 | Halogen (r2 alternative) | [Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated](https://huggingface.co/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated), revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, file `qwen38-flash-next-v2-abliterated.hgn` (r2) | 88,737,777,792 bytes, SHA-256 `7bbac319851b500639462133085156b4f998dec562f511e65ca1c14d7af5163e` | Tested here on Halogen 0.20.4; native verifier caveat below |
 | Gufo | The stock `UD-Q4_K_XL` with [huihui's patch](https://huggingface.co/huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/tree/main/patch-unsloth) applied locally | 3.56 GB patch | Run here on Gufo 0.34.0 on November 15 |
+| Gufo (lower memory) | UD 3.1 `UD-IQ4_XS` with the same huihui patch and pinned `flash_next_iq` module | Stock IQ4_XS shards plus local patch output | [Validated here](engine-updates.md#november-15-gufo-iq4-xs-extension-trial); 72.64 GiB allocation, 4/4 sandboxed Pi coding runs |
 | Gufo (alternative) | [NeosQ/Qwen3.8-Flash-Next-Uncensored-UD-Q4_K_XL](https://huggingface.co/NeosQ/Qwen3.8-Flash-Next-Uncensored-UD-Q4_K_XL) | About 104 GiB in 3 shards, plus its own MTP head | Author-tested on Gufo `aae1ac48` (October 25) |
 | Strixite | [ngkzngkz/Qwen3.8-Flash-Next-Uncensored-strixw](https://huggingface.co/ngkzngkz/Qwen3.8-Flash-Next-Uncensored-strixw) | About 114 GiB | Converted with Strixite v0.2.4 in a format version 0.7.0 reads; no published test |
 
-For abliterated Halogen use on this host, prefer HT43 based on the local trial; r2 remains available for comparison. The Gufo pick needs only the patch.
+For abliterated Halogen use on this host, prefer HT43 based on the local trial; r2 remains available for comparison. Gufo’s existing Q4_K_XL pick needs only the patch; the smaller IQ4_XS option also needs its pinned extension and stock IQ4_XS shards.
 
 ### Halogen: Quat3rnion r2
 
@@ -33,6 +34,12 @@ The [local HT43 trial](engine-updates.md#november-15-ht43-abliterated-trial) pas
 ### Gufo: huihui patch on the stock file
 
 huihui's v2 GGUF repository ships a 3.56 GB patch file and a Python script that replace the `ssm_out`, `attn_output` and `ffn_down_shexp` tensors of an existing Unsloth quant, leaving the routed experts alone. Applied here on November 15 first to the October export and then to UD 3.1 `UD-Q4_K_XL`, it replaced exactly 96 Q8_0 tensors and preserved every other tensor and all metadata. The UD 3.1 copy passed Gufo 0.34.0's live conversation, tools and cancellation checks, copied five exact identifiers, answered all five probes the new stock model refused, and used the same 89.12 GiB startup allocation with the shared MTP head. The patch script was read in full and ran without network access and with read-only inputs. Output hashes and results are in the [UD 3.1 update record](engine-updates.md#november-15-ud-31-weights-and-selectable-profiles). Select it with `bin/run.sh gufo start --weights abliterated --wait` or the dashboard; both October copies have been deleted at the user's request. Quality beyond these short checks is unmeasured.
+
+### Gufo: huihui patch on UD 3.1 IQ4_XS
+
+The optional `flash_next_iq` module now loads the smaller Unsloth UD 3.1 quant in stock Gufo 0.34.0. Select `iq4-xs` for stock or `iq4-xs-abliterated` for the locally patched copy. Both use the existing shared MTP head and report 72.64 GiB allocation at native 256K with one session, about 16.49 GiB below Q4_K_XL. The abliterated profile passed short conversation, streamed tools, cancellation and five exact identifiers, and answered all five probes its stock control refused. These probes classify refusal behavior, not accuracy or completeness of the answers. See [the full trial record](engine-updates.md#november-15-gufo-iq4-xs-extension-trial) for coding checks, speed, provenance and limits.
+
+The same pinned huihui script replaced 84 Q8_0 tensors and 12 Q6_K attention-output tensors. The verifier checked all 1,224 tensors: exactly 96 changed, every target changed, all other tensor bytes and metadata matched. The patched metadata-only first shard gained six zero alignment bytes; shards 3 and 4 are byte-identical to stock. `gguf-py` from llama.cpp revision `18b74fa41dcac1f55ae1371fe58153f7225941f6` supplies the Q2_0 support missing from PyPI 0.19.0. Patching ran without network or home access, with read-only inputs and only the output directory writable. Output hashes are in [the patched manifest](../config/weights/gufo-iq4-xs-abliterated.tsv).
 
 ### Gufo alternative: NeosQ
 
@@ -54,7 +61,7 @@ A gated source needs `HF_TOKEN` (see the README) with access to public gated rep
 
 ## What each engine reads
 
-**Gufo 0.34.0** loads Flash-Next experts only as Q4_K, Q5_K, Q6_K, Q5_1 or Q8_0 and the n-gram table only as IQ4_NL, Q8_0 or BF16 (see [smaller quants](gufo-extensions.md#smaller-flash-next-quants)). Header scans on November 15:
+**Gufo 0.34.0 without the optional IQ extension** loads Flash-Next experts only as Q4_K, Q5_K, Q6_K, Q5_1 or Q8_0 and the n-gram table only as IQ4_NL, Q8_0 or BF16 (see [smaller quants](gufo-extensions.md#smaller-flash-next-quants)). Header scans on November 15:
 
 | Repository | Size | Loads | Notes |
 |---|---|---|---|
@@ -68,9 +75,9 @@ A gated source needs `HF_TOKEN` (see the README) with access to public gated rep
 | mradermacher/Qwen3.8-Flash-Next-Uncensored-GGUF and -i1-GGUF | 110.96 GiB (Q4_K_M) | No | Q5_0 experts and n-gram table, Q4_K embeddings |
 | orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF | 110.97 GiB (Q4_K_M) | No | Gated. Q4_K_M has Q5_0 down experts and n-gram table, Q4_K embeddings and the four #780 tensors at Q4_K; IQ4_XS (90.77 GiB) uses IQ4_XS and IQ4_NL on the experts and most of the trunk, Q5_K on `attn_qkv` and `attn_v`, and a Q6_K output |
 
-huihui's `patch-unsloth` tool is the Gufo pick, [above](#gufo-huihui-patch-on-the-stock-file). It patches by tensor type, so it should also apply to the UD 3.1 files: their `ssm_out`, `attn_output` and `ffn_down_shexp` tensors are Q8_0 or Q6_K, and the patch carries Q8_0, Q6_K, Q5_K and BF16 entries. `gguf` 0.19.0 from PyPI, which ran the patch here, does not know GGML `Q2_0`, so patching UD 3.1 `UD-IQ4_XS` needs a `gguf` build that does.
+huihui's `patch-unsloth` tool is the Gufo pick, [above](#gufo-huihui-patch-on-the-stock-file). It patches by tensor type, so it should also apply to the UD 3.1 files: their `ssm_out`, `attn_output` and `ffn_down_shexp` tensors are Q8_0 or Q6_K, and the patch carries Q8_0, Q6_K, Q5_K and BF16 entries. `gguf` 0.19.0 from PyPI, which ran the patch here, does not know GGML `Q2_0`, so the IQ4_XS trial used pinned upstream `gguf-py` with Q2_0 support, as recorded above.
 
-Below `UD-Q4_K_XL`, Gufo needs the [`flash_next_iq` extension](gufo-extensions.md#community-options), which adds Unsloth's `UD-IQ4_XS` layouts to stock Gufo 0.34.0 at about 80.8 GiB of device memory by its README. huihui v2's `unsloth-UD-IQ4_XS` folder (87.25 GiB) matches Unsloth's October `UD-IQ4_XS` at `38bb39ee` type for type across all 1,224 tensors, and the extension lists that export as supported, so it is the abliterated candidate for that route; nobody reports running it. orcarouter's IQ4_XS is unlikely to load there: its dense trunk is IQ4_XS, Q5_K and IQ4_NL and the four #780 tensors are IQ4_XS, while the extension's trunk code takes F32, Q8_0 and Q6_K.
+Below `UD-Q4_K_XL`, Gufo needs the [`flash_next_iq` extension](gufo-extensions.md#community-options), which adds Unsloth's `UD-IQ4_XS` layouts to stock Gufo 0.34.0 at 72.64 GiB measured here with one session (the publisher’s 80.8 GiB figure used two). huihui v2's `unsloth-UD-IQ4_XS` folder (87.25 GiB) matches Unsloth's October `UD-IQ4_XS` at `38bb39ee` type for type across all 1,224 tensors, and the extension lists that export as supported, but that downloadable October candidate remains untested here; the validated profile instead patches the pinned UD 3.1 stock files locally. orcarouter's IQ4_XS is unlikely to load there: its dense trunk is IQ4_XS, Q5_K and IQ4_NL and the four #780 tensors are IQ4_XS, while the extension's trunk code takes F32, Q8_0 and Q6_K.
 
 The most downloaded abliterated builds fit neither engine. [SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF](https://huggingface.co/SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF) transplants orcarouter's tensors into GSQ-RCO quants; even its largest tier, IQ3_S, contains IQ3_XXS, IQ2_S and Q2_0 tensors, which stock Gufo's expert list excludes and Halogen refuses by name (the IQ2 family). [agentionai/Qwen3.8-Flash-Next-Gyro-abliterated-Huihui-GGUF](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-abliterated-Huihui-GGUF) uses trellis types that need Strata, strix-llama.cpp or agentionai's llama.cpp. Neither was checked against the `flash_next_iq` extension.
 

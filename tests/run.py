@@ -232,6 +232,35 @@ else:
         else:
             assert "STRIX_MODELS_DIR=/models/trial/strixw" in launch
     assert run("gufo", "start", WEIGHTS="trial").returncode == 0
+    # IQ profiles require an installed module for this exact image; ordinary profiles never mount it.
+    calls.unlink()
+    result = run("gufo", "start", "--weights", "iq4-xs")
+    assert result.returncode == 1 and "IQ extension missing" in result.stderr, result
+    assert not any(call[0] == "run" for call in recorded())
+    store = Path(subprocess.check_output(["python", str(temp / "bin/weights.py"), "gufo", "extension", "iq4-xs"], env=env, text=True).strip())
+    modules = store / "flash_next_iq/modules"
+    modules.mkdir(parents=True)
+    (modules / "fixture.so").touch()
+    (store / "installed.json").write_text(json.dumps({"schema": 1, "extensions": [{"name": "flash_next_iq"}]}))
+    calls.unlink()
+    assert run("gufo", "start", "--weights", "iq4-xs").returncode == 0
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert f"{store}:/extensions:ro" in launch and "GUFO_EXTENSIONS_DIR=/extensions" in launch
+    assert "--userns=keep-id:uid=1000,gid=1000" in launch
+    assert launch[launch.index("--mtp-model") + 1].endswith("/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf")
+    assert not any(arg in ("--privileged", "--security-opt", "--user") for arg in launch)
+    calls.unlink()
+    assert run("gufo", "start").returncode == 0
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert not any("/extensions" in arg or "GUFO_EXTENSIONS_DIR" in arg for arg in launch)
+    pins = temp / "config/pins.env"
+    original_pins = pins.read_text()
+    pins.write_text(original_pins.replace("GUFO_IMAGE=", "OLD_GUFO_IMAGE=") + "\nGUFO_IMAGE=example@sha256:" + "f" * 64 + "\n")
+    calls.unlink()
+    result = run("gufo", "start", "--weights", "iq4-xs")
+    assert result.returncode == 1 and "IQ extension missing" in result.stderr
+    assert not any(call[0] == "run" for call in recorded())
+    pins.write_text(original_pins)
     for args, overrides in ((("gufo", "start", "--weights", "../default"), {}),
                             (("gufo", "start", "--weights", "trial"), {"GUFO_MODEL": "trial/model-00001-of-00004.gguf"})):
         calls.unlink(missing_ok=True)

@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,8 @@ def profiles(engine: str) -> dict:
                 relative(entry[key])
         if not entry.get('model') or not entry.get('manifest'):
             raise ValueError(f'Incomplete weight profile: {name}')
+        if entry.get('extension') and (engine != 'gufo' or entry['extension'] != 'flash_next_iq'):
+            raise ValueError(f'Unsupported extension for {engine}/{name}')
     return entries
 
 
@@ -37,11 +40,33 @@ def profile(engine: str, name: str) -> dict:
         raise ValueError(f'Unknown weight profile {engine}/{name}') from None
 
 
+def extension_store(entry: dict) -> Path | None:
+    """Keep native modules separate from prompt caches and tied to the exact engine image."""
+    if not entry.get('extension'):
+        return None
+    pins = dict(item.split('=', 1) for item in shlex.split((ROOT / 'config/pins.env').read_text(), comments=True))
+    cache = Path(os.environ.get('CACHE_ROOT') or Path.home() / '.cache/strix-halo-inference')
+    return cache / 'gufo-extensions' / pins['GUFO_IMAGE'].split('@sha256:')[1] / pins['GUFO_IQ_REVISION']
+
+
+def extension_ready(entry: dict) -> bool:
+    store = extension_store(entry)
+    if store is None:
+        return True
+    try:
+        installed = json.loads((store / 'installed.json').read_text())
+        return (installed.get('schema') == 1
+                and [item['name'] for item in installed['extensions']] == ['flash_next_iq']
+                and any((store / 'flash_next_iq/modules').glob('*.so')))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def available(entry: dict) -> bool:
     """Fast presence/size check, matching models.sh check; full hashes are verified separately."""
     try:
         rows = (ROOT / 'config' / entry['manifest']).read_text().splitlines()
-        return bool(rows) and all((MODELS / entry.get('directory', '') / relative(row.split('\t')[2])).stat().st_size == int(row.split('\t')[1]) for row in rows)
+        return extension_ready(entry) and bool(rows) and all((MODELS / entry.get('directory', '') / relative(row.split('\t')[2])).stat().st_size == int(row.split('\t')[1]) for row in rows)
     except (OSError, ValueError, IndexError):
         return False
 
@@ -56,8 +81,13 @@ if __name__ == '__main__':
             entry = profile(engine, args[0])
             # One field per line: Bash reads this without evaluating configuration as shell code.
             if action == 'launch':
+                if not extension_ready(entry):
+                    raise ValueError('Gufo IQ extension missing for the pinned image. See docs/gufo-extensions.md before installing.')
                 for key in ('model', 'mtp'):
                     print(entry.get(key, ''))
+                print(extension_store(entry) or '')
+            elif action == 'extension':
+                print(extension_store(entry) or '')
             elif action == 'manifest':
                 print(entry.get('directory', ''))
                 print(entry['manifest'])

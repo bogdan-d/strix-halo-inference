@@ -96,6 +96,8 @@ From the target project:
 pi --provider gufo --model qwen3.8-flash-next --thinking xhigh
 ```
 
+Choose weights in the dashboard before starting the engine, or pass `--weights PROFILE` to the launcher. Pi’s provider and API model names stay the same across weight profiles; `/model` selects the engine, not its checkpoint. Finish or cancel the current request before stopping the engine to change weights. See [weight profiles](weight-profiles.md) for the available variants and validation status.
+
 Do not run the engines together. The launchers enforce this restriction. Each uses one active inference slot with MTP enabled. Do not launch parallel coding agents against the same engine for the initial comparison. Pi does not start or stop the containers for you.
 
 ## Select Strixite
