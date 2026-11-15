@@ -18,6 +18,8 @@ h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .02em; }
 #error, #notice { color: var(--bad); }
 .controls { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); }
 .controls label, .group { display: flex; align-items: center; gap: 6px; }
+#weights { flex-wrap: wrap; gap: 6px 14px; }
+#weights select { max-width: min(320px, 60vw); }
 #helper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; color: var(--muted); }
 select, button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
 button { padding: 3px 10px; cursor: pointer; }
@@ -77,6 +79,7 @@ body.logs { padding-bottom: 34vh; }
   <div id="helper" hidden>
     <span class="group">Monitoring <span id="monitoring" class="chip"></span><button id="monitor"></button></span>
     <span class="group">Engine <span id="engines" class="group"></span><button id="npu">Halogen + NPU</button><button id="stop">Stop</button></span>
+    <span id="weights" class="group"></span>
     <span class="group">Cache <span id="caches" class="group"></span></span>
   </div>
   <span id="notice"></span>
@@ -429,8 +432,8 @@ replaced by the panel's window, else by a window derived from the scrape interva
 /** @typedef {{metric: Record<string, string>, value: [number, string], values: [number, string][]}} Sample */
 /** @typedef {{start: number, end: number, step: number, instantWindow: string, rangeWindow: string}} Context */
 /** @typedef {{el: HTMLElement, refresh: (context: Context) => Promise<unknown>}} Mounted */
-/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping"|"clearing", since: number}} Engine */
-/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string, caches: Record<string, number>}} State */
+/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping"|"clearing", since: number, weights: string|null}} Engine */
+/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string, caches: Record<string, number>, weights: Record<string, {id: string, label: string, available: boolean}[]>}} State */
 
 // True when bin/dashboard.py serves this page. It also runs the commands behind the buttons; opened as a file, the page only reads.
 const HELPER = location.protocol !== "file:";
@@ -747,13 +750,32 @@ function render() {
   for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("engines").childNodes)) {
     const engine = state?.engines[el.dataset.id ?? ""], name = SOURCES.find(source => source.id === el.dataset.id)?.name;
     const shown = engine?.state === "starting" && engine.since ? `loading ${Math.max(0, Math.round(Date.now() / 1000 - engine.since))} s` : engine?.state;
-    el.textContent = engine && engine.state !== "stopped" ? `${name} · ${shown}` : name ?? "";
+    el.textContent = engine && engine.state !== "stopped" ? `${name} · ${engine.weights ?? "unknown"} · ${shown}` : name ?? "";
     el.className = engine && engine.state !== "stopped" ? "on" : "";
     // One engine at a time: starting another needs an explicit stop first.
     el.disabled = !state || !!running;
   }
+  for (const engine of config.engines) {
+    const select = /** @type {HTMLSelectElement} */ (byId(`weights-${engine.job}`));
+    const entries = state?.weights[engine.job] ?? [];
+    const signature = JSON.stringify(entries);
+    if (select.dataset.entries !== signature) {
+      const previous = select.value || localStorage.getItem(`strix.weights.${engine.job}`) || "default";
+      select.replaceChildren(...entries.map(entry => {
+        const option = new Option(`${entry.label}${entry.available ? "" : " (not installed)"}`, entry.id);
+        option.disabled = !entry.available;
+        return option;
+      }));
+      select.value = entries.some(entry => entry.id === previous) ? previous : "default";
+      select.dataset.entries = signature;
+    }
+    select.disabled = !state || !!running;
+    const chosen = entries.find(entry => entry.id === select.value);
+    const start = /** @type {HTMLButtonElement} */ (byId("engines").querySelector(`[data-id="${engine.job}"]`));
+    start.disabled ||= !chosen?.available;
+  }
   const npu = /** @type {HTMLButtonElement} */ (byId("npu"));
-  npu.disabled = !state || !!running;
+  npu.disabled = !state || !!running || !state.weights.halogen.some(entry => entry.id === selectedWeights("halogen") && entry.available);
   npu.title = state ? `Start Halogen with NPU models ${state.npu_models}` : "";
   for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("caches").childNodes)) {
     const id = el.dataset.id ?? "", engine = state?.engines[id], size = state ? format(state.caches[id] ?? 0, "bytes").join(" ") : "";
@@ -860,13 +882,26 @@ function closeLogs() {
   document.body.classList.remove("logs");
 }
 
+/** @param {string} engine */
+function selectedWeights(engine) {
+  return /** @type {HTMLSelectElement} */ (byId(`weights-${engine}`)).value;
+}
+
 if (HELPER) {
+  for (const engine of config.engines) {
+    const label = h("label", "group", `${engine.name} weights`);
+    const select = document.createElement("select");
+    select.id = `weights-${engine.job}`;
+    select.addEventListener("change", () => { localStorage.setItem(`strix.weights.${engine.job}`, select.value); render(); });
+    label.append(select);
+    byId("weights").append(label);
+  }
   byId("helper").hidden = byId("logs").hidden = false;
   byId("engines").append(...config.engines.map(engine => button(engine.job, engine.name, async () => {
     // Open the log at once, so a failed start is visible.
-    if (await act(`/engine/${engine.job}/start`)) tail(engine.job);
+    if (await act(`/engine/${engine.job}/start/${selectedWeights(engine.job)}`)) tail(engine.job);
   })));
-  byId("npu").addEventListener("click", async () => { if (await act("/engine/halogen/start-npu")) tail("halogen"); });
+  byId("npu").addEventListener("click", async () => { if (await act(`/engine/halogen/start-npu/${selectedWeights("halogen")}`)) tail("halogen"); });
   // Clearing deletes, so the first click only asks; a second click within five seconds clears.
   byId("caches").append(...config.engines.map(engine => button(engine.job, engine.name, () => {
     clearTimeout(unconfirm);

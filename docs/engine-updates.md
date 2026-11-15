@@ -1,8 +1,58 @@
 # Engine updates
 
+## November 15: UD 3.1 weights and selectable profiles
+
+Gufo's default weights moved from the October export to Unsloth UD 3.1 `UD-Q4_K_XL`, revision `d96201194f103c906994f283f504209dc8d2a10c`. The four shards total 111,334,654,778 bytes; the existing shared Q8_0 MTP head is unchanged. The revision, sizes and SHA-256 values were rechecked against Hugging Face and [Gufo 0.34.0's model guide](https://github.com/gufo-org/gufo/blob/v0.34.0/docs/models/qwen3.8-flash-next.md). `config/pins.env` and `config/gufo-files.tsv` hold the pins. Image versions and host settings did not change.
+
+The downloader fetched and individually verified every shard, then encountered a shell-offset error because its script was edited while the original Bash process was still running. A fresh invocation of the completed downloader and a separate `bin/models.sh verify gufo` both succeeded against the final files; nothing needed redownloading.
+
+### Profiles and launcher
+
+[The shared catalog](../config/weights.json) now supplies named weight profiles to all three launchers and the dashboard. `bin/run.sh ENGINE weights` lists availability; `start --weights PROFILE --wait` selects a profile. Gufo has `default` and `abliterated`, both based on UD 3.1. Halogen and Strixite retain their existing default packages. Profile manifests can name independently pinned download sources, so later trials and lower quants need catalog entries rather than another hardcoded launcher path. Engine compatibility and extension support still need separate validation.
+
+The dashboard marks missing profiles, remembers a selection per engine, and shows the running container's actual profile. Switching requires an explicit stop. Each profile has its own `CACHE_ROOT/ENGINE/PROFILE` prompt cache; existing caches directly under the engine directory remain on disk but are not reused. Cache clear still clears the entire chosen engine. Endpoints remain loopback-only, weights remain read-only in containers, and the one-engine startup lock is unchanged. See [weight profiles](weight-profiles.md).
+
+### UD 3.1 patch
+
+The same reviewed huihui patch, key and script from the [earlier trial](#november-15-trial-huihui-patch-on-the-stock-gufo-file) were hash-verified again. They remain pinned at `cbc7fba13f1939ac3fa42b18d77ccf43847d74ef`. A temporary Python environment used `gguf==0.19.0` and `tqdm==4.70.1` with wheel hashes `70bcd10edfe697fb2dad6e40af2234b9d8ece9a41a99761405121ebda1c3c1cd` and `c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73`, respectively, plus system NumPy 2.5.4.
+
+Bubblewrap ran with `--unshare-all --die-with-parent --new-session`, no network or home directory, read-only software and inputs, and only the new output directory persistently writable. `/in` was the new `unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL` directory; `/patch` was the existing huihui `patch-unsloth` directory; `/out` was the new `huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patched-unsloth-UD-Q4_K_XL-d9620119` directory, all under `/home/bogdan/models`. The exact patch command inside that sandbox was:
+
+```bash
+/venv/bin/python -I /patch/patch-unsloth-Qwen3.8-Flash-Next-dec.py \
+  --input-path /in --patch-path /patch/patch-unsloth-all --output-path /out \
+  --start-layer 0 --end-layer 48 --ablate-experts 2
+```
+
+The patch replaced 96 Q8_0 tensors: 36 `ssm_out`, 12 `attn_output` and 48 `ffn_down_shexp`, with no missing-entry or type-mismatch warnings. Its notice about 180 unused entries is expected because the patch also carries other tensor formats. `verify_patch.py` then ran with both directories read-only: all 1,224 tensor names, types, shapes and sizes and every metadata field matched; exactly the intended 96 tensors changed, with no other differences in tensor content. The metadata-only first shard gained six trailing zero alignment bytes (10,946,618 to 10,946,624 bytes); its original prefix is byte-identical. The n-gram shard is byte-identical to stock. [The patched manifest](../config/weights/gufo-abliterated.tsv) records every output's size and SHA-256, plus the unchanged shared MTP head.
+
+### Local checks
+
+All starts used native 262144 context and MTP on. Engines ran one at a time, with a stop and memory-release check before switching. The October stock model was measured once more before removal on the same hash-table prompt, thinking off, temperature zero, 400 output tokens, two measured requests. The new stock and patched models used that same prompt and settings.
+
+| Check | October stock baseline | UD 3.1 default | UD 3.1 abliterated |
+|---|---|---|---|
+| Ready and generation | Pass | Pass | Pass |
+| Conversation, named/streamed tools, disconnect and generation after cancellation | Previously validated; not rerun for baseline | Pass | Pass |
+| Startup GPU allocation | 89.12 GiB | 89.12 GiB | 89.12 GiB |
+| Host MemAvailable at status | 27.38 GiB | 29.30 GiB | 28.03 GiB |
+| Refusal probes, thinking off | Earlier trial: 5 refused | 5 refused | 5 answered |
+| Case-sensitive tool identifiers | Earlier trial: 5/5 | 5/5 | 5/5 |
+| Decode, two 400-token requests | 43.29, 43.74 tok/s | 43.87, 41.58 tok/s | 49.39, 49.41 tok/s |
+
+Decode is Gufo's `timings.predicted_per_second`, not end-to-end throughput. These are exploratory samples, not a performance ranking: the patched model writes different text and accepts more draft tokens (239 of 359 versus stock's 206 of 351). Stock and patched live tests each assembled four tool-argument fragments successfully. No Gufo warning or error was logged. Raw prompts and replies remain outside the repository; the refusal results use the existing probe's opening-text classifier, not a broader safety or quality evaluation.
+
+After both UD 3.1 runs, MemAvailable returned to about 120 GiB and GTT to about 1.08 GiB. Some desktop pages remained swapped out (about 2.1 GiB after the last run); available RAM was restored, and swap/kernel settings were not changed. At the user's explicit request, both October weight directories were deleted after validation, along with the temporary October comparison cache. The shared MTP head, huihui patch inputs and both UD 3.1 profiles remain.
+
+Halogen and Strixite also passed readiness, smoke generation and their existing live conversation/tool/cancellation checks through the new default-profile launcher, then stopped. Halogen repeated its known low-contiguous-memory warning (234 free 2 MiB blocks after weights were pinned), with 20-second startup; no host tuning was applied. Strixite emitted one expected warning for the test that deliberately truncates a tool call. The launcher still prints its existing non-crun notice; the host's direct GPU device access worked.
+
+Offline validation passed shell syntax, ShellCheck, `tests/models.sh`, `tests/run.py`, `tests/status.py`, `tests/cache.py`, `tests/dashboard.py`, `tests/weights.py`, JavaScript syntax and `git diff --check`. Live dashboard backend checks correctly identified a CLI-started Halogen default and Gufo abliterated container, and both installed Gufo profiles. No engine, monitoring container or dashboard helper was left running.
+
+Not exercised: browser rendering of the new selectors, thinking-on quality, long-context workloads, images, Pi sessions, perplexity/KL, smaller quants or extension loading. Existing model-specific limitations still apply.
+
 ## November 15 trial: huihui patch on the stock Gufo file
 
-An abliterated copy of the pinned `UD-Q4_K_XL` was made with huihui's patch and run on Gufo 0.34.0. Pins, images and the default model are unchanged; the copy is selected only with `GUFO_MODEL` (README, First run). Plan and ticket: `.scratch/abliterated-trials/issues/04-gufo-huihui-patch.md`.
+Historical trial; both October copies described below were superseded and deleted after the UD 3.1 validation above. An abliterated copy of the then-pinned `UD-Q4_K_XL` was made with huihui's patch and run on Gufo 0.34.0. Pins, images and the default model are unchanged; the copy is selected only with `GUFO_MODEL` (README, First run). Plan and ticket: `.scratch/abliterated-trials/issues/04-gufo-huihui-patch.md`.
 
 ### Patch files
 

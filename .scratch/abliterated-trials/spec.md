@@ -2,7 +2,7 @@
 
 ## Goal
 
-Move Gufo to Unsloth's UD 3.1 `UD-Q4_K_XL`, then try an abliterated Flash-Next on each engine, cheapest and best-evidenced first. Drafted November 15, 2026, to run later, once the VPN is off and downloads are fast. Nothing here is downloaded, provisioned or run yet.
+Move Gufo to Unsloth's UD 3.1 `UD-Q4_K_XL`, then try an abliterated Flash-Next on each engine, cheapest and best-evidenced first. Drafted November 15, 2026. Ticket 04 completed on the October weights; ticket 01 is complete on UD 3.1, with the user requesting named weight profiles and deletion of both superseded October copies after validation.
 
 Background and sources are in [abliterated builds](../../docs/abliterated-models.md) and [Gufo memory, smaller quants and extensions](../../docs/gufo-extensions.md). Pins, sizes and hashes below were read from the Hugging Face API on November 15; recheck them before downloading.
 
@@ -22,7 +22,7 @@ Tickets 01 to 06 total about 402 GB, roughly 8.6 hours at the 13 MB/s measured t
 
 ## Disk
 
-`/home/bogdan/models` is btrfs with 2.5 TB free. Beyond the downloads, the patch in tickets 04 and 05 writes full copies of what it patches (about 111 GB and 94 GB), so budget about 610 GB of new space, or 660 GB if ticket 06 needs the second n-gram table. The October shards (111 GB) also stay on disk until the user approves deleting them. Where a trial needs a file that is already on disk under another name, use `cp --reflink=always`, which costs no space on btrfs, then verify the copy's SHA-256.
+`/home/bogdan/models` is btrfs with 2.5 TB free. Beyond the downloads, the patch in tickets 04 and 05 writes full copies of what it patches (about 111 GB and 94 GB), so budget about 610 GB of new space, or 660 GB if ticket 06 needs the second n-gram table. The user approved deleting both October copies during ticket 01; they were removed after the UD 3.1 replacements passed validation. Where a trial needs a file that is already on disk under another name, use `cp --reflink=always`, which costs no space on btrfs, then verify the copy's SHA-256.
 
 ## Constraints
 
@@ -51,7 +51,7 @@ Abliterated trials add the two checks below, both run by [probe.py](probe.py); [
 
 ## Launcher and manifest changes
 
-`bin/run.sh` hardcodes each engine's model paths and `bin/models.sh` accepts only the four pinned manifests, so trials need two small additions. Each ticket adds only what its engine needs:
+The original plan below described missing launcher support. Ticket 01 now adds shared `config/weights.json` profiles, `bin/run.sh ENGINE start --weights PROFILE`, per-profile caches, alternative manifests with pinned source paths, and dashboard selection for all engines. Follow `docs/weight-profiles.md`; later tickets register their files there instead of adding competing override mechanisms. Extension loading remains ticket 05 work. Original requirements:
 
 - **Trial manifests** (ticket 02): let `bin/models.sh download|verify|check` handle a manifest whose lines name their own repository and revision, as the NPU manifest already does, so trial files are pinned in `config/` like everything else.
 - **Halogen** (ticket 02): an explicit checkpoint override. Halogen finds the n-gram table beside the checkpoint, and the launcher takes the tokenizer and vision paths from the same directory, so a trial directory holds the trial checkpoint plus reflink copies of the stock companions.
@@ -66,6 +66,6 @@ None of these needs bandwidth: the launcher and manifest changes above with thei
 
 ## Open decisions
 
-- **October `UD-Q4_K_XL` shards:** delete after ticket 01 passes, or keep (111 GB)? Default: keep, moved aside, until told.
+- **October `UD-Q4_K_XL` shards:** delete after ticket 01 passes, or keep (111 GB)? User decision during ticket 01: delete both October stock and patched copies after the UD 3.1 replacements pass validation.
 - **Extension source:** if [gufo-extension#11](https://github.com/gufo-org/gufo-extension/pull/11) has not merged, ticket 05 installs unreviewed native code from a pinned commit. Confirm before installing.
-- **After the trials:** whether any abliterated build becomes a regular launcher option is decided from the results, not here.
+- **After the trials:** the user requested regular named weight profiles during ticket 01; Gufo now offers validated UD 3.1 `default` and `abliterated`. Other engines' trial profiles still require their own provisioning and validation.

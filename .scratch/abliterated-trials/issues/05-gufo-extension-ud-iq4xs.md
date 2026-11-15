@@ -31,3 +31,5 @@ Known risk: the extension's README says the weight upload fails under Docker unl
 - [ ] Results go in `docs/engine-updates.md`, `docs/gufo-extensions.md` and `docs/abliterated-models.md`.
 
 ## Comments
+
+- November 15: ticket 01 also supplies shared CLI/dashboard weight profiles and alternative download manifests at the user's request. Register this trial in `config/weights.json` and follow `docs/weight-profiles.md`; model and Gufo MTP selection now come from the profile. Extension installation/loading still needs its own implementation and validation.

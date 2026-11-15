@@ -24,3 +24,5 @@ It goes in the r2 directory and uses the same companion files.
 The stock HT43 checkpoint is not on disk. Without it, a perplexity gap to r2 cannot be split between HT43 itself and the abliteration; download peonist's `qwen38-flash-next-ht43.hgn` (57.6 GB) only if that question matters.
 
 ## Comments
+
+- November 15: ticket 01 also supplies shared CLI/dashboard weight profiles and alternative download manifests at the user's request. Register this trial in `config/weights.json` and follow `docs/weight-profiles.md`; model and Gufo MTP selection now come from the profile. Extension installation/loading still needs its own implementation and validation.

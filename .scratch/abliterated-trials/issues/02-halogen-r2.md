@@ -23,3 +23,5 @@ Put it in `/home/bogdan/models/Quat3rnion/halogen-qwen3.8-flash-next-v2-ablitera
 - [ ] Results are recorded in `docs/engine-updates.md`, and the r2 status in `docs/abliterated-models.md` is updated from "author-tested on 0.15.0 only".
 
 ## Comments
+
+- November 15: ticket 01 also supplies shared CLI/dashboard weight profiles and alternative download manifests at the user's request. Register this trial in `config/weights.json` and follow `docs/weight-profiles.md`; model and Gufo MTP selection now come from the profile. Extension installation/loading still needs its own implementation and validation.

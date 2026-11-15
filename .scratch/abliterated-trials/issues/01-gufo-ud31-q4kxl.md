@@ -4,7 +4,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Pin `GUFO_REVISION=d96201194f103c906994f283f504209dc8d2a10c`, the revision Gufo's docs and CI use. The four shards are byte-identical at Unsloth's `main` on November 15 (`f5d175de2cf7f720d45d6064019a81fcf056e986`).
 
@@ -18,15 +18,19 @@ Pin `GUFO_REVISION=d96201194f103c906994f283f504209dc8d2a10c`, the revision Gufo'
 
 The new shards have the same file names as the October ones, and `bin/models.sh` never overwrites an existing file. Rename the October directory first, for example to `UD-Q4_K_XL.october-38bb39ee/` beside it, and leave it there. Shard 4 now holds only the n-gram table and is shared with the other UD 3.1 quants (ticket 05 reuses it).
 
-- [ ] No managed engine is running, and the October `UD-Q4_K_XL` directory is renamed, not deleted.
-- [ ] `config/pins.env` and `config/gufo-files.tsv` carry the revision and the rows above, and `tests/models.sh` passes.
-- [ ] `bin/models.sh download gufo` then `bin/models.sh verify gufo` succeed (111.3 GB).
-- [ ] Trial checks 2 to 6 from the [spec](../spec.md#trial-checks) pass with `gufo`.
-- [ ] The startup allocation is recorded against the 89.12 GiB measured on November 14, and decode speed against the October file on the same prompt.
-- [ ] `docs/engine-updates.md` records the change, and every doc that names the October revision as current is updated (`grep -rn 38bb39ee README.md docs`).
-- [ ] The huihui patch from ticket 04 is re-applied to the UD 3.1 shards (no download, under a minute), checked with `verify_patch.py` and `probe.py gufo`, and recorded. The copy patched from the October file is then superseded.
-- [ ] The user has decided whether the October shards, and the copy patched from them (111 GB), are deleted or kept.
+- [x] No managed engine is running, and the October `UD-Q4_K_XL` directory is renamed, not deleted.
+- [x] `config/pins.env` and `config/gufo-files.tsv` carry the revision and the rows above, and `tests/models.sh` passes.
+- [x] `bin/models.sh download gufo` then `bin/models.sh verify gufo` succeed (111.3 GB).
+- [x] Trial checks 2 to 6 from the [spec](../spec.md#trial-checks) pass with `gufo`.
+- [x] The startup allocation is recorded against the 89.12 GiB measured on November 14, and decode speed against the October file on the same prompt.
+- [x] `docs/engine-updates.md` records the change, and every doc that names the October revision as current is updated (`grep -rn 38bb39ee README.md docs`).
+- [x] The huihui patch from ticket 04 is re-applied to the UD 3.1 shards (no download, under a minute), checked with `verify_patch.py` and `probe.py gufo`, and recorded. The copy patched from the October file is then superseded.
+- [x] The user has decided whether the October shards, and the copy patched from them (111 GB), are deleted or kept.
 
-Rollback: restore the two config files and rename the directory back.
+Rollback after the user-requested cleanup requires restoring the October pin/manifest and downloading that revision again; no October weight copy remains.
 
 ## Comments
+
+- November 15, in progress: upstream revision and all five hashes rechecked against Hugging Face and Gufo v0.34.0's current model guide. Download started after moving the October directory aside with no engines active. User also requested shared CLI/dashboard profiles for per-engine weight selection, including future lower quants. User then explicitly requested deleting both October copies; they will be removed after UD 3.1 stock and patched validation.
+
+- Completed November 15: both UD 3.1 profiles passed hash/layout, native-256K MTP readiness/generation, live conversation/tools/cancellation, exact identifiers and comparison probes. Both retain 89.12 GiB startup allocation. The stock model refused all five probes; the patched model answered all five. Both October directories were deleted as requested after validation, and all engines were stopped. Shared named profiles, download manifests, isolated profile caches, dashboard selectors, tests and docs are implemented. Full results and limitations are in `docs/engine-updates.md` (UD 3.1 update).

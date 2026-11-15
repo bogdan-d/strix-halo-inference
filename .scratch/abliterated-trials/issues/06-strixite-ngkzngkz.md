@@ -32,3 +32,5 @@ First attempt: a new model directory with the downloaded files plus a reflink co
 Strixite rejects named-tool selection and `required`, so check 8 uses `tool_choice: auto`, as `tests/strixite_live.py` does.
 
 ## Comments
+
+- November 15: ticket 01 also supplies shared CLI/dashboard weight profiles and alternative download manifests at the user's request. Register this trial in `config/weights.json` and follow `docs/weight-profiles.md`; model and Gufo MTP selection now come from the profile. Extension installation/loading still needs its own implementation and validation.

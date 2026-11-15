@@ -21,10 +21,14 @@ with tempfile.TemporaryDirectory(prefix="strix-dashboard-") as directory:
     calls = temp / "calls"
     viewer = temp / "viewer"
     shutil.copy(ROOT / "bin/dashboard.py", temp / "bin/dashboard.py")
+    shutil.copy(ROOT / "bin/weights.py", temp / "bin/weights.py")
+    shutil.copy(ROOT / "config/weights.json", temp / "config/weights.json")
     (temp / "config/monitoring/dashboard.html").write_text("fixture page")
     stub = '''#!/usr/bin/env python3
 import json, os, sys, time
 a = sys.argv[1:]
+if a[-1] != "--follow":
+    assert "GUFO_MODEL" not in os.environ and "WEIGHTS" not in os.environ
 with open(os.environ["CALLS"], "a") as output:
     output.write(json.dumps([os.path.basename(sys.argv[0]), *a] + [f"NPU_MODELS={value}" for value in [os.environ.get("NPU_MODELS")] if value]) + "\\n")
 if a[-1] == "--follow":
@@ -50,7 +54,7 @@ else:
     (temp / "cache/halogen").mkdir(parents=True)
     (temp / "cache/halogen/entry").write_bytes(b"x" * 8192)
     env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls), VIEWER=str(viewer), DASHBOARD_PORT=str(port),
-               DASHBOARD_NPU_MODELS="decider-0.8b", CACHE_ROOT=str(temp / "cache"))
+               DASHBOARD_NPU_MODELS="decider-0.8b", WEIGHTS="wrong-inherited-profile", GUFO_MODEL="wrong-inherited-file.gguf", CACHE_ROOT=str(temp / "cache"))
     env.pop("NPU_MODELS", None)
     helper = subprocess.Popen(["python3", str(temp / "bin/dashboard.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -73,11 +77,13 @@ else:
         assert request("GET", "/")[:2] == (200, "fixture page")
         status, body, _ = request("GET", "/state")
         current = json.loads(body)
+        weights = current.pop("weights")
+        assert [entry["id"] for entry in weights["gufo"]] == ["default", "abliterated"]
         caches = current.pop("caches")
         assert caches["halogen"] >= 8192 and caches["gufo"] == caches["strixite"] == 0, caches
         assert status == 200 and current == {
             "monitoring": "off", "logs": [], "npu_models": "decider-0.8b",
-            "engines": {engine: {"state": "stopped", "since": 0} for engine in ("halogen", "gufo", "strixite")}}, body
+            "engines": {engine: {"state": "stopped", "since": 0, "weights": None} for engine in ("halogen", "gufo", "strixite")}}, body
         # Other sites' pages, rebound host names and requests without this page's origin never reach a command.
         for method, path, headers in (
                 ("GET", "/state", {"Host": "evil.example"}),
@@ -89,13 +95,15 @@ else:
                 ("POST", "/engine/halogen/start-npu", {"Origin": "http://evil.example"})):
             status, _, recorded = request(method, path, **headers)
             assert status == 403 and not recorded, (method, path, headers, status, recorded)
-        for method, path in (("POST", "/engine/halogen/pull"), ("POST", "/engine/other/start"), ("POST", "/engine/halogen/start/x"), ("POST", "/engine/gufo/start-npu"),
+        for method, path in (("POST", "/engine/gufo/start/unknown"), ("POST", "/engine/gufo/start/../../x"), ("POST", "/engine/halogen/pull"), ("POST", "/engine/other/start"), ("POST", "/engine/halogen/start/x"), ("POST", "/engine/gufo/start-npu"),
                              ("POST", "/cache/other/clear"), ("GET", "/cache/halogen/clear"),
                              ("POST", "/monitoring/pull"), ("POST", "/logs/halogen"), ("GET", "/logs/grafana"),
                              ("GET", "/engine/halogen/start"), ("GET", "/../bin/run.sh")):
             status, _, recorded = request(method, path, Origin=origin)
             assert status == 404 and not recorded, (method, path, status, recorded)
         for path, expected in (("/engine/halogen/start", ["run.sh", "halogen", "start"]),
+                               ("/engine/gufo/start/abliterated", ["run.sh", "gufo", "start", "--weights", "abliterated"]),
+                               ("/engine/halogen/start-npu/default", ["run.sh", "halogen", "start", "--weights", "default", "NPU_MODELS=decider-0.8b"]),
                                ("/engine/halogen/start-npu", ["run.sh", "halogen", "start", "NPU_MODELS=decider-0.8b"]),
                                ("/engine/strixite/stop", ["run.sh", "strixite", "stop"]),
                                ("/cache/gufo/clear", ["cache.sh", "gufo", "clear"]),

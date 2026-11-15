@@ -22,7 +22,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 
 ## First run
 
-Requirements: Linux with accessible `/dev/kfd` and `/dev/dri`, rootless Podman, Bash, curl, Python 3, coreutils and `flock`. Model downloads need approximately 217 GiB in total, plus images, partial downloads and prompt caches. Existing model files are never deliberately overwritten. Halogen is a proprietary binary engine with a [free-use EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md). Model licenses apply separately.
+Requirements: Linux with accessible `/dev/kfd` and `/dev/dri`, rootless Podman, Bash, curl, Python 3, coreutils and `flock`. The default Halogen and Gufo downloads need approximately 217 GiB in total, plus images, partial downloads and prompt caches. Gufo's abliterated copy adds about 104 GiB, and the separate Strixite package about 114 GiB. Existing model files are never deliberately overwritten. Halogen is a proprietary binary engine with a [free-use EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md). Model licenses apply separately.
 
 Run from this checkout. Launcher commands take the engine first, then the action. Old action-first commands are rejected with a migration hint. Pull and diagnose each engine before downloading:
 
@@ -74,7 +74,22 @@ Use `bin/run.sh halogen start --wait` to wait for readiness and print the endpoi
 
 The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client.
 
-To try another GGUF on Gufo without changing the pins, set `GUFO_MODEL` to its first shard, relative to the models directory: `env GUFO_MODEL=publisher/model/file-00001-of-00004.gguf bin/run.sh gufo start`. It replaces only the model file; the MTP head, served model name and every other setting stay as pinned. Such a file is outside `bin/models.sh`'s manifests, so verify its hashes yourself and record where it came from.
+Select weights independently for each engine with a named profile. `default` remains the ordinary start; Gufo's default is Unsloth UD 3.1 `UD-Q4_K_XL` at revision `d96201194f103c906994f283f504209dc8d2a10c`, and `abliterated` selects its locally huihui-patched copy. List installed profiles, stop the current engine and start the chosen one:
+
+```bash
+bin/run.sh gufo weights
+bin/run.sh gufo stop
+bin/run.sh gufo start --weights abliterated --wait
+bin/run.sh gufo status
+bin/run.sh gufo smoke
+# After stopping it, switch back:
+bin/run.sh gufo stop
+bin/run.sh gufo start --weights default --wait
+```
+
+`WEIGHTS=PROFILE` is the equivalent environment setting; `--weights` takes precedence. The dashboard has the same per-engine selections, marks missing profiles and shows the running container's profile. Switching requires an explicit stop, so it cannot interrupt an active request silently. Profiles do not change the served API model name or client context settings. See [weight profiles](docs/weight-profiles.md) to register another quant or checkpoint with its manifest and matching companions.
+
+For an unmanaged Gufo experiment, `GUFO_MODEL=publisher/model/file-00001-of-00004.gguf bin/run.sh gufo start` still replaces only the model file and keeps the default shared MTP head. It cannot be combined with a non-default profile. This escape hatch checks the first file only; verify all shards yourself. Prefer a named profile for repeatable trials.
 
 Halogen and Strixite keep the attention cache in 8 bits by default, about 0.6 of the 16-bit cache's memory. Use `env KV8=off` for the 16-bit cache. Gufo has no such setting. Strixite reads images by default, which needs its `vision.strixw` and `preprocessor_config.json` from `bin/models.sh download strixite`. Use `env VISION=off` to load no vision encoder; image requests then get a 400. Strixite serves one conversation at a time by default; `env SLOTS=2`, up to 8, serves more at once, each able to grow to the full context. Halogen reads images only with `env VISION=on`, which loads its 0.84 GiB vision tower; without it image requests get a 400 and text behaves as before. The tower is part of Halogen's download, so an existing install needs `bin/models.sh download halogen` once before its next start. Images are `data:` URLs or bare base64; remote URLs are refused. Upstream measures about 5.5 seconds per 1280x800 image and 25 seconds at 2560x1440, the size larger images are scaled down to. Gufo stays text only: its projector is not downloaded.
 
@@ -211,11 +226,11 @@ Use the existing publisher/model directory convention:
 
 Downloads happen on the host before inference. The inference containers receive no automatic-download setting and mount the entire central directory read-only. Download locks are per model repository, so separate package downloads can run independently without two writers touching the same files. Override the host root with `MODELS_DIR` only when deliberately using another central store.
 
-Generated prompt caches live under `$HOME/.cache/strix-halo-inference/halogen` and `$HOME/.cache/strix-halo-inference/gufo`, each mounted writable at `/cache`. Override their parent with `CACHE_ROOT`. Disk caches are capped at 16 GiB per engine for the active configuration. Gufo additionally caps retained RAM snapshots at 2 GiB. Since 0.15.0 Gufo stages disk writes through a fixed 1 MiB buffer, so the launcher sets no staging limit. Since 0.20.1 Halogen also keeps the end of each reply in its RAM prompt cache by default, about 112 MiB a conversation and evicted like any other entry, so a conversation's next turn continues from the reply instead of processing it again. This replaced the `HALOGEN_FORK_MAP=auto` keep the launcher set before. A change to those settings starts Halogen's disk cache in a new directory; Halogen leaves the old one in place. These caches contain conversation state and must not be committed or shared between engines.
+Generated prompt caches live under `$HOME/.cache/strix-halo-inference/ENGINE/PROFILE`, each mounted writable at `/cache`. Each named weight profile has a separate directory; the unmanaged Gufo override uses `custom`. Older caches directly under the engine directory remain on disk but are not reused by this launcher. Override their parent with `CACHE_ROOT`. Disk caches are capped at 16 GiB per engine for the active configuration. Gufo additionally caps retained RAM snapshots at 2 GiB. Since 0.15.0 Gufo stages disk writes through a fixed 1 MiB buffer, so the launcher sets no staging limit. Since 0.20.1 Halogen also keeps the end of each reply in its RAM prompt cache by default, about 112 MiB a conversation and evicted like any other entry, so a conversation's next turn continues from the reply instead of processing it again. This replaced the `HALOGEN_FORK_MAP=auto` keep the launcher set before. A change to those settings starts Halogen's disk cache in a new directory; Halogen leaves the old one in place. These caches contain conversation state and must not be committed or shared between engines.
 
 `bin/cache.sh all status` shows each engine's cache size. `bin/cache.sh ENGINE clear` deletes that engine's cache files, and `all` clears all three; the next turn of every conversation then processes its whole prompt once. It refuses while the engine's container exists or a start is in progress, and keeps the empty directory the launcher mounts. Nothing is archived; `bin/update.py --fresh-cache` remains the archiving alternative. The dashboard's Cache buttons run the same command.
 
-Strixite creates its own `$HOME/.cache/strix-halo-inference/strixite` on first start, with a 16 GiB disk cap and an 8 GiB MemAvailable margin for retained RAM state. That margin is not a RAM-cache cap or a memory reservation. Its model store remains read-only, with all prompt state directed to `/cache`.
+Strixite creates its own `$HOME/.cache/strix-halo-inference/strixite/PROFILE` on first start, with a 16 GiB disk cap and an 8 GiB MemAvailable margin for retained RAM state. That margin is not a RAM-cache cap or a memory reservation. Its model store remains read-only, with all prompt state directed to `/cache`.
 
 Pre-existing empty directories and four `.ini` files under `/home/bogdan/models` are untouched. Only the selected Halogen, Gufo and Strixite repositories have received downloads.
 
@@ -232,6 +247,7 @@ python tests/run.py
 python tests/status.py
 PYTHONDONTWRITEBYTECODE=1 python tests/monitor.py
 PYTHONDONTWRITEBYTECODE=1 python tests/dashboard.py
+PYTHONDONTWRITEBYTECODE=1 python tests/weights.py
 PYTHONDONTWRITEBYTECODE=1 python tests/strixite_metrics.py
 ```
 

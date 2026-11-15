@@ -13,6 +13,8 @@ import subprocess
 import threading
 from urllib.request import ProxyHandler, build_opener
 
+from weights import profiles, available
+
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "config/monitoring/dashboard.html"
 RUN, MONITOR, CACHE = str(ROOT / "bin/run.sh"), str(ROOT / "bin/monitor.sh"), str(ROOT / "bin/cache.sh")
@@ -37,6 +39,12 @@ ACTIONS = {f"/engine/{engine}/{verb}": (engine, verb, [RUN, engine, verb]) for e
     f"/monitoring/{verb}": ("monitoring", verb, [MONITOR, verb]) for verb in ("start", "stop")}
 LOGS = {f"/logs/{engine}": [RUN, engine, "logs", "--follow"] for engine in ENGINES} | {
     f"/logs/{component}": [MONITOR, component, "logs", "--follow"] for component in COMPONENTS}
+PROFILES = {engine: profiles(engine) for engine in ENGINES}
+for engine, entries in PROFILES.items():
+    for name in entries:
+        ACTIONS[f"/engine/{engine}/start/{name}"] = (engine, "start", [RUN, engine, "start", "--weights", name])
+        if engine == "halogen":
+            ACTIONS[f"/engine/{engine}/start-npu/{name}"] = (engine, "start", ["env", f"NPU_MODELS={NPU_MODELS}", RUN, engine, "start", "--weights", name])
 ACTION_TIMEOUT = 180
 
 # Targets with a start, stop or cache clear in flight, so their state reads as starting, stopping or clearing meanwhile.
@@ -91,13 +99,15 @@ def state() -> dict[str, object]:
             current = "stopping"
         else:
             current = "ready" if healthy(health) else "starting"
-        engines[engine] = {"state": current, "since": container["StartedAt"] if container else 0}
+        engines[engine] = {"state": current, "since": container["StartedAt"] if container else 0,
+                           "weights": (container.get("Labels") or {}).get("io.strix-halo-inference.weights", "unknown") if container else None}
     running = sum(containers.get(f"strix-halo-monitor-{component}", {}).get("State") == "running" for component in COMPONENTS)
     monitoring = busy.get("monitoring") or {0: "off", len(COMPONENTS): "on"}.get(running, "partial")
     logs = [engine for engine in ENGINES if f"strix-halo-{engine}" in containers]
     logs += [component for component in COMPONENTS if f"strix-halo-monitor-{component}" in containers]
     caches = {engine: disk_bytes(CACHE_ROOT / engine) for engine in ENGINES}
-    return {"monitoring": monitoring, "engines": engines, "logs": logs, "npu_models": NPU_MODELS, "caches": caches}
+    weights = {engine: [{"id": name, "label": entry["label"], "available": available(entry)} for name, entry in entries.items()] for engine, entries in PROFILES.items()}
+    return {"weights": weights, "monitoring": monitoring, "engines": engines, "logs": logs, "npu_models": NPU_MODELS, "caches": caches}
 
 
 def sensors() -> list[tuple[int, float]]:
@@ -220,7 +230,8 @@ class Handler(BaseHTTPRequestHandler):
             BUSY[target] = {"start": "starting", "stop": "stopping", "clear": "clearing"}[verb]
         try:
             result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, timeout=ACTION_TIMEOUT)
+                                    text=True, timeout=ACTION_TIMEOUT,
+                                    env={key: value for key, value in os.environ.items() if key not in ("WEIGHTS", "GUFO_MODEL", "NPU_MODELS")})
             self.reply(200 if result.returncode == 0 else 409, result.stdout)
         except subprocess.TimeoutExpired:
             self.reply(504, f"No result after {ACTION_TIMEOUT} seconds. Inspect the {target} status in a terminal.\n")

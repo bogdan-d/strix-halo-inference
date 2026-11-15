@@ -18,6 +18,8 @@ with tempfile.TemporaryDirectory(prefix="strix-halo-run-") as directory:
     (temp / "bin").mkdir()
     (temp / "config").mkdir()
     shutil.copy(ROOT / "bin/run.sh", temp / "bin/run.sh")
+    shutil.copy(ROOT / "bin/weights.py", temp / "bin/weights.py")
+    shutil.copy(ROOT / "config/weights.json", temp / "config/weights.json")
     shutil.copy(ROOT / "config/pins.env", temp / "config/pins.env")
     shutil.copy(ROOT / "config/npu-files.tsv", temp / "config/npu-files.tsv")
     models = temp / "bin/models.sh"
@@ -123,7 +125,7 @@ else:
                         ("--vision", "on"), ("--kv-cache", "q8"), ("--total-slots", "1")):
         assert launch[launch.index(flag) + 1] == value, launch
     assert f"{env['MODELS_DIR']}:/models:ro" in launch
-    assert f"{env['CACHE_ROOT']}/strixite:/cache:rw" in launch
+    assert f"{env['CACHE_ROOT']}/strixite/default:/cache:rw" in launch
     assert "STRIX_MODELS_DIR=/models/wemoh/Qwen3.8-Flash-Next-strixw" in launch
     assert not any(arg in ("--privileged", "--security-opt", "--group-add", "--ipc=host") for arg in launch)
     assert not any("never-forward" in arg for arg in launch)
@@ -207,6 +209,34 @@ else:
     launch = next(call for call in recorded() if call[0] == "run")
     assert launch[launch.index("--model") + 1] == "/models/trial/model-00001-of-00004.gguf"
     assert launch[launch.index("--mtp-model") + 1].endswith("/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf")
+    # Named profiles choose the model, companion and cache together; they cannot inject CLI arguments.
+    catalog = json.loads((temp / "config/weights.json").read_text())
+    for engine in ("halogen", "gufo", "strixite"):
+        catalog[engine]["trial"] = {"label": "Trial", "model": "trial/checkpoint.hgn" if engine == "halogen" else "trial/weights.gguf" if engine == "gufo" else "trial/strixw",
+                                    "mtp": "trial/mtp.gguf", "manifest": "trial.tsv"}
+    (temp / "config/weights.json").write_text(json.dumps(catalog))
+    for engine in ("halogen", "gufo", "strixite"):
+        calls.unlink(missing_ok=True)
+        result = run(engine, "start", "--weights", "trial", "--wait")
+        assert result.returncode == 0, result
+        launch = next(call for call in recorded() if call[0] == "run")
+        assert "io.strix-halo-inference.weights=trial" in launch
+        assert f"{env['CACHE_ROOT']}/{engine}/trial:/cache:rw" in launch
+        assert (temp / "models-calls").read_text().endswith(f"check {engine} trial\n")
+        if engine == "halogen":
+            assert "HALOGEN_CHECKPOINT=/models/trial/checkpoint.hgn" in launch
+            assert "HALOGEN_TOKENIZER=/models/trial/tokenizer" in launch
+        elif engine == "gufo":
+            assert launch[launch.index("--model") + 1] == "/models/trial/weights.gguf"
+            assert launch[launch.index("--mtp-model") + 1] == "/models/trial/mtp.gguf"
+        else:
+            assert "STRIX_MODELS_DIR=/models/trial/strixw" in launch
+    assert run("gufo", "start", WEIGHTS="trial").returncode == 0
+    for args, overrides in ((("gufo", "start", "--weights", "../default"), {}),
+                            (("gufo", "start", "--weights", "trial"), {"GUFO_MODEL": "trial/model-00001-of-00004.gguf"})):
+        calls.unlink(missing_ok=True)
+        result = run(*args, **overrides)
+        assert result.returncode != 0 and not any(call[0] == "run" for call in recorded()), result
     calls.unlink()
     result = run("halogen", "start", NPU_MODELS="decider-0.8b,embeddinggemma-2")
     assert result.returncode == 0, result

@@ -46,10 +46,16 @@ The helper adds the first loopback endpoint here that acts instead of only readi
 
 - It binds `127.0.0.1` only and accepts only its own `Host` name, which defeats DNS rebinding.
 - It refuses any request a browser marks as coming from another site, requires its own `Origin` on every command, and sends no cross-origin headers. Other pages open in the browser can neither run commands nor read state or logs.
-- Each request path selects one fixed command line: `bin/run.sh <engine> start|stop|logs --follow`, `env NPU_MODELS=<set> bin/run.sh halogen start`, `bin/cache.sh <engine> clear` or `bin/monitor.sh start|stop` and `bin/monitor.sh <component> logs --follow`. No request text reaches a command; the NPU model set comes from the helper's environment. The one-engine rule stays in `bin/run.sh`; the helper relays its refusal.
+- Each request path selects one fixed command line: `bin/run.sh <engine> start [--weights <configured-profile>]|stop|logs --follow`, `env NPU_MODELS=<set> bin/run.sh halogen start`, `bin/cache.sh <engine> clear` or `bin/monitor.sh start|stop` and `bin/monitor.sh <component> logs --follow`. No request text reaches a command; the NPU model set comes from the helper's environment. The one-engine rule stays in `bin/run.sh`; the helper relays its refusal.
 - It has no authentication. Any local process, under any local user, can still start or stop these engines and monitoring and read their logs through it. Do not run it on a shared host, and do not tunnel or expose the port.
 - `GET /metrics` serves NPU readings for Prometheus, described under [NPU readings](#npu-readings). Like `/state`, it is readable by local processes but not by other sites' pages.
 - Logs are streamed to the page and not stored. Closing the drawer, switching tabs or closing the page ends that log viewer. The Gufo log seen during validation held request metadata, not prompt text. The other engines and other settings were not reviewed, so treat the drawer like a terminal showing those logs.
+
+### Weight selection
+
+Each engine has a weight selector populated from [the profile catalog](../config/weights.json). Gufo offers `default` (UD 3.1 Q4_K_XL) and `abliterated` (the huihui patch applied to that same export). Stop the active engine, select its weights and click its start button. Halogen + NPU uses Halogen's selected profile too. The browser remembers each selection, but it does not change CLI defaults. While an engine runs, its button shows the profile from the container label, including a start made from a terminal. An older container without a label shows `unknown`.
+
+A missing manifest or size-mismatched file marks a profile “not installed” and disables its start. These are fast presence/size checks, not checksum verification; use `bin/models.sh verify ENGINE PROFILE` after provisioning. Restart `bin/dashboard.py` after adding or removing profiles so its fixed command allowlist reloads. Engine starts through the dashboard ignore inherited `WEIGHTS`, `GUFO_MODEL` and `NPU_MODELS`; the selected profile and the NPU button are authoritative. See [weight profiles](weight-profiles.md) for adding a quant or checkpoint. Cache clearing still clears every profile for that engine.
 
 ## Stack and boundaries
 

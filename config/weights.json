@@ -1,0 +1,33 @@
+{
+  "halogen": {
+    "default": {
+      "label": "Default \u00b7 native v2",
+      "model": "peonist-ai/halogen-qwen3.8-flash-next/qwen38-flash-next-v2.hgn",
+      "directory": "peonist-ai/halogen-qwen3.8-flash-next",
+      "manifest": "halogen-files.tsv"
+    }
+  },
+  "gufo": {
+    "default": {
+      "label": "Default \u00b7 UD 3.1 Q4_K_XL",
+      "model": "unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+      "directory": "unsloth/Qwen3.8-Flash-Next-GGUF",
+      "manifest": "gufo-files.tsv",
+      "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf"
+    },
+    "abliterated": {
+      "label": "Abliterated \u00b7 UD 3.1 Q4_K_XL",
+      "model": "huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patched-unsloth-UD-Q4_K_XL-d9620119/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+      "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
+      "manifest": "weights/gufo-abliterated.tsv"
+    }
+  },
+  "strixite": {
+    "default": {
+      "label": "Default \u00b7 native strixw",
+      "model": "wemoh/Qwen3.8-Flash-Next-strixw",
+      "directory": "wemoh/Qwen3.8-Flash-Next-strixw",
+      "manifest": "strixite-files.tsv"
+    }
+  }
+}

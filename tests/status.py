@@ -19,9 +19,9 @@ container = {
     "Image": "running-image-id",
     "State": {"Status": "running", "Running": True},
     "Config": {
-        "Labels": {"org.opencontainers.image.version": "old-running-version"},
+        "Labels": {"org.opencontainers.image.version": "old-running-version", "io.strix-halo-inference.weights": "abliterated"},
         "Env": ["HALOGEN_CTX=65536", "HALOGEN_DRAFTER_DEFAULT=0", "HALOGEN_CACHE_DISK_GIB=8"],
-        "Cmd": ["gufo", "serve", "--context", "65536", "--speculative", "off",
+        "Cmd": ["gufo", "serve", "--model", "/models/trial.gguf", "--context", "65536", "--speculative", "off",
                 "--cache-ram-bytes", "1073741824", "--cache-disk-bytes", "8589934592"],
     },
     "Mounts": [],
@@ -47,6 +47,9 @@ with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on"):
     for engine, response in (("halogen", {"status": "ok"}), ("gufo", {"status": "ready"})):
         result, output = check(engine, response)
         assert result == 0, output
+        assert "Weight profile: abliterated" in output
+        if engine == "gufo":
+            assert "Weights: /models/trial.gguf" in output
         assert "old-running-version" in output and "old-running-image" in output
         assert "Configured context: 65536" in output and "262144" not in output
         assert "Cache disk usage: unavailable" in output

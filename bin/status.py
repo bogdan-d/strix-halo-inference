@@ -36,6 +36,9 @@ def show_configuration(engine: str, container: dict) -> None:
     print(f"Image: {container.get('ImageName', 'unavailable')}")
     print(f"Image ID: {container.get('Image', 'unavailable')}")
     print(f"Image version (OCI label): {config.get('Labels', {}).get('org.opencontainers.image.version', 'unavailable')}")
+    print(f"Weight profile: {config.get('Labels', {}).get('io.strix-halo-inference.weights', 'unknown (older launcher)')}")
+    model_path = env.get('HALOGEN_CHECKPOINT') if engine == 'halogen' else setting(args, '--model') if engine == 'gufo' else env.get('STRIX_MODELS_DIR')
+    print(f"Weights: {model_path or 'unavailable'}")
     if engine == "halogen":
         context = env.get("HALOGEN_CTX")
         mtp = "off" if env.get("HALOGEN_DRAFTER_DEFAULT") == "0" else "engine default (see readiness or logs)"

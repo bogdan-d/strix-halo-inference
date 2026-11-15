@@ -1,6 +1,6 @@
 # Gufo memory, smaller quants and extensions
 
-Notes from November 14 and 15, 2026, for later trials. Nothing here is provisioned or configured; the launcher still runs stock Gufo 0.34.0 with Unsloth `UD-Q4_K_XL` at revision `38bb39ee97821de2c9009abb7e93950eec396e66`. Community numbers below are the publishers' claims, not local measurements, unless marked as measured here.
+Notes from November 14 and 15, 2026, for later trials. The extensions here are not provisioned or configured. The launcher pins stock Gufo 0.34.0 with Unsloth UD 3.1 `UD-Q4_K_XL` at revision `d96201194f103c906994f283f504209dc8d2a10c`; named weight profiles also select its huihui-patched copy (see [weight profiles](weight-profiles.md)). Community numbers below are the publishers' claims, not local measurements, unless marked as measured here.
 
 ## Gufo memory at the current pin
 

@@ -5,30 +5,34 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/config/pins.env"
 
 usage() {
-  echo 'Usage: bin/run.sh halogen|gufo|strixite pull|diagnose|start|stop|logs|status|smoke' >&2
+  echo 'Usage: bin/run.sh halogen|gufo|strixite pull|diagnose|start|stop|logs|status|smoke|weights' >&2
   echo '       bin/run.sh halogen|gufo|strixite logs --follow' >&2
-  echo '       bin/run.sh halogen|gufo|strixite start --wait (START_TIMEOUT=300 seconds)' >&2
+  echo '       bin/run.sh halogen|gufo|strixite start [--weights PROFILE] [--wait] (START_TIMEOUT=300 seconds)' >&2
   exit 2
 }
 ENGINE="${1:-}"
 ACTION="${2:-}"
 case "$ENGINE" in
-  pull|diagnose|start|stop|logs|status|smoke) echo "Engine comes first. Use: bin/run.sh halogen|gufo|strixite $ENGINE" >&2; usage ;;
+  pull|diagnose|start|stop|logs|status|smoke|weights) echo "Engine comes first. Use: bin/run.sh halogen|gufo|strixite $ENGINE" >&2; usage ;;
 esac
 FOLLOW=()
 WAIT=false
-if [[ $# == 3 && "$ACTION" == logs && "$3" == --follow ]]; then
-  FOLLOW=(--follow)
-elif [[ $# == 3 && "$ACTION" == start && "$3" == --wait ]]; then
-  WAIT=true
-else
-  [[ $# == 2 ]] || usage
-fi
-case "$ACTION" in pull|diagnose|start|stop|logs|status|smoke) ;; *) usage ;; esac
+PROFILE="${WEIGHTS:-default}"
+shift "$(( $# >= 2 ? 2 : $# ))"
+while (( $# )); do
+  case "$1" in
+    --follow) [[ "$ACTION" == logs && ${#FOLLOW[@]} == 0 ]] || usage; FOLLOW=(--follow) ;;
+    --wait) [[ "$ACTION" == start && "$WAIT" == false ]] || usage; WAIT=true ;;
+    --weights) [[ "$ACTION" == start && $# -ge 2 ]] || usage; PROFILE="$2"; shift ;;
+    *) usage ;;
+  esac
+  shift
+done
+case "$ACTION" in pull|diagnose|start|stop|logs|status|smoke|weights) ;; *) usage ;; esac
 case "$ENGINE" in
-  halogen) IMAGE="$HALOGEN_IMAGE"; PORT=8731; REPO="$HALOGEN_REPO"; HEALTH=/health ;;
-  gufo) IMAGE="$GUFO_IMAGE"; PORT=8080; REPO="$GUFO_REPO"; HEALTH=/ready ;;
-  strixite) IMAGE="$STRIXITE_IMAGE"; PORT=5300; REPO="$STRIXITE_REPO"; HEALTH=/health ;;
+  halogen) IMAGE="$HALOGEN_IMAGE"; PORT=8731; HEALTH=/health ;;
+  gufo) IMAGE="$GUFO_IMAGE"; PORT=8080; HEALTH=/ready ;;
+  strixite) IMAGE="$STRIXITE_IMAGE"; PORT=5300; HEALTH=/health ;;
   *) echo 'Choose halogen, gufo or strixite.' >&2; usage ;;
 esac
 NAME="strix-halo-$ENGINE"
@@ -43,6 +47,7 @@ if [[ "$WAIT" == true ]]; then
   [[ "$START_TIMEOUT" =~ ^[1-9][0-9]{0,3}$ && "$START_TIMEOUT" -le 3600 ]] || { echo 'START_TIMEOUT must be 1..3600 seconds.' >&2; exit 2; }
 fi
 case "$ACTION" in
+  weights) exec python "$ROOT/bin/weights.py" "$ENGINE" list ;;
   pull) exec podman pull "$IMAGE" ;;
   stop)
     STOP_TIMEOUT=60
@@ -87,7 +92,16 @@ if [[ "$ACTION" == diagnose ]]; then
   exec podman run --rm --network none "${GPU[@]}" --entrypoint /bin/sh "$IMAGE" -c 'ulimit -l; rocminfo'
 fi
 
-"$ROOT/bin/models.sh" check "$ENGINE"
+SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" launch "$PROFILE")"
+mapfile -t WEIGHT_PATHS <<<"$SELECTION"
+if [[ "$ENGINE" == gufo && -n "${GUFO_MODEL:-}" && "$PROFILE" != default ]]; then
+  echo 'Choose either --weights/WEIGHTS or GUFO_MODEL, not both.' >&2; exit 2
+fi
+if [[ "$PROFILE" == default ]]; then
+  "$ROOT/bin/models.sh" check "$ENGINE"
+else
+  "$ROOT/bin/models.sh" check "$ENGINE" "$PROFILE"
+fi
 NPU=()
 if [[ -n "$NPU_MODELS" ]]; then
   [[ "$ENGINE" == halogen && "$ACTION" == start ]] || { echo 'NPU_MODELS applies only to bin/run.sh halogen start.' >&2; exit 2; }
@@ -133,19 +147,24 @@ if [[ "$ENGINE" == gufo && -n "${GUFO_MODEL:-}" ]]; then
   [[ "$GUFO_MODEL" != /* && "$GUFO_MODEL" != *..* && "$GUFO_MODEL" == *.gguf && -f "$MODELS_DIR/$GUFO_MODEL" ]] \
     || { echo "GUFO_MODEL must be a .gguf file under $MODELS_DIR, given relative to it." >&2; exit 2; }
 fi
-GUFO_MODEL="${GUFO_MODEL:-$GUFO_REPO/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf}"
+WEIGHT_LABEL="$PROFILE"
+[[ "$ENGINE" != gufo || -z "${GUFO_MODEL:-}" ]] || WEIGHT_LABEL=custom
+GUFO_MODEL="${GUFO_MODEL:-${WEIGHT_PATHS[0]}}"
+ENGINE_CACHE="$CACHE_ROOT/$ENGINE/$WEIGHT_LABEL"
+mkdir -p -- "$ENGINE_CACHE"
 ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.managed=true
+  --label "io.strix-halo-inference.weights=$WEIGHT_LABEL"
   "${GPU[@]}" --publish "127.0.0.1:$PORT:$PORT"
-  --volume "$MODELS_DIR:/models:ro" --volume "$CACHE_ROOT/$ENGINE:/cache:rw")
+  --volume "$MODELS_DIR:/models:ro" --volume "$ENGINE_CACHE:/cache:rw")
 if [[ "$ENGINE" == halogen ]]; then
   ARGS+=(--ipc=host "${NPU[@]}"
-    --env "HALOGEN_CHECKPOINT=/models/$REPO/qwen38-flash-next-v2.hgn"
-    --env "HALOGEN_TOKENIZER=/models/$REPO/tokenizer"
+    --env "HALOGEN_CHECKPOINT=/models/${WEIGHT_PATHS[0]}"
+    --env "HALOGEN_TOKENIZER=/models/${WEIGHT_PATHS[0]%/*}/tokenizer"
     --env "HALOGEN_CTX=$CONTEXT" --env "HALOGEN_KV_POOL_POSITIONS=$CONTEXT"
     --env HALOGEN_KV_SLOTS=1 --env HALOGEN_CACHE_DIR=/cache --env HALOGEN_CACHE_DISK_GIB=16)
   [[ "$SPECULATIVE" == on ]] || ARGS+=(--env HALOGEN_DRAFTER_DEFAULT=0 --env HALOGEN_PLD=0)
   [[ "$KV8" == off ]] || ARGS+=(--env HALOGEN_KV8=1)
-  [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/$REPO/qwen38-flash-next-vision.hgn")
+  [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/${WEIGHT_PATHS[0]%/*}/qwen38-flash-next-vision.hgn")
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
   ARGS+=("--userns=keep-id:uid=1000,gid=1000" "$IMAGE" gufo serve --host 0.0.0.0 --port "$PORT" --sessions 1 llm
@@ -154,12 +173,12 @@ elif [[ "$ENGINE" == gufo ]]; then
     --cache-ram-bytes 2147483648 --cache-disk /cache
     --cache-disk-bytes 17179869184)
   if [[ "$SPECULATIVE" == on ]]; then
-    ARGS+=(--speculative mtp --mtp-model "/models/$REPO/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf")
+    ARGS+=(--speculative mtp --mtp-model "/models/${WEIGHT_PATHS[1]}")
   else
     ARGS+=(--speculative off)
   fi
 else
-  ARGS+=(--stop-timeout 90 --env "STRIX_MODELS_DIR=/models/$REPO" "$IMAGE"
+  ARGS+=(--stop-timeout 90 --env "STRIX_MODELS_DIR=/models/${WEIGHT_PATHS[0]}" "$IMAGE"
     --host 0.0.0.0 --port "$PORT" --model-id qwen3.8-flash-next
     --capacity "$CONTEXT" --rope-yarn-factor 1 --mtp "$SPECULATIVE"
     --prompt-cache-dir /cache --prompt-cache-gib 16 --prompt-cache-ram-margin-gib 8
