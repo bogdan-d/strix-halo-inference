@@ -193,6 +193,20 @@ else:
     result = run("gufo", "start", VISION="on")
     assert result.returncode == 2 and "VISION=on applies only to Halogen and Strixite" in result.stderr, result
     assert not any(call[0] == "run" for call in recorded())
+    # A Gufo trial model replaces only the model path, and must be an existing GGUF inside the models directory.
+    trial = Path(env["MODELS_DIR"]) / "trial/model-00001-of-00004.gguf"
+    for model in ("/etc/passwd.gguf", "trial/../model.gguf", "trial/model-00001-of-00004.gguf", "trial"):
+        calls.unlink()
+        result = run("gufo", "start", GUFO_MODEL=model)
+        assert result.returncode == 2 and "GUFO_MODEL must be" in result.stderr, (model, result)
+        assert not any(call[0] == "run" for call in recorded()), model
+    trial.parent.mkdir(parents=True)
+    trial.touch()
+    calls.unlink(missing_ok=True)
+    assert run("gufo", "start", GUFO_MODEL="trial/model-00001-of-00004.gguf").returncode == 0
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert launch[launch.index("--model") + 1] == "/models/trial/model-00001-of-00004.gguf"
+    assert launch[launch.index("--mtp-model") + 1].endswith("/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf")
     calls.unlink()
     result = run("halogen", "start", NPU_MODELS="decider-0.8b,embeddinggemma-2")
     assert result.returncode == 0, result

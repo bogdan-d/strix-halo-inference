@@ -1,5 +1,61 @@
 # Engine updates
 
+## November 15 trial: huihui patch on the stock Gufo file
+
+An abliterated copy of the pinned `UD-Q4_K_XL` was made with huihui's patch and run on Gufo 0.34.0. Pins, images and the default model are unchanged; the copy is selected only with `GUFO_MODEL` (README, First run). Plan and ticket: `.scratch/abliterated-trials/issues/04-gufo-huihui-patch.md`.
+
+### Patch files
+
+From [huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF](https://huggingface.co/huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/tree/cbc7fba13f1939ac3fa42b18d77ccf43847d74ef/patch-unsloth) at revision `cbc7fba13f1939ac3fa42b18d77ccf43847d74ef`, stored under `/home/bogdan/models/huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patch-unsloth/`:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `patch-unsloth-all/Huihui-Qwen3.8-Flash-Next-abliterated-patch-all.gguf` | 3,561,572,544 | `f3a42f213edb9117fd7f3873e0b29a9a94033cb49b91e100e792f6344adec752` |
+| `patch-unsloth-all/Huihui-Qwen3.8-Flash-Next-abliterated-patch-all.gguf.key` | 64 | `2ed56e36f9a9c4f806d9fb48f5ef9e06ed5d1ab3b4f6b8ee31e19ef5b8ea9667` |
+| `patch-unsloth-Qwen3.8-Flash-Next-dec.py` | 9,659 | `69d15f62facd3f9d16bdeaf13cab9077e3568b5f274a843d28fd1796eb31d22a` |
+
+### Script review
+
+`patch-unsloth-Qwen3.8-Flash-Next-dec.py` is the only executable file. It is 269 lines of ASCII with Windows line endings and no hidden characters, and was read in full. It imports only `gguf`, `numpy` and standard-library modules, and makes no network, subprocess, `eval`, `exec` or delete call. It reads the input GGUFs, the patch file and the key, and writes only into the output directory, where it would overwrite files of the same name. For each tensor in the chosen families it looks up a patch entry of the same quantisation type, decodes it by XOR with the 64-character key and writes it in place of the stock tensor; with no matching entry it copies the stock tensor and logs a warning. The patch file itself is data, not code: a GGUF holding 276 tensors.
+
+### Run
+
+The script ran under Bubblewrap with no network, no home directory, the stock shards and patch files read-only and only the new output directory writable, on Python 3.14.10 with NumPy 2.5.4 and hash-pinned `gguf` 0.19.0 and `tqdm` 4.70.1 in a temporary virtual environment:
+
+```bash
+python -I /patch/patch-unsloth-Qwen3.8-Flash-Next-dec.py --input-path /in --patch-path /patch/patch-unsloth-all \
+  --output-path /out --start-layer 0 --end-layer 48 --ablate-experts 2
+```
+
+The input was the pinned October `UD-Q4_K_XL` at `38bb39ee97821de2c9009abb7e93950eec396e66`. It took 38 seconds and patched 96 tensors, all Q8_0: 36 `ssm_out`, 12 `attn_output` and 48 `ffn_down_shexp`, with no type-mismatch or missing-entry warning. Output, in `/home/bogdan/models/huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patched-unsloth-UD-Q4_K_XL-38bb39ee/`:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf` (byte-identical to stock) | 10,946,624 | `4448186216b3af4cc558bbce2c3213f01608f8f8b2e5267a9767971dd3ec8082` |
+| `Qwen3.8-Flash-Next-UD-Q4_K_XL-00002-of-00004.gguf` | 49,859,583,136 | `a9b7aad6475acf6c414b94f85fef48ec89f14c3f392e8d6d4a0e66e1050e4524` |
+| `Qwen3.8-Flash-Next-UD-Q4_K_XL-00003-of-00004.gguf` | 49,376,141,504 | `f4b9c67c7a06b632aac0ea8c05f5b0ffff5e336837903b9bddde6e8226235134` |
+| `Qwen3.8-Flash-Next-UD-Q4_K_XL-00004-of-00004.gguf` | 12,087,983,520 | `e828681eaf2eef3018fe8f2d64170d87eed161e79bcca440145479aeff5dfb3e` |
+
+`.scratch/abliterated-trials/verify_patch.py` compared the output with stock, in the same sandbox with both read-only: every metadata key and value is identical, all 1,224 tensors keep their name, order, type, shape and size, and exactly the 96 patched tensors differ in content. Each differs from its stock tensor by 3.2 to 4.5% (relative norm), and 93 to 99% of that difference lies in a single direction, which is the signature of projecting out one refusal direction rather than of retrained weights.
+
+### Gufo 0.34.0 checks
+
+Each model was started alone at native 262144 context with MTP on and the stock shared MTP head, then stopped. MemAvailable was 115.6 GiB before the first start and 116.6 GiB after the last stop, with Unevictable 116 KiB. `python tests/run.py`, `bash -n` and `shellcheck` on `bin/run.sh` passed after the `GUFO_MODEL` change.
+
+| Check | Stock `UD-Q4_K_XL` | Patched copy |
+|---|---|---|
+| Ready and a smoke generation | Pass | Pass |
+| `tests/live.py` | Not rerun (passed November 14) | Pass, 4 fragments |
+| Startup allocation | 89.12 GiB | 89.12 GiB |
+| MemAvailable while running | 25.1 GiB | 24.8 GiB |
+| Refusal probe, 5 prompts, thinking off, temperature 0 | 5 refused | 5 answered |
+| Tool call copying an exact case-sensitive identifier, 5 identifiers | 5 of 5 | 5 of 5 |
+| Decode, 400 tokens, two runs | 43.3 and 43.8 tok/s | 49.4 and 49.6 tok/s |
+
+The probe categories were explicit adult fiction, hot-wiring a car, shoplifting, bypassing a paywall and picking someone else's lock. Three of the patched model's answers open with a legal disclaimer and then comply. The decode figures are Gufo's own `predicted_per_second` on one prompt; the two models wrote different text, so MTP acceptance differs and the gap is not a like-for-like speed-up. Neither run logged warnings or errors. `.scratch/abliterated-trials/probe.py` runs the probe; its prompt texts are kept outside the repository.
+
+Not exercised: thinking on, long contexts, images, Pi sessions, coding quality, perplexity or KL against stock, a larger refusal set, and the patch on the UD 3.1 file, which is not downloaded yet.
+
 ## November 14 update
 
 `bin/update.py` pulled Halogen 0.20.4 and Gufo 0.34.0 by digest and atomically updated their image and version pins. Strixite 0.7.0 was already current. Launch settings, model revisions, live Pi files and host settings are unchanged. `bin/npu-manifest.sh` against the 0.20.4 image changed only the 16 `d3-lite/devices/` files, republished with new contents at the same paths (`peonist-ai/halogen-npu-d3-lite` revision `2def562` to `8919811`); the `d3-lite` weights, tokenizer and picture files are unchanged. The 16 superseded files were deleted, then `bin/models.sh download npu` fetched them and verified all 166 NPU files. Both updated engines passed the [local checks](#november-14-local-checks). After the checks, the superseded Halogen 0.20.1 and Gufo 0.33.0 images were removed by digest, and `bin/cache.sh` cleared the Halogen and Gufo prompt caches, which held only the test runs' state.

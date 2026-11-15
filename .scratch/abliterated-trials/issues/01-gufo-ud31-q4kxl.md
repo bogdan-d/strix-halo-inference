@@ -24,7 +24,8 @@ The new shards have the same file names as the October ones, and `bin/models.sh`
 - [ ] Trial checks 2 to 6 from the [spec](../spec.md#trial-checks) pass with `gufo`.
 - [ ] The startup allocation is recorded against the 89.12 GiB measured on November 14, and decode speed against the October file on the same prompt.
 - [ ] `docs/engine-updates.md` records the change, and every doc that names the October revision as current is updated (`grep -rn 38bb39ee README.md docs`).
-- [ ] The user has decided whether the October shards are deleted or kept.
+- [ ] The huihui patch from ticket 04 is re-applied to the UD 3.1 shards (no download, under a minute), checked with `verify_patch.py` and `probe.py gufo`, and recorded. The copy patched from the October file is then superseded.
+- [ ] The user has decided whether the October shards, and the copy patched from them (111 GB), are deleted or kept.
 
 Rollback: restore the two config files and rename the directory back.
 

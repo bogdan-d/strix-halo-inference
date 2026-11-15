@@ -13,7 +13,7 @@ Background and sources are in [abliterated builds](../../docs/abliterated-models
 | [01](issues/01-gufo-ud31-q4kxl.md) | Update Gufo to UD 3.1 `UD-Q4_K_XL` | 111.3 GB | 2.4 h |
 | [02](issues/02-halogen-r2.md) | Halogen: Quat3rnion r2 | 88.7 GB | 1.9 h |
 | [03](issues/03-halogen-ht43-abliterated.md) | Halogen: HT43 abliterated | 57.6 GB | 1.2 h |
-| [04](issues/04-gufo-huihui-patch.md) | Gufo: huihui patch on the stock file | 3.6 GB | 5 min |
+| [04](issues/04-gufo-huihui-patch.md) | Gufo: huihui patch on the stock file (done November 15, on the October file) | 3.6 GB | 5 min |
 | [05](issues/05-gufo-extension-ud-iq4xs.md) | Gufo: `flash_next_iq` extension with `UD-IQ4_XS` | 69.0 GB | 1.5 h |
 | [06](issues/06-strixite-ngkzngkz.md) | Strixite: ngkzngkz weights, local n-gram table first | 71.6 GB (plus 51.8 GB if the table is rejected) | 1.5 h (plus 1.1 h) |
 | [07](issues/07-remaining-candidates.md) | Maybe: the remaining candidates | per candidate | |
@@ -44,7 +44,7 @@ Each trial runs these and records the results in [engine-updates.md](../../docs/
 5. Decode speed on the same prompt as the stock model.
 6. `bin/run.sh ENGINE stop`, then confirm memory was released.
 
-Abliterated trials add:
+Abliterated trials add the two checks below, both run by [probe.py](probe.py); [verify_patch.py](verify_patch.py) compares a patched GGUF with its source.
 
 7. A refusal probe: at least three prompts that the stock model on the same engine refuses, run on stock first as the control, then on the trial. Record the category and whether each was answered. Keep prompt texts and outputs out of the repository.
 8. A tool call that must copy an exact case-sensitive identifier, as in [gufo-org/gufo#780](https://github.com/gufo-org/gufo/issues/780), since no abliterated build's author reports testing this beyond one forced call.
@@ -55,7 +55,7 @@ Abliterated trials add:
 
 - **Trial manifests** (ticket 02): let `bin/models.sh download|verify|check` handle a manifest whose lines name their own repository and revision, as the NPU manifest already does, so trial files are pinned in `config/` like everything else.
 - **Halogen** (ticket 02): an explicit checkpoint override. Halogen finds the n-gram table beside the checkpoint, and the launcher takes the tokenizer and vision paths from the same directory, so a trial directory holds the trial checkpoint plus reflink copies of the stock companions.
-- **Gufo** (tickets 04 and 05): explicit model and MTP head overrides, and in ticket 05 a mount for the extension store.
+- **Gufo** (tickets 04 and 05): `GUFO_MODEL`, added with ticket 04, selects a trial GGUF. Ticket 05 adds an MTP head override and a mount for the extension store.
 - **Strixite** (ticket 06): an explicit model directory override.
 
 Update the README's launcher documentation with each setting, and keep `tests/run.py` passing.

@@ -127,6 +127,13 @@ case "$VISION" in on|off) ;; *) echo 'VISION must be on or off.' >&2; exit 2 ;; 
 # Strixite conversations served at once. Each slot can grow to a full-capacity K/V state.
 SLOTS="${SLOTS:-1}"
 [[ "$SLOTS" =~ ^[1-8]$ ]] || { echo 'SLOTS must be 1..8.' >&2; exit 2; }
+# Gufo trial model: the first shard of another GGUF under the models directory, served instead of the pinned
+# file. Trial files are outside bin/models.sh's manifests; the MTP head stays the pinned one.
+if [[ "$ENGINE" == gufo && -n "${GUFO_MODEL:-}" ]]; then
+  [[ "$GUFO_MODEL" != /* && "$GUFO_MODEL" != *..* && "$GUFO_MODEL" == *.gguf && -f "$MODELS_DIR/$GUFO_MODEL" ]] \
+    || { echo "GUFO_MODEL must be a .gguf file under $MODELS_DIR, given relative to it." >&2; exit 2; }
+fi
+GUFO_MODEL="${GUFO_MODEL:-$GUFO_REPO/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf}"
 ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.managed=true
   "${GPU[@]}" --publish "127.0.0.1:$PORT:$PORT"
   --volume "$MODELS_DIR:/models:ro" --volume "$CACHE_ROOT/$ENGINE:/cache:rw")
@@ -142,7 +149,7 @@ if [[ "$ENGINE" == halogen ]]; then
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
   ARGS+=("--userns=keep-id:uid=1000,gid=1000" "$IMAGE" gufo serve --host 0.0.0.0 --port "$PORT" --sessions 1 llm
-    --model "/models/$REPO/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf"
+    --model "/models/$GUFO_MODEL"
     --served-model-name qwen3.8-flash-next --context "$CONTEXT"
     --cache-ram-bytes 2147483648 --cache-disk /cache
     --cache-disk-bytes 17179869184)

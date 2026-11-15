@@ -22,11 +22,11 @@ Known risk: the extension's README says the weight upload fails under Docker unl
 
 - [ ] Shards 1 to 3 and the standalone MTP head are downloaded (69.0 GB), shard 4 is a reflink copy, and all five files verify.
 - [ ] The extension is installed into the pinned Gufo image from the agreed source, with its revision recorded.
-- [ ] `bin/run.sh gufo` can mount the extension store through an explicit setting; the default start is unchanged and the README documents it.
+- [ ] `bin/run.sh gufo` can mount the extension store and take another MTP head through explicit settings (`GUFO_MODEL` already exists); the default start is unchanged and the README documents them.
 - [ ] Stock `UD-IQ4_XS` passes trial checks 2 to 6 from the [spec](../spec.md#trial-checks) under the launcher's rootless Podman.
 - [ ] Startup allocation with one session, `MemAvailable`, decode speed and a quality comparison against UD 3.1 `UD-Q4_K_XL` are recorded.
 - [ ] Whether the extension accepts the shared MTP head already on disk is recorded (it would save about 1.3 GiB).
-- [ ] The huihui patch is applied to `UD-IQ4_XS` as in ticket 04. In this layout `ssm_out` and `ffn_down_shexp` are Q8_0 and `attn_output` is Q6_K, all present in the patch, so 96 tensors should be patched with no dtype-mismatch copy.
+- [ ] The huihui patch is applied to `UD-IQ4_XS` as in ticket 04. In this layout `ssm_out` and `ffn_down_shexp` are Q8_0 and `attn_output` is Q6_K, all present in the patch, so 96 tensors should be patched with no dtype-mismatch copy. `gguf` 0.19.0 from PyPI, used in ticket 04, has no GGML `Q2_0` type, which two down-expert tensors of this file use, so the script needs a `gguf` build that knows it.
 - [ ] The patched model passes trial checks 2 to 8, with stock `UD-IQ4_XS` as the control for the refusal probe.
 - [ ] Results go in `docs/engine-updates.md`, `docs/gufo-extensions.md` and `docs/abliterated-models.md`.
 
