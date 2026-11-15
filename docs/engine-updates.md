@@ -1,5 +1,90 @@
 # Engine updates
 
+## November 15: HT43 abliterated trial
+
+The `abliterated-ht43` Halogen profile selects `qwen38-flash-next-ht43-abliterated.hgn` from Quat3rnion revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`: 57,618,253,824 bytes, SHA-256 `2beaad7b6d5107d7abfa866b33b47287160a68b9fc45b86020dbaa884955329c`. Size and hash were rechecked against Hugging Face metadata before downloading. The profile shares r2's pinned tokenizer, vision tower and n-gram files, with its own prompt cache. Its [manifest](../config/weights/halogen-abliterated-ht43.tsv) pins all nine files. Stock `default` and `abliterated-r2` remain explicit alternatives; the default is unchanged.
+
+The [pinned model card](https://huggingface.co/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/blob/e7783c5822dfda2785a0f5b435abf54df89fe8ee/README.md#experimental-ht43-alternative) describes alternating HT4/HT3 trunk expert layers instead of v2's I4R, with 290 hyperconnection tensors changed to q8g64. It applies the same orcarouter donor as r2, without the Swift fine-tune. The publisher reported offline weight checks only. Halogen's pinned 0.20.4 release supports HT43; no engine image, context limit or host setting changed for this trial.
+
+```bash
+bin/run.sh halogen start --weights abliterated-ht43 --wait
+bin/run.sh halogen stop
+```
+
+The dashboard loads this profile after its helper is restarted. The configured context is still 262144, MTP remains on and serving uses the same 8-bit KV pool as r2. Lower weight memory does not extend the model's context length.
+
+### Quality method
+
+This trial reuses the exact full WikiText-2 raw test corpus and stock reference from [ticket 02](#november-15-halogen-r2-abliterated-trial); both hashes were checked again. A new r2 reference permits direct comparisons with both baselines. All native `ppl` runs use chunk 1024, sequence 262144 and the tool's default 16-bit attention state, scoring 297,052 positions over two sequences. References keep the top 128 probabilities, so reported KL treats the tail as one bucket and is a lower bound. Raw results and references remain outside Git under `$HOME/.cache/strix-halo-inference/trials/halogen-r2`.
+
+Stock HT43 was not downloaded. Differences between HT43 abliterated and r2 therefore combine the quantization change and its interaction with abliteration; they cannot isolate either effect. The stock v2 reference remains a quality control, not a stock HT43 control.
+
+### File validation
+
+All nine manifest hashes passed. Native verification of the original HT43 file passed without the table-order workaround needed for r2:
+
+```text
+PASS .../qwen38-flash-next-ht43-abliterated.hgn: 2015 tensors, 53.66 GiB, v2, model_id qwen3.8-flash-next-ht43; header, table, layout, payload sizes, checksums, codebooks and scales OK; geometry checked on 1197 tensors (818 with no rule)
+```
+
+`inspect --no-hash --json` reported 2,015 tensors, 128,350,804,643 parameters and 57,617,927,352 referenced bytes (53.660876 GiB). This compact file has no retained 22 GB of obsolete payloads like r2; the smaller live payload also reflects the changed quantization. Its FFN table has 192 HT4 and 48 HT3 records, with a native MTP head and the same 818 transform-plane tensors that have no native geometry rule.
+
+The new r2 reference reproduced ticket 02's perplexity exactly, 3.78911432 over 297,052 positions. Reference SHA-256: `3a4c10a23fb4f42b3d75292956251c9ed8d9b6440cdd972fb9c5d22cebe56c3f` (461,024,736 bytes). The stock reference hash remains `0573079d503908443f72a826d81e10bdea60e88fb6b1d7fa4afb2b1f69f5f01c`.
+
+### Full-corpus results
+
+| Metric | Stock v2 | Abliterated r2 | Abliterated HT43 |
+|---|---|---|---|
+| Scored positions | 297,052 | 297,052 | 297,052 |
+| Mean negative log likelihood | 1.33306524 | 1.33213230 | 1.32635817 |
+| Perplexity | 3.79265097 | 3.78911432 | 3.76729850 |
+| Mean KL from stock, lower bound | — | 0.04274782 | 0.07722999 |
+| Top-token agreement with stock | — | 92.5868% | 90.1798% |
+
+HT43 against the new r2 reference: mean KL 0.06246026, median 0.01602405, p90 0.14129210, p99 0.75416619 and maximum 8.47653103; top-token agreement 91.1383%. Against stock: median KL 0.02050864, p90 0.17659713, p99 0.93150623 and maximum 11.8564806. Neither comparison dropped tail positions. The two HT43 passes reproduced the same negative log likelihood and perplexity exactly. Scoring took 481.27 seconds against stock and 458.05 seconds against r2; the r2 reference run took 430.55 seconds. These are whole scoring-run times, not serving decode benchmarks.
+
+This corpus shows no perplexity regression for HT43. The small reduction does not establish better general quality: HT43 changes the top token more often than r2 does relative to stock. Tool behavior and practical generation need the separate serving checks below.
+
+The native tool commands were:
+
+```text
+# r2 reference (r2 checkpoint)
+ppl FILE --corpus /work/wikitext-2-raw-test.txt --chunk 1024 --seq 262144 --ref-out /work/r2-wikitext2.ref --json
+# HT43 comparisons (HT43 checkpoint)
+ppl FILE --corpus /work/wikitext-2-raw-test.txt --chunk 1024 --seq 262144 --ref /work/stock-wikitext2.ref --worst 0 --json
+ppl FILE --corpus /work/wikitext-2-raw-test.txt --chunk 1024 --seq 262144 --ref /work/r2-wikitext2.ref --worst 0 --json
+```
+
+The containers used the same GPU devices, unlimited memlock and host IPC as ticket 02, with network disabled, models read-only and the trial directory writable at `/work`. The startup lock and managed label enforced one engine at a time. Each quality container exited before the next started; `Mlocked` and `Unevictable` returned to 660 KiB after the final comparison.
+
+### Serving results and choice
+
+HT43 passed readiness and smoke generation, `tests/live.py halogen` (conversation, forced tool, streamed automatic tool with four argument fragments, disconnect slot release and generation after cancellation), all five exact case-sensitive identifiers and all five short refusal probes. Stock v2 refused those same five probes during ticket 02. As before, the probe uses refusal markers near the start of a 96-token response, not an evaluation of the accuracy or completeness of its advice; raw prompts and replies remain outside Git.
+
+| Check | Stock v2 (ticket 02) | Abliterated r2 (ticket 02) | Abliterated HT43 |
+|---|---|---|---|
+| Startup allocation, engine report | 78.7 GiB | 78.7 GiB | 70.2 GiB |
+| Weights / KV / working, rounded | 62.1 / 4.1 / 12.5 GiB | Same | 53.7 / 4.1 / 12.5 GiB |
+| `MemAvailable` at status | 100.68 GiB | 100.55 GiB | 94.99 GiB |
+| Kernel GTT at status | 17.49 GiB | 17.53 GiB | 18.01 GiB |
+| Model-ready timestamp | 14.5 s | 1.9 s | 6.8 s |
+| Decode, first / cached repeat | 65.46 / 66.85 tok/s | 61.84 / 62.30 tok/s | 63.34 / 63.90 tok/s |
+| End-to-end, first / repeat | 64.1 / 66.7 tok/s | 60.7 / 62.2 tok/s | 62.1 / 63.8 tok/s |
+| Exact tool identifiers | 5/5 | 5/5 | 5/5 |
+| Short refusal probes answered | 0/5 | 5/5 | 5/5 |
+
+The two decode requests used the same hash-table explanation prompt, thinking off, temperature zero and 400 output tokens. Engine-log decode excludes prefill; the end-to-end figure includes it. These are short exploratory measurements with differing generated text and MTP acceptance, not a broad performance ranking. Startup file-cache warmth differed too.
+
+**Prefer `abliterated-ht43` for abliterated Halogen use on this host**, based on these checks: the engine reports 8.5 GiB less total allocation, full-corpus perplexity does not regress, and the short tools, cancellation and refusal checks all pass. The two decode requests show no slowdown relative to r2. Keep `abliterated-r2` available for comparison: it stays closer to stock's token distribution, and neither trial establishes general coding quality, image accuracy or long-context retrieval quality. The ordinary `default` remains stock v2; no profile is silently promoted.
+
+### Warnings and limits
+
+HT43's first quality run emitted the known fragmentation warning with 246 free contiguous 2 MiB blocks and became ready in 14.4 seconds without intervention; the second became ready in 1.6 seconds without that warning. Serving emitted a separate warning that **10.8 GiB of host RAM was already used**, potentially reducing the lookup table's file cache and slowing long prefill. It also noted just 137 free contiguous 2 MiB blocks after allocation. Other host workloads were not stopped, and no compaction or kernel settings were changed. Before interpreting long-prefill performance, repeat it with adequate host headroom. These host-state differences further limit the cross-run speed comparison.
+
+`MemAvailable` and GTT do not contradict the weight saving: they are host-wide counters, and Halogen's locked file-backed weights can appear reclaimable. The useful model capacity comparison is the engine's startup allocation. After the final stop, no managed inference container remained, `Mlocked` and `Unevictable` returned to 660 KiB, `MemAvailable` was about 113.6 GiB and GTT about 1.77 GiB across all GPU users. Other host usage remained.
+
+The existing dashboard helper was restarted with its original environment to reload the profile catalog, then its backend confirmed all three Halogen profiles installed and the running label `abliterated-ht43`. It remains running; inference is stopped. Launcher, profile/download and dashboard helper tests passed, along with `git diff --check`. This ticket did not repeat browser rendering or exercise image inputs, the live Pi client, long-context retrieval or near-capacity generation. The stock HT43 checkpoint was deliberately not fetched, so the quantization/abliteration causal split remains unmeasured.
+
 ## November 15: Halogen r2 abliterated trial
 
 Halogen now has an explicit `abliterated-r2` profile beside its unchanged stock `default`. It uses Quat3rnion's r2 checkpoint at revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, not the later conversion at the same filename on `main`. The 88,737,777,792-byte file has SHA-256 `7bbac319851b500639462133085156b4f998dec562f511e65ca1c14d7af5163e`; upstream metadata was rechecked before downloading. [Its manifest](../config/weights/halogen-abliterated-r2.tsv) also pins reflink copies of the stock n-gram table, vision tower and tokenizer at peonist revision `506567c641cfb737e0b01c1deff10813154c5529`. Download verification and a separate full manifest verification passed for all nine files. No engine image or host setting changed.

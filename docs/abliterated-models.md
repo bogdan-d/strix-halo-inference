@@ -1,6 +1,6 @@
 # Abliterated Flash-Next builds
 
-Notes from November 15, 2026. The huihui patch on Gufo and Quat3rnion r2 on Halogen have been provisioned and tested here; other candidates remain untested locally. Local results are linked below. Other numbers come from model cards and GGUF headers read with HTTP range requests; author measurements are their claims, not local results. Abliteration can reduce refusals; it does not establish the accuracy of the resulting answers.
+Notes from November 15, 2026. The huihui patch on Gufo and Quat3rnion r2 and HT43 on Halogen have been provisioned and tested here; other candidates remain untested locally. Local results are linked below. Other numbers come from model cards and GGUF headers read with HTTP range requests; author measurements are their claims, not local results. Abliteration can reduce refusals; it does not establish the accuracy of the resulting answers.
 
 ## Picks
 
@@ -8,12 +8,13 @@ The Halogen and Strixite picks and the Gufo alternative derive from orcarouter's
 
 | Engine | Repository | Download | Status |
 |---|---|---|---|
-| Halogen (first choice) | [Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated](https://huggingface.co/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated), revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, file `qwen38-flash-next-v2-abliterated.hgn` (r2) | 88,737,777,792 bytes, SHA-256 `7bbac319851b500639462133085156b4f998dec562f511e65ca1c14d7af5163e` | Tested here on Halogen 0.20.4; native verifier caveat below |
+| Halogen (first choice for abliterated use) | [Quat3rnion HT43](https://huggingface.co/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated), revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, file `qwen38-flash-next-ht43-abliterated.hgn` | 57,618,253,824 bytes, SHA-256 `2beaad7b6d5107d7abfa866b33b47287160a68b9fc45b86020dbaa884955329c` | [Validated here on 0.20.4](engine-updates.md#november-15-ht43-abliterated-trial); 70.2 GiB total allocation |
+| Halogen (r2 alternative) | [Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated](https://huggingface.co/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated), revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, file `qwen38-flash-next-v2-abliterated.hgn` (r2) | 88,737,777,792 bytes, SHA-256 `7bbac319851b500639462133085156b4f998dec562f511e65ca1c14d7af5163e` | Tested here on Halogen 0.20.4; native verifier caveat below |
 | Gufo | The stock `UD-Q4_K_XL` with [huihui's patch](https://huggingface.co/huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/tree/main/patch-unsloth) applied locally | 3.56 GB patch | Run here on Gufo 0.34.0 on November 15 |
 | Gufo (alternative) | [NeosQ/Qwen3.8-Flash-Next-Uncensored-UD-Q4_K_XL](https://huggingface.co/NeosQ/Qwen3.8-Flash-Next-Uncensored-UD-Q4_K_XL) | About 104 GiB in 3 shards, plus its own MTP head | Author-tested on Gufo `aae1ac48` (October 25) |
 | Strixite | [ngkzngkz/Qwen3.8-Flash-Next-Uncensored-strixw](https://huggingface.co/ngkzngkz/Qwen3.8-Flash-Next-Uncensored-strixw) | About 114 GiB | Converted with Strixite v0.2.4 in a format version 0.7.0 reads; no published test |
 
-For a single large download, take the Halogen r2 file. The Gufo pick needs only the patch.
+For abliterated Halogen use on this host, prefer HT43 based on the local trial; r2 remains available for comparison. The Gufo pick needs only the patch.
 
 ### Halogen: Quat3rnion r2
 
@@ -21,9 +22,13 @@ r2 is peonist's stock v2 checkpoint with 149 tensors replaced by the orcarouter 
 
 It needs only the main file. r2 was built against peonist revision `5cc17cea1a10b502b4a5db41d8d2b1a0f22dba26` for the n-gram table and `e053f488b120b99ed2525e6ac99f68c51b3b6179` for the tokenizer and vision files; their Hugging Face LFS hashes match the files at this repository's pinned revision `506567c641cfb737e0b01c1deff10813154c5529`, which are already on disk. Select the pinned r2 package with `bin/run.sh halogen start --weights abliterated-r2 --wait` or the dashboard; its companions and prompt cache are separate from the default profile.
 
-Pin r2 by revision. The repository's current file at the same name is a later native conversion (October 11, 66,687,678,432 bytes, SHA-256 `b5bd925fa2b44343be4a2cd328cae6b57ce7ffa2fe2cc56281717377e5a1ce8a`) made from the BF16 source with Quat3rnion's Apache-2.0 [bf16-to-hgn](https://github.com/Quat3rnion/bf16-to-hgn) converter. It has passed only offline format checks, never GPU inference, and its source-matched n-gram and vision files are not published; the author does not vouch for the stock companions with it. The repository also holds an experimental `qwen38-flash-next-ht43-abliterated.hgn`, the same abliteration applied to peonist's smaller HT43 checkpoint: 53.66 GiB against v2's 62.11 GiB, and peonist reports HT43 holds about 8 GiB less in memory. Halogen loads HT43 since 0.16, but this derivative has passed only offline weight checks, never GPU inference. The file changed after r2's revision (57,618,253,824 bytes, SHA-256 `2beaad7b6d5107d7abfa866b33b47287160a68b9fc45b86020dbaa884955329c` at `e7783c5`; 57,618,253,792 bytes, `e74a0d272d74f5f41c54b00b16eb62be5d691130097cbf965b90be429cd7a1fd` on `main`) while the card still lists the old hash, so pin it by revision too. It is the candidate for a second, lower-memory trial after r2.
+Pin r2 by revision. The repository's current file at the same name is a later native conversion (October 11, 66,687,678,432 bytes, SHA-256 `b5bd925fa2b44343be4a2cd328cae6b57ce7ffa2fe2cc56281717377e5a1ce8a`) made from the BF16 source with Quat3rnion's Apache-2.0 [bf16-to-hgn](https://github.com/Quat3rnion/bf16-to-hgn) converter. It has passed only offline format checks, never GPU inference, and its source-matched n-gram and vision files are not published; the author does not vouch for the stock companions with it. The repository also holds an experimental `qwen38-flash-next-ht43-abliterated.hgn`, the same abliteration applied to peonist's smaller HT43 checkpoint: 53.66 GiB against v2's 62.11 GiB, and peonist reports HT43 holds about 8 GiB less in memory. Halogen loads HT43 since 0.16. The publisher reported offline weight checks only; it has now passed local GPU inference under 0.20.4. The file changed after r2's revision (57,618,253,824 bytes, SHA-256 `2beaad7b6d5107d7abfa866b33b47287160a68b9fc45b86020dbaa884955329c` at `e7783c5`; 57,618,253,792 bytes, `e74a0d272d74f5f41c54b00b16eb62be5d691130097cbf965b90be429cd7a1fd` on `main`) while the card still lists the old hash, so pin it by revision too. Select it as `abliterated-ht43`, with a separate per-profile prompt cache.
 
 The [local 0.20.4 trial](engine-updates.md#november-15-halogen-r2-abliterated-trial) passed full manifest hashes, inspection, full WikiText-2 comparison, live conversation/tools/cancellation and all five exact identifiers. r2 answered all five probes stock refused and used the same 78.7 GiB startup allocation. Its native verifier reports 149 false overlaps because table order differs from payload order: an independent range check found no overlaps, and a temporary table-order-only copy passed every native checksum and payload check. All inference used the unchanged pinned file. Full-corpus perplexity was 3.7891 against stock 3.7927, with 92.59% top-token agreement; the earlier card scores above used a shorter corpus. The two measured decode requests were modestly slower than stock. See the update record for limits and exact settings. Halogen's maintainers will not build refusal removal into the engine ([#239](https://github.com/peonist-ai/halogen-flash-server/issues/239)) and point to loading your own checkpoint.
+
+### Halogen: validated HT43 trial
+
+The [local HT43 trial](engine-updates.md#november-15-ht43-abliterated-trial) passed all manifest hashes and native verification without r2's table-order caveat. It passed live conversation, tools, cancellation and five exact identifiers, and answered the same five short probes that stock refused. Allocation was 70.2 GiB, 8.5 GiB below r2. Full WikiText-2 perplexity was 3.7673 against r2's 3.7891 and stock's 3.7927; top-token agreement was 91.14% with r2 and 90.18% with stock. Two short decode requests reached 63.34 and 63.90 tok/s. Prefer HT43 for the memory saving and passing local checks, without claiming generally better quality from the small perplexity difference. Host memory pressure differed between runs; image inputs, real coding work and long-context retrieval remain untested. Stock v2 stays the default.
 
 ### Gufo: huihui patch on the stock file
 
@@ -75,9 +80,9 @@ The most downloaded abliterated builds fit neither engine. [SC117/Qwen3.8-Flash-
 
 ## Trial plan
 
-1. Download the r2 file by revision into a new directory beside the stock checkpoint, verify its size and SHA-256, and run Halogen's `verify`, `inspect` and `ppl` against the stock checkpoint.
-2. Start Halogen with the `abliterated-r2` weight profile, then run the health check, a real generation, `tests/live.py`, a refusal probe and the startup allocation, and record the results in the update record.
-3. For lower memory, repeat steps 1 and 2 with the HT43 file pinned at `e7783c5`, comparing `ppl` and resident memory with r2.
+1. Completed: download the r2 file by revision into a new directory beside the stock checkpoint, verify its size and SHA-256, and run Halogen's `verify`, `inspect` and `ppl` against the stock checkpoint.
+2. Completed: start Halogen with the `abliterated-r2` weight profile, then run the health check, a real generation, `tests/live.py`, a refusal probe and the startup allocation, and record the results in the update record.
+3. Completed: for lower memory, repeat steps 1 and 2 with the HT43 file pinned at `e7783c5`, comparing `ppl` and resident memory with r2.
 4. Gufo is covered by the huihui patch run on November 15. Try NeosQ only if the same orcarouter abliteration is wanted on every engine, and include tool calling, since its author did not test it and #780 showed that a quant recipe (four small tensors stored as Q8_0) can corrupt copied identifiers on Gufo.
 
 The launcher and dashboard share named weight profiles for every engine; see [weight profiles](weight-profiles.md). New trials add a catalog entry and a pinned manifest. The full sequence is in `.scratch/abliterated-trials/`.

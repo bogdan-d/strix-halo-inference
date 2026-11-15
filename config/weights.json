@@ -11,6 +11,12 @@
       "model": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/qwen38-flash-next-v2-abliterated.hgn",
       "directory": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated",
       "manifest": "weights/halogen-abliterated-r2.tsv"
+    },
+    "abliterated-ht43": {
+      "label": "Abliterated \u00b7 HT43",
+      "model": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/qwen38-flash-next-ht43-abliterated.hgn",
+      "directory": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated",
+      "manifest": "weights/halogen-abliterated-ht43.tsv"
     }
   },
   "gufo": {
