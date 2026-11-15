@@ -2,7 +2,7 @@
 
 ## Goal
 
-Move Gufo to Unsloth's UD 3.1 `UD-Q4_K_XL`, then try an abliterated Flash-Next on each engine, cheapest and best-evidenced first. Drafted November 15, 2026. Ticket 04 completed on the October weights; ticket 01 is complete on UD 3.1, with the user requesting named weight profiles and deletion of both superseded October copies after validation.
+Move Gufo to Unsloth's UD 3.1 `UD-Q4_K_XL`, then try an abliterated Flash-Next on each engine, cheapest and best-evidenced first. Drafted November 15, 2026. Ticket 02 is complete on Halogen 0.20.4 with its native verifier table-order limitation documented; ticket 04 completed on the October weights; ticket 01 is complete on UD 3.1, with the user requesting named weight profiles and deletion of both superseded October copies after validation.
 
 Background and sources are in [abliterated builds](../../docs/abliterated-models.md) and [Gufo memory, smaller quants and extensions](../../docs/gufo-extensions.md). Pins, sizes and hashes below were read from the Hugging Face API on November 15; recheck them before downloading.
 
@@ -68,4 +68,8 @@ None of these needs bandwidth: the launcher and manifest changes above with thei
 
 - **October `UD-Q4_K_XL` shards:** delete after ticket 01 passes, or keep (111 GB)? User decision during ticket 01: delete both October stock and patched copies after the UD 3.1 replacements pass validation.
 - **Extension source:** if [gufo-extension#11](https://github.com/gufo-org/gufo-extension/pull/11) has not merged, ticket 05 installs unreviewed native code from a pinned commit. Confirm before installing.
-- **After the trials:** the user requested regular named weight profiles during ticket 01; Gufo now offers validated UD 3.1 `default` and `abliterated`. Other engines' trial profiles still require their own provisioning and validation.
+- **After the trials:** the user requested regular named weight profiles during ticket 01; Gufo now offers validated UD 3.1 `default` and `abliterated`. Halogen now also offers validated `abliterated-r2`; HT43 and Strixite trials still require their own provisioning and validation.
+
+## Halogen reference for ticket 03
+
+Ticket 02 saved the full WikiText-2 corpus, stock reference, source pins and result JSON outside Git at `$HOME/.cache/strix-halo-inference/trials/halogen-r2`. Reuse that exact corpus and reference with the same pinned Halogen 0.20.4 image, chunk 1024, sequence 262144 and native tool attention settings for the HT43 comparison. See [the r2 update record](../../docs/engine-updates.md#november-15-halogen-r2-abliterated-trial) for hashes and the verifier limitation; recheck each new file independently.

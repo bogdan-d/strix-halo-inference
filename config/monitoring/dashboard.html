@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Strix Halo</title>
+<link rel="icon" href="data:,">
 <style>
 :root {
   --bg: #0b0d11; --card: #141820; --line: #232a36; --text: #e8eaee; --muted: #8791a1;
@@ -16,30 +17,49 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 syst
 header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .02em; }
 #error, #notice { color: var(--bad); }
-.controls { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); }
+.controls { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--muted); }
 .controls label, .group { display: flex; align-items: center; gap: 6px; }
-#weights { flex-wrap: wrap; gap: 6px 14px; }
-#weights select { max-width: min(320px, 60vw); }
-#helper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; color: var(--muted); }
-select, button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
-button { padding: 3px 10px; cursor: pointer; }
+#helper { max-width: 1600px; margin: 0 auto; padding: 20px 20px 0; }
+.console-head, .utilities { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+.console-head { margin-bottom: 12px; }
+.console-head p { margin: 0; color: var(--muted); font-size: 12px; }
+#stop { margin-left: auto; }
+#engines { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.engine-control { min-width: 0; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.engine-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.weight-label { display: block; color: var(--muted); font-size: 12px; }
+.weight-label select { display: block; width: 100%; min-width: 0; margin-top: 4px; }
+.engine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.engine-start { border-color: var(--accent); }
+.running-profile { margin: 8px 0 0; color: var(--accent); font-size: 12px; overflow-wrap: anywhere; }
+.utilities { margin-top: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+#cache-tools { margin-left: auto; }
+#caches { flex-wrap: wrap; margin-top: 8px; }
+summary { cursor: pointer; color: var(--muted); }
+summary:hover { color: var(--text); }
+#messages { max-width: 1600px; margin: 0 auto; padding: 0 20px; overflow-wrap: anywhere; }
+#messages span:not(:empty) { display: block; margin-top: 12px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+select, button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+button { padding: 6px 12px; cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 button.on { opacity: 1; color: var(--accent); border-color: var(--accent); }
-main { padding: 4px 20px 24px; max-width: 2200px; margin: 0 auto; }
+main { padding: 4px 20px 24px; max-width: 1600px; margin: 0 auto; }
 section { margin-top: 18px; }
 .head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
-h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
-.note { margin: 0 0 10px; color: var(--muted); font-size: 12px; max-width: 150ch; }
+h2 { margin: 0; font-size: 16px; font-weight: 650; color: var(--accent); }
+.note { margin: 0 0 10px; color: var(--muted); font-size: 12px; max-width: 100ch; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
 .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--na); }
 .chip.ok::before { background: var(--ok); }
 .chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
 .chip.bad::before { background: var(--bad); }
 .grid { display: grid; gap: 10px; margin-bottom: 10px; }
-.tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-.charts { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.extras { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.extras { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
 .title { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { display: block; font-size: 11px; opacity: .75; overflow: hidden; text-overflow: ellipsis; }
@@ -66,24 +86,31 @@ h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-t
 .idle { margin-top: 18px; padding: 18px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
 code { color: var(--text); }
 body.stale main { opacity: .45; }
-#offline { margin: 18px 20px; }
+#offline { width: calc(100% - 40px); max-width: 1560px; margin: 18px auto; }
+.metric-details { margin-top: 12px; }
+.metric-details > summary { margin-bottom: 10px; }
 #drawer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; height: 34vh; display: flex; flex-direction: column; background: var(--card); border-top: 1px solid var(--line); }
 #drawer .head { margin: 0; padding: 6px 20px; border-bottom: 1px solid var(--line); }
 #log { flex: 1; margin: 0; padding: 8px 20px; overflow: auto; font: 12px/1.45 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 body.logs { padding-bottom: 34vh; }
+#tabs { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  header { position: static; padding: 12px; }
+  header .controls { margin-left: 0; width: 100%; gap: 8px 12px; }
+  #helper { padding: 16px 12px 0; }
+  #engines { grid-template-columns: 1fr; }
+  .engine-control { padding: 12px; }
+  main { padding: 4px 12px 24px; }
+  #offline { width: auto; margin: 16px 12px; }
+  #messages { padding: 0 12px; }
+  #cache-tools { margin-left: 0; }
+  .utilities { align-items: flex-start; }
+}
 </style>
 </head>
 <body>
 <header>
   <h1>Strix Halo</h1>
-  <div id="helper" hidden>
-    <span class="group">Monitoring <span id="monitoring" class="chip"></span><button id="monitor"></button></span>
-    <span class="group">Engine <span id="engines" class="group"></span><button id="npu">Halogen + NPU</button><button id="stop">Stop</button></span>
-    <span id="weights" class="group"></span>
-    <span class="group">Cache <span id="caches" class="group"></span></span>
-  </div>
-  <span id="notice"></span>
-  <span id="error"></span>
   <div class="controls">
     <span id="updated"></span>
     <button id="logs" hidden>Logs</button>
@@ -91,6 +118,18 @@ body.logs { padding-bottom: 34vh; }
     <label>Refresh <select id="refresh"></select></label>
   </div>
 </header>
+<div id="helper" hidden>
+  <div class="console-head">
+    <h2>Engines</h2><p>Run one at a time. Stop before switching.</p>
+    <button id="stop" hidden>Stop engine</button>
+  </div>
+  <div id="engines"></div>
+  <div class="utilities">
+    <span class="group">Monitoring <span id="monitoring" class="chip"></span><button id="monitor"></button></span>
+    <details id="cache-tools"><summary>Prompt caches</summary><div id="caches" class="group"></div></details>
+  </div>
+</div>
+<div id="messages" role="status"><span id="notice"></span><span id="error"></span></div>
 <div id="offline" class="idle" hidden></div>
 <main id="main"></main>
 <aside id="drawer" hidden>
@@ -642,7 +681,8 @@ function mount(section) {
   /** @param {string} className @param {Mounted[]} mounted */
   const grid = (className, mounted) => mounted.length > 0 && h("div", `grid ${className}`, ...mounted.map(item => item.el));
   const el = h("section", "", h("div", "head", h("h2", "", section.name), ...chips.map(item => item.el)), h("p", "note", section.note),
-    grid("tiles", tiles), grid("charts", charts), grid("extras", extras));
+    grid("tiles", tiles), grid("charts", charts),
+    extras.length > 0 && h("details", "metric-details", h("summary", "", "Additional metrics"), grid("extras", extras)));
   return {el, refresh: context => Promise.all([...chips, ...tiles, ...charts, ...extras].map(item => item.refresh(context)))};
 }
 
@@ -747,11 +787,16 @@ function render() {
   const monitor = /** @type {HTMLButtonElement} */ (byId("monitor"));
   monitor.textContent = monitoring === "off" ? "Start" : "Stop";
   monitor.disabled = !state || monitoring === "starting" || monitoring === "stopping";
-  for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("engines").childNodes)) {
+  for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("engines").querySelectorAll(".engine-start"))) {
     const engine = state?.engines[el.dataset.id ?? ""], name = SOURCES.find(source => source.id === el.dataset.id)?.name;
     const shown = engine?.state === "starting" && engine.since ? `loading ${Math.max(0, Math.round(Date.now() / 1000 - engine.since))} s` : engine?.state;
-    el.textContent = engine && engine.state !== "stopped" ? `${name} · ${engine.weights ?? "unknown"} · ${shown}` : name ?? "";
-    el.className = engine && engine.state !== "stopped" ? "on" : "";
+    const status = byId(`status-${el.dataset.id}`), profile = byId(`profile-${el.dataset.id}`);
+    status.textContent = shown ?? "unknown";
+    status.className = `chip ${engine?.state === "ready" ? "ok" : ""}`;
+    profile.hidden = !engine || engine.state === "stopped";
+    profile.textContent = `Running weights: ${engine?.weights ?? "unknown"}`;
+    el.textContent = "Start";
+    el.setAttribute("aria-label", `Start ${name}`);
     // One engine at a time: starting another needs an explicit stop first.
     el.disabled = !state || !!running;
   }
@@ -771,7 +816,7 @@ function render() {
     }
     select.disabled = !state || !!running;
     const chosen = entries.find(entry => entry.id === select.value);
-    const start = /** @type {HTMLButtonElement} */ (byId("engines").querySelector(`[data-id="${engine.job}"]`));
+    const start = /** @type {HTMLButtonElement} */ (byId("engines").querySelector(`.engine-start[data-id="${engine.job}"]`));
     start.disabled ||= !chosen?.available;
   }
   const npu = /** @type {HTMLButtonElement} */ (byId("npu"));
@@ -789,6 +834,7 @@ function render() {
   const stop = /** @type {HTMLButtonElement} */ (byId("stop"));
   stop.hidden = !running || running[1].state === "clearing";
   stop.disabled = running?.[1].state === "stopping";
+  stop.textContent = running ? `Stop ${SOURCES.find(source => source.id === running[0])?.name ?? "engine"}` : "Stop engine";
   for (const el of /** @type {NodeListOf<HTMLButtonElement>} */ (byId("tabs").childNodes)) {
     el.className = el.dataset.id === tab ? "on" : "";
     el.disabled = el.dataset.id !== tab && !state?.logs.includes(el.dataset.id ?? "");
@@ -889,19 +935,34 @@ function selectedWeights(engine) {
 
 if (HELPER) {
   for (const engine of config.engines) {
-    const label = h("label", "group", `${engine.name} weights`);
+    const label = h("label", "weight-label", "Weights");
     const select = document.createElement("select");
     select.id = `weights-${engine.job}`;
+    select.setAttribute("aria-label", `${engine.name} weights`);
     select.addEventListener("change", () => { localStorage.setItem(`strix.weights.${engine.job}`, select.value); render(); });
     label.append(select);
-    byId("weights").append(label);
+    const status = h("span", "chip", "unknown");
+    status.id = `status-${engine.job}`;
+    const profile = h("p", "running-profile");
+    profile.id = `profile-${engine.job}`;
+    profile.hidden = true;
+    const start = button(engine.job, "Start", async () => {
+      // Open the log at once, so a failed start is visible.
+      if (await act(`/engine/${engine.job}/start/${selectedWeights(engine.job)}`)) tail(engine.job);
+    });
+    start.className = "engine-start";
+    const actions = h("div", "engine-actions", start);
+    if (engine.job === "halogen") {
+      const npu = button("halogen-npu", "Start with NPU", async () => {
+        if (await act(`/engine/halogen/start-npu/${selectedWeights("halogen")}`)) tail("halogen");
+      });
+      npu.id = "npu";
+      actions.append(npu);
+    }
+    byId("engines").append(h("div", "engine-control",
+      h("div", "engine-heading", h("h3", "", engine.name), status), label, actions, profile));
   }
   byId("helper").hidden = byId("logs").hidden = false;
-  byId("engines").append(...config.engines.map(engine => button(engine.job, engine.name, async () => {
-    // Open the log at once, so a failed start is visible.
-    if (await act(`/engine/${engine.job}/start/${selectedWeights(engine.job)}`)) tail(engine.job);
-  })));
-  byId("npu").addEventListener("click", async () => { if (await act(`/engine/halogen/start-npu/${selectedWeights("halogen")}`)) tail("halogen"); });
   // Clearing deletes, so the first click only asks; a second click within five seconds clears.
   byId("caches").append(...config.engines.map(engine => button(engine.job, engine.name, () => {
     clearTimeout(unconfirm);

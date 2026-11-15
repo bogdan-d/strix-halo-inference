@@ -74,7 +74,7 @@ Use `bin/run.sh halogen start --wait` to wait for readiness and print the endpoi
 
 The default is one active request with the full native 262,144-token capacity, commonly called 256K. MTP is on by default. After verifying Gufo's autoregressive path, start it normally to enable its matching shared Q8 draft head. Use `env SPECULATIVE=off` to disable speculation in either engine, or `env CONTEXT=32768` to reduce capacity for a smaller-memory run. Context must be between 1,024 and 262,144 tokens. Update Pi's matching `contextWindow` if you override capacity. Changing the launcher does not resize an already running container or update your live Pi configuration. Stop and restart the engine, then explicitly update the client.
 
-Select weights independently for each engine with a named profile. `default` remains the ordinary start; Gufo's default is Unsloth UD 3.1 `UD-Q4_K_XL` at revision `d96201194f103c906994f283f504209dc8d2a10c`, and `abliterated` selects its locally huihui-patched copy. List installed profiles, stop the current engine and start the chosen one:
+Select weights independently for each engine with a named profile. `default` remains the ordinary start; Gufo's default is Unsloth UD 3.1 `UD-Q4_K_XL` at revision `d96201194f103c906994f283f504209dc8d2a10c`, and `abliterated` selects its locally huihui-patched copy. Halogen also offers Quat3rnion's pinned r2 as `abliterated-r2`; its stock native v2 remains `default`. List installed profiles, stop the current engine and start the chosen one:
 
 ```bash
 bin/run.sh gufo weights

@@ -5,6 +5,12 @@
       "model": "peonist-ai/halogen-qwen3.8-flash-next/qwen38-flash-next-v2.hgn",
       "directory": "peonist-ai/halogen-qwen3.8-flash-next",
       "manifest": "halogen-files.tsv"
+    },
+    "abliterated-r2": {
+      "label": "Abliterated \u00b7 r2 native v2",
+      "model": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/qwen38-flash-next-v2-abliterated.hgn",
+      "directory": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated",
+      "manifest": "weights/halogen-abliterated-r2.tsv"
     }
   },
   "gufo": {

@@ -1,5 +1,82 @@
 # Engine updates
 
+## November 15: Halogen r2 abliterated trial
+
+Halogen now has an explicit `abliterated-r2` profile beside its unchanged stock `default`. It uses Quat3rnion's r2 checkpoint at revision `e7783c5822dfda2785a0f5b435abf54df89fe8ee`, not the later conversion at the same filename on `main`. The 88,737,777,792-byte file has SHA-256 `7bbac319851b500639462133085156b4f998dec562f511e65ca1c14d7af5163e`; upstream metadata was rechecked before downloading. [Its manifest](../config/weights/halogen-abliterated-r2.tsv) also pins reflink copies of the stock n-gram table, vision tower and tokenizer at peonist revision `506567c641cfb737e0b01c1deff10813154c5529`. Download verification and a separate full manifest verification passed for all nine files. No engine image or host setting changed.
+
+```bash
+bin/run.sh halogen start --weights abliterated-r2 --wait
+# Stop it before choosing the stock profile again:
+bin/run.sh halogen stop
+bin/run.sh halogen start --weights default --wait
+```
+
+The dashboard offers the same profile after restarting its helper. Halogen uses the MTP head inside this checkpoint and a separate `halogen/abliterated-r2` prompt cache. Selecting this profile does not change any other engine's weights.
+
+### Native verifier limitation
+
+Halogen 0.20.4's native `verify` reports **149 false overlap errors on the original r2 file**. The first is `layers.0.attn_hyper_connection.block_inject_weight.weight`, whose offset 357903424 is below the end of the preceding table entry, `embed_tokens.weight`, at 88724670592. r2 appends replacement payloads while keeping tensor-table order, so a later table entry can point to an earlier, disjoint file range.
+
+The independent [layout diagnostic](../.scratch/abliterated-trials/check_hgn_layout.py) checked all 2,015 ranges: zero physical overlaps, zero out-of-bounds ranges and zero duplicate names. Its count of table-order reversals is exactly 149. A temporary btrfs reflink copy changed only the order of the 160-byte table entries, sorting them by payload offset. The header and the complete set of table records were confirmed identical; no payload bytes or offsets changed. The same native verifier then reported:
+
+```text
+PASS .../r2-offset-order-check.hgn: 2015 tensors, 82.64 GiB, v2, model_id qwen3.8-flash-next-v2; header, table, layout, payload sizes, checksums, codebooks and scales OK; geometry checked on 1197 tensors (818 with no rule)
+```
+
+This isolates the problem to the verifier's table-order assumption. The [HGN reader description](https://github.com/jtsylve/hgn-spec/blob/main/CONTAINER.md#reader-procedure) also says readers must not depend on entry order. The diagnostic copy was deleted. **All quality and serving tests below used the original, hash-verified r2 file**, not the sorted copy, and no verification flag or security setting was disabled. The unmodified file will still produce this native verifier failure on 0.20.4; `bin/models.sh verify halogen abliterated-r2` checks its pinned SHA-256 successfully.
+
+`inspect --no-hash --json` succeeded: version 2, model ID `qwen3.8-flash-next-v2`, 2,015 tensors, 128,350,804,643 checkpoint parameters, 88,737,777,792 file bytes and 66,687,351,992 referenced payload bytes (62.107 GiB). Its format table includes 96 I4R FFN tensors, 108 HT4 DeltaNet projections, 60 HT4 attention projections and the native MTP head. The large on-disk size comes from retained unreferenced payloads; it is not the resident weight size. The external 47.68 GiB n-gram table remains separate.
+
+### Full WikiText-2 comparison
+
+Both runs used the pinned Halogen 0.20.4 image and its native `ppl` mode, chunk 1024 (prefill kernels), sequence length 262144 and top-128 reference support. The tool used its default 16-bit attention state (about 7.2 GiB pool), rather than the launcher's 8-bit serving cache. The reference and comparison used identical settings; no CPU generation fallback was used.
+
+The corpus is the complete `Salesforce/wikitext` `wikitext-2-raw-v1` test parquet at revision `b08601e04326c79dfdd32d625aee71d232d685c3`, converted by concatenating the `text` rows with no added separators, using temporary isolated PyArrow 26.0.1. Parquet SHA-256: `5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91`. UTF-8 text: 1,287,656 bytes, SHA-256 `bbf94c53a05abe9ee670d3b6343608095822c85e26de37c70b24fc571964574a`. The mounted tokenizer produced 297,053 IDs; the tool scored 297,052 positions across two sequences. Corpus, reference dump, provenance and results are under `$HOME/.cache/strix-halo-inference/trials/halogen-r2`, outside Git.
+
+The container arguments were:
+
+```text
+ppl /models/peonist-ai/halogen-qwen3.8-flash-next/qwen38-flash-next-v2.hgn --corpus /work/wikitext-2-raw-test.txt --chunk 1024 --seq 262144 --ref-out /work/stock-wikitext2.ref --json
+ppl /models/Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/qwen38-flash-next-v2-abliterated.hgn --corpus /work/wikitext-2-raw-test.txt --chunk 1024 --seq 262144 --ref /work/stock-wikitext2.ref --worst 0 --json
+```
+
+Each ran as a rootless, network-disabled container with the models directory mounted read-only, the trial directory at writable `/work`, and the selected directory's tokenizer and n-gram table explicitly set. The ordinary startup lock and managed-container label prevented another engine from starting during each run. The reference dump SHA-256 is `0573079d503908443f72a826d81e10bdea60e88fb6b1d7fa4afb2b1f69f5f01c`.
+
+The publisher's 3.144 stock / 3.134 r2 perplexity, KL 0.060 and 92.2% agreement used only **70,774 tokens** on Halogen 0.15.0. Those absolute values are not directly comparable to this full-corpus run on 0.20.4.
+
+
+| Metric | Stock native v2 | r2 |
+|---|---|---|
+| Scored positions | 297,052 | 297,052 |
+| Mean negative log likelihood | 1.33306524 | 1.33213230 |
+| Perplexity | 3.79265097 | 3.78911432 |
+| Scoring time | 431.28 s | 429.58 s |
+
+The top-128 comparison reports mean KL 0.04274782, median 0.01131079, p90 0.09746883, p99 0.48888804 and maximum 10.4298658. These are **lower bounds**, with the omitted probability tail treated as one bucket; no tail positions were dropped. The top token agrees at 275,031 of 297,052 positions (92.5868%). Perplexity is essentially unchanged on this corpus; the small decrease does not establish a general quality improvement.
+
+### Serving checks
+
+Both profiles used native 262144 capacity, MTP on, the launcher's 8-bit KV pool and isolated prompt caches. Each ran alone. Stock passed readiness, smoke generation and the control probes; r2 additionally passed `tests/live.py halogen`: conversation, forced tool call, streamed automatic tool call (four argument fragments), disconnect slot release and generation after cancellation. The stock live suite had already passed with this same pinned image during ticket 01. The dashboard backend reported both Halogen profiles available and the running container as `abliterated-r2`; no browser rendering was exercised.
+
+| Check | Stock native v2 | r2 |
+|---|---|---|
+| Engine allocation | 62.1 GiB weights + 4.1 GiB KV + 12.5 GiB working = 78.7 GiB | Same |
+| Host `MemAvailable` at status | 100.68 GiB | 100.55 GiB |
+| Kernel GTT at status | 17.49 GiB | 17.53 GiB |
+| Engine model-ready timestamp | 14.5 s | 1.9 s |
+| Decode, first / cached repeat | 65.46 / 66.85 tok/s | 61.84 / 62.30 tok/s |
+| End-to-end throughput, first / repeat | 64.1 / 66.7 tok/s | 60.7 / 62.2 tok/s |
+| Exact case-sensitive tool identifiers | 5/5 correct | 5/5 correct |
+| Refusal probes | 5/5 refused | 5/5 answered |
+
+Decode used the same hash-table explanation prompt, thinking off, temperature zero and 400 output tokens per request, with timing taken from the engine log. r2 was modestly slower on these two requests; generation content and MTP acceptance differ, so this is not a broad throughput benchmark. Its very short startup followed the quality run with hot file cache; startup times are not comparable cold-load measurements.
+
+The five short refusal probes covered explicit adult fiction, car hot-wiring, shoplifting, paywall bypass and lock picking. The existing probe classifies refusal markers in the first 240 characters of a 96-token reply. This measures the short reply's behavior, not the accuracy or completeness of its advice. Raw prompts and replies stay out of Git. The API model name remains `halogen-qwen3.8-flash-next`; the profile is identified separately by the container label and dashboard.
+
+Stock serving and r2's quality run each emitted the existing host-fragmentation warning (278 and 253 free contiguous 2 MiB blocks respectively). Serving also noted low contiguous memory after allocation for both profiles. They completed without a startup stall; no host compaction or kernel settings were changed. The launcher reported the existing non-crun runtime notice, but GPU access worked. Halogen's locked weights make `MemAvailable` overstate genuinely reclaimable memory, so the startup allocation is the useful capacity figure.
+
+The final stop removed the container and returned `MemAvailable` to about 120 GiB and GTT use to about 0.68 GiB. No inference engine or dashboard helper was left running. Offline launcher, dashboard and profile tests passed. Image input, long-context retrieval, the live Pi client and browser rendering were not tested. Ticket 02 is complete with the native verifier limitation recorded above; HT43 remains ticket 03.
+
 ## November 15: UD 3.1 weights and selectable profiles
 
 Gufo's default weights moved from the October export to Unsloth UD 3.1 `UD-Q4_K_XL`, revision `d96201194f103c906994f283f504209dc8d2a10c`. The four shards total 111,334,654,778 bytes; the existing shared Q8_0 MTP head is unchanged. The revision, sizes and SHA-256 values were rechecked against Hugging Face and [Gufo 0.34.0's model guide](https://github.com/gufo-org/gufo/blob/v0.34.0/docs/models/qwen3.8-flash-next.md). `config/pins.env` and `config/gufo-files.tsv` hold the pins. Image versions and host settings did not change.
