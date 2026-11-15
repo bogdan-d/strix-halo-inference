@@ -3,12 +3,18 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP="$(mktemp -d)"
 trap 'rm --preserve-root=all --one-file-system -r -- "$TEMP"' EXIT
-export MODELS_DIR="$TEMP"
+export MODELS_DIR="$TEMP/models"
+# This test is offline: any download attempt fails it instead of fetching weights.
+mkdir -- "$TEMP/bin"
+printf '#!/bin/sh\necho "Offline test tried to download: $*" >&2\nexit 97\n' > "$TEMP/bin/curl"
+chmod +x -- "$TEMP/bin/curl"
+export PATH="$TEMP/bin:$PATH"
 
-# A size-correct corrupt existing file must be rejected, never overwritten.
+# A size-correct corrupt existing file must be rejected, never overwritten. It is the manifest's first entry,
+# so no earlier missing file is downloaded before it is checked. truncate makes it sparse, whatever its size.
 for ENGINE in gufo strixite; do
   if [[ "$ENGINE" == gufo ]]; then REPO=unsloth/Qwen3.8-Flash-Next-GGUF; else REPO=wemoh/Qwen3.8-Flash-Next-strixw; fi
-  IFS=$'\t' read -r _HASH SIZE FILE < <(awk -F '\t' '$2 < 20000000 {print; exit}' "$ROOT/config/$ENGINE-files.tsv")
+  IFS=$'\t' read -r _HASH SIZE FILE < "$ROOT/config/$ENGINE-files.tsv"
   TARGET="$MODELS_DIR/$REPO/$FILE"
   mkdir -p -- "$(dirname -- "$TARGET")"
   truncate -s "$SIZE" -- "$TARGET"
