@@ -39,7 +39,7 @@ elif sys.argv[1] == "run":
 elif sys.argv[1] == "stop" and os.environ.get("MISSING"):
     sys.exit(125)
 elif sys.argv[1] == "ps":
-    print(os.environ.get("ACTIVE", ""))
+    print(os.environ.get("COMFY_ACTIVE" if any("name=" in a for a in sys.argv) else "ACTIVE", ""))
 elif sys.argv[1] == "inspect":
     print("false" if os.environ.get("EXITED") else "true")
 ''')
@@ -83,6 +83,11 @@ else:
         assert result.returncode == 2, (args, result)
         assert not calls.exists(), f"Invalid arguments invoked Podman: {args}"
     assert "Engine comes first" in run("start", "halogen").stderr
+    for blocked in ("halogen", "gufo", "strixite"):
+        result = run(blocked, "start", COMFY_ACTIVE="strix-halo-den-comfyui")
+        assert result.returncode == 1 and "Stop ComfyUI in Den" in result.stderr, result
+        assert not any(json.loads(line)[0] == "run" for line in calls.read_text().splitlines())
+        calls.unlink()
     for engine in ("halogen", "gufo", "strixite"):
         result = run(engine, "pull")
         assert result.returncode == 0, result

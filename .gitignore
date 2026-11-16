@@ -10,3 +10,7 @@
 /config/.pins.env.*
 /config/monitoring/.lock
 __pycache__/
+
+/desktop/app/dist/
+/desktop/app/node_modules/
+/desktop/app/gen/

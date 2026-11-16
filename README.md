@@ -20,6 +20,10 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 - [Halogen upstream](https://github.com/peonist-ai/halogen-flash-server).
 - [Gufo upstream](https://github.com/gufo-org/gufo).
 
+## Desktop app
+
+Open the dashboard with `bin/desktop.sh run`, or the **Strix Halo Inference** KDE entry once installed. It bundles one WebView and a Rust control backend, with native header metrics, saved window/fullscreen state and agent inspection. Engines and optional monitoring remain explicitly started and stopped; closing the app leaves them running. The [desktop guide](docs/desktop.md) covers Podman builds, F11, logs and debugging; [shortcut setup](docs/desktop-shortcuts.md) covers the local entry. `bin/dashboard.py` remains the browser fallback.
+
 ## First run
 
 Requirements: Linux with accessible `/dev/kfd` and `/dev/dri`, rootless Podman, Bash, curl, Python 3, coreutils and `flock`. The default Halogen and Gufo downloads need approximately 217 GiB in total, plus images, partial downloads and prompt caches. Gufo's abliterated copy adds about 104 GiB, and the separate Strixite package about 114 GiB. Existing model files are never deliberately overwritten. Halogen is a proprietary binary engine with a [free-use EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md). Model licenses apply separately.

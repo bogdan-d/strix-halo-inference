@@ -1,6 +1,6 @@
 # 02: Native engine and monitoring controls
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: [01](01-desktop-shell.md)
 
@@ -14,12 +14,14 @@ Preserve per-target busy states, operation timeouts, inherited-environment filte
 
 ## Acceptance criteria
 
-- [ ] Every permitted action maps to fixed validated argv; unknown engines/actions/profiles cannot execute arbitrary commands.
-- [ ] Selected profiles and NPU model choices override the same inherited variables as today; refused starts retain actionable output.
-- [ ] State follows CLI-launched/stopped containers, running weight labels and partial monitoring; controls work when monitoring is off.
-- [ ] Cache clearing keeps its second-click confirmation and launcher restrictions.
-- [ ] Policy/timeout/operation tests cover the current tests/dashboard.py contract as applicable to IPC; close during start/stop cannot terminate detached container monitors.
+- [x] Every permitted action maps to fixed validated argv; unknown engines/actions/profiles cannot execute arbitrary commands.
+- [x] Selected profiles and NPU model choices override the same inherited variables as today; refused starts retain actionable output.
+- [x] State follows CLI-launched/stopped containers, running weight labels and partial monitoring; controls work when monitoring is off.
+- [x] Cache clearing keeps its second-click confirmation and launcher restrictions.
+- [x] Policy/timeout/operation tests cover the current tests/dashboard.py contract as applicable to IPC; close during start/stop cannot terminate detached container monitors.
 
 ## Comments
 
 2026-11-17: Recorded at the user’s request for subsequent implementation. No implementation or runtime validation has started.
+
+2026-11-17: Implemented typed Rust actions/state, profile validation via short-lived weights.py, filtered launch environment, per-target busy guards, finite helper timeouts and cached slow-changing details. Native fixtures passed malformed-action, environment, refusal and close-during-operation checks. All three engines started/stopped through native actions and passed short generation/cancellation checks. App close left Halogen reachable. See [desktop validation](../../../docs/desktop-validation.md) and [operations/debugging](../../../docs/desktop.md).

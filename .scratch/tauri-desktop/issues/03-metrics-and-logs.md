@@ -1,6 +1,6 @@
 # 03: Historical metrics, host header and streamed logs
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: [01](01-desktop-shell.md), [02](02-native-controls.md)
 
@@ -16,12 +16,14 @@ Preserve streamed logs for all six sources using native subscriptions and Tauri 
 
 ## Acceptance criteria
 
-- [ ] Historical host/engine charts retain current panel behavior and the existing panel/promtool tests pass.
-- [ ] The native controls and live header work with monitoring off; chart errors/stale data recover when monitoring returns.
-- [ ] Refresh/visibility changes cannot overlap polls indefinitely; chart ranges and view preferences persist within the app profile.
-- [ ] All six log sources follow live output, keep the drawer’s scroll/follow behavior, and clean up viewers on cancellation and renderer/app exit.
-- [ ] Agent inspection can diagnose chart requests and frontend errors; responsive layout is checked with the richer header and active log drawer.
+- [x] Historical host/engine charts retain current panel behavior and the existing panel/promtool tests pass.
+- [x] The native controls and live header work with monitoring off; chart errors/stale data recover when monitoring returns.
+- [x] Refresh/visibility changes cannot overlap polls indefinitely; chart ranges and view preferences persist within the app profile.
+- [x] All six log sources follow live output, keep the drawer’s scroll/follow behavior, and clean up viewers on cancellation and renderer/app exit.
+- [x] Agent inspection can diagnose chart requests and frontend errors; responsive layout is checked with the richer header and active log drawer.
 
 ## Comments
 
 2026-11-17: Recorded at the user’s request for subsequent implementation. No implementation or runtime validation has started.
+
+2026-11-17: Shared the existing JSDoc-typed chart/control implementation with the browser fallback; added strict TypeScript native transport and metrics header rather than rewriting proven chart code solely to change syntax. Panel JSON remains in the HTML. Direct Prometheus CORS, all three promtool suites, native log streaming/cancellation/reload/close and monitoring stop/start recovery passed. Polls serialize and wait for every in-flight query to settle. Window hiding pauses polls; Wayland minimization visibility remains a recorded limitation. See [desktop validation](../../../docs/desktop-validation.md) and [operations/debugging](../../../docs/desktop.md).

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "strict": true,
+    "noEmitOnError": true,
+    "allowJs": true,
+    "checkJs": true,
+    "rootDir": "../..",
+    "outDir": "dist",
+    "sourceMap": true,
+    "inlineSources": true
+  },
+  "include": [
+    "frontend/**/*.ts",
+    "../../config/monitoring/dashboard.js"
+  ]
+}

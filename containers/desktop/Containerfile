@@ -1,0 +1,9 @@
+# Rust 1.100.0 / Debian bookworm. Toolchain only: the app runs against the host's existing WebKitGTK.
+FROM docker.io/library/rust@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea
+RUN printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261115T000000Z bookworm main' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261115T000000Z bookworm-security main' > /etc/apt/sources.list \
+    && rm --preserve-root=all --one-file-system -f -- /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev patchelf \
+    && rm --preserve-root=all --one-file-system -rf -- /var/lib/apt/lists
+RUN rustup component add rustfmt
+WORKDIR /src/desktop/app

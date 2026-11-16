@@ -1,0 +1,1 @@
+{"name":"inference-desktop","private":true,"scripts":{"build":"tsc && node build-ui.mjs"},"devDependencies":{"typescript":"7.0.2"}}

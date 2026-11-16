@@ -1,6 +1,6 @@
 # 04: Preserve NPU history outside the desktop lifecycle
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: [02](02-native-controls.md), [03](03-metrics-and-logs.md)
 
@@ -14,12 +14,14 @@ Preserve the existing /health gate before opening the NPU device, metric names, 
 
 ## Acceptance criteria
 
-- [ ] Prometheus receives the existing npu_busy_percent, npu_power_watts, npu_model_loaded and npu_queued contract when applicable.
-- [ ] NPU history continues with monitoring running after the desktop app closes.
-- [ ] When Halogen has no npu object, the collector does not open /dev/accel/accel0; stopping monitoring stops only its owned collector.
-- [ ] Legacy helper coexistence, occupied ports, partial startup, repeated start/stop and app restart cannot create duplicate collectors or stop unrelated processes.
-- [ ] Fixture checks and a real opt-in NPU run verify readings, scrape gating and idle-device behavior; untested cases are documented.
+- [x] Prometheus receives the existing npu_busy_percent, npu_power_watts, npu_model_loaded and npu_queued contract when applicable.
+- [x] NPU history continues with monitoring running after the desktop app closes.
+- [x] When Halogen has no npu object, the collector does not open /dev/accel/accel0; stopping monitoring stops only its owned collector.
+- [x] Legacy helper coexistence, occupied ports, partial startup, repeated start/stop and app restart cannot create duplicate collectors or stop unrelated processes.
+- [x] Fixture checks and a real opt-in NPU run verify readings, scrape gating and idle-device behavior; untested cases are documented.
 
 ## Comments
 
 2026-11-17: Recorded at the user’s request for subsequent implementation. No implementation or runtime validation has started.
+
+2026-11-17: Extracted the standard-library collector into bin/npu_metrics.py and a monitoring-owned read-only exporter on 9098; the browser helper keeps 9099 and proxies its old metrics path. Lifecycle lock, pidfd ownership, occupied-port/duplicate-start tests and monitoring rollback tests passed. Real Halogen NPU embeddings, collector output and app-close continuity passed; after Halogen stopped, scrapes returned 503 and the NPU suspended. See [desktop validation](../../../docs/desktop-validation.md) and [operations/debugging](../../../docs/desktop.md).

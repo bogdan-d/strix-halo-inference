@@ -8,9 +8,9 @@ bin/monitor.sh start
 bin/monitor.sh status
 ```
 
-`start` and `status` print the `file://` address of [the dashboard page](../config/monitoring/dashboard.html). Open it in a browser. It is one self-contained HTML file with no build step, dependency or server of its own. It reads the local Prometheus HTTP API directly. Nothing starts automatically at login. An inference engine does not require monitoring to be running.
+The default interface is the [native desktop app](desktop.md): `bin/desktop.sh run`. Its controls and live header work without monitoring; the historical charts query the local Prometheus API directly. Nothing starts automatically at login. An inference engine does not require monitoring to be running.
 
-Opened that way the page only reads. To also start and stop monitoring and engines and to read container logs from the page, use the [dashboard controls](#dashboard-controls) helper.
+For a browser fallback, run `bin/dashboard.py` and open `http://127.0.0.1:9099/`. The page shares its JavaScript, CSS and panel definitions with the app. Opening `config/monitoring/dashboard.html` directly still provides read-only charts without the command helper. Keep its adjacent `.js` and `.css` files together.
 
 The page always shows host readings. Below them it shows whichever engine's metrics scrape is currently up, with headline speed, context, reuse and speculation readings, then charts and a collapsed **Additional metrics** section for engine-specific extras. With no engine running it says so. Engine semantics are documented separately for [Halogen](halogen-monitoring.md), [Gufo](gufo-monitoring.md) and [Strixite](strixite-monitoring.md); similar headline names do not imply identical accounting. Hover over a reading for its caveat. Stop and restart monitoring to load new scrape/probe configuration; run `pull` first only when pinned images are missing or changed. Starting monitoring does not start an engine.
 
@@ -31,7 +31,7 @@ The component comes before `logs`. Snapshot logs include the last 100 lines. Fol
 bin/dashboard.py
 ```
 
-This optional helper serves the same page at `http://127.0.0.1:9099/` and runs the commands behind its buttons. It is one Python file using only the standard library and runs on the host, not in a container, because it has to call Podman through the existing launchers. It runs in the foreground and nothing starts it at login. `Ctrl+C` stops only the helper; engines and monitoring keep running. Set `DASHBOARD_PORT` to use another port. [Desktop shortcuts](desktop-shortcuts.md) start and stop it from the KDE desktop instead.
+This optional helper serves the same page at `http://127.0.0.1:9099/` and runs the commands behind its buttons. It uses only the Python standard library and runs on the host, not in a container, because it has to call Podman through the existing launchers. It runs in the foreground and nothing starts it at login. `Ctrl+C` stops only the helper; engines and monitoring keep running. Set `DASHBOARD_PORT` to use another port. The [desktop shortcut](desktop-shortcuts.md) opens the native app; this helper remains an explicit browser fallback.
 
 Served by the helper, the page has a compact header for logs and chart settings, followed by an engine control area. Each engine groups its weight selector, start actions and status together; these groups stack on narrow screens. Controls include:
 
@@ -111,7 +111,7 @@ All requested readings are accessible on the validated Strix Halo host without c
 
 ## NPU readings
 
-The NPU section appears while Halogen serves NPU models and `bin/dashboard.py` runs, because the helper collects these readings and Prometheus scrapes them from `127.0.0.1:9099/metrics` as job `npu`. If `DASHBOARD_PORT` changes, change that target in `prometheus.yml` too. Opened as a file without the helper, the page has no NPU section.
+The NPU section appears while Halogen serves NPU models and monitoring runs. `bin/monitor.sh start` starts the independent read-only `bin/npu-exporter.py` collector on `127.0.0.1:9098/metrics`, scraped as job `npu`. Closing the desktop or browser helper does not stop it or its history. `bin/monitor.sh stop` stops the owned collector. The browser helper on 9099 proxies its old `/metrics` path; it no longer opens the device itself. Restart older helpers and stop/start monitoring once after updating to reload the new target. `DASHBOARD_PORT` changes only the browser fallback, not the NPU collector.
 
 | Reading | Source and meaning |
 |---|---|
@@ -121,7 +121,7 @@ The NPU section appears while Halogen serves NPU models and `bin/dashboard.py` r
 | NPU requests queued | Halogen's `/health` `npu.queued`. |
 | Locked memory | `/proc/meminfo` `Unevictable` for the whole host, where NPU models lock their memory. About 0.1 GiB is locked without them. |
 
-The firmware averages its readings. On October 14, 2026, back-to-back embedding requests read 37 to 41% busy and about 1.5 W, the decider 41 to 44% and 1.15 W. Busy dropped to zero within four seconds of the last request, while power fell off over tens of seconds. Opening the NPU device wakes it from runtime suspend for five seconds, so the helper reads the sensors only while Halogen reports NPU models and answers 503 otherwise; with NPU models stopped, the NPU suspended while Prometheus kept scraping. `xrt-smi` 2.21.75 shows only the power reading, because it asks for one sensor. Halogen's own `/metrics` has nothing about the NPU.
+The firmware averages its readings. On October 14, 2026, back-to-back embedding requests read 37 to 41% busy and about 1.5 W, the decider 41 to 44% and 1.15 W. Busy dropped to zero within four seconds of the last request, while power fell off over tens of seconds. Opening the NPU device wakes it from runtime suspend for five seconds, so the collector reads the sensors only while Halogen reports NPU models and answers 503 otherwise; with NPU models stopped, the NPU suspended while Prometheus kept scraping. `xrt-smi` 2.21.75 shows only the power reading, because it asks for one sensor. Halogen's own `/metrics` has nothing about the NPU.
 
 ## Storage and overhead
 

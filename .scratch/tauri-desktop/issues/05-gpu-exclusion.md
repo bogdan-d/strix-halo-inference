@@ -1,6 +1,6 @@
 # 05: Close the cross-app GPU exclusion gap
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: [02](02-native-controls.md)
 
@@ -14,11 +14,13 @@ Inspect simultaneous-start coordination: independent pre-start checks alone do n
 
 ## Acceptance criteria
 
-- [ ] Starting any inference engine while strix-halo-den-comfyui is running is refused from both CLI and app.
-- [ ] Existing inference-engine exclusion remains intact, and refused starts leave the active engine and its workload untouched.
-- [ ] Tests cover the ComfyUI check and current inference start-lock behavior.
-- [ ] Simultaneous-start limitations or a coordinated cross-repository solution are explicitly documented and validated before claiming strict cross-app exclusion.
+- [x] Starting any inference engine while strix-halo-den-comfyui is running is refused from both CLI and app.
+- [x] Existing inference-engine exclusion remains intact, and refused starts leave the active engine and its workload untouched.
+- [x] Tests cover the ComfyUI check and current inference start-lock behavior.
+- [x] Simultaneous-start limitations or a coordinated cross-repository solution are explicitly documented and validated before claiming strict cross-app exclusion.
 
 ## Comments
 
 2026-11-17: Recorded at the user’s request for subsequent implementation. No implementation or runtime validation has started.
+
+2026-11-17: Added the missing ComfyUI-name check inside inference’s existing start lock. Fixture starts of all three engines are refused while ComfyUI is present, without issuing a run command. Independent Den/inference locks still permit simultaneous-start races; the spec and desktop guide explicitly record the need for a coordinated Den-side lock change before claiming strict exclusion. See [desktop validation](../../../docs/desktop-validation.md) and [operations/debugging](../../../docs/desktop.md).

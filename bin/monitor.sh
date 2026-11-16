@@ -6,7 +6,7 @@ CONFIG="$ROOT/config/monitoring"
 source "$CONFIG/pins.env"
 LABEL=io.strix-halo-inference.monitoring
 COMPONENTS=(exporter probe prometheus)
-DASHBOARD="file://$CONFIG/dashboard.html"
+DASHBOARD="bin/desktop.sh run (browser fallback: bin/dashboard.py)"
 select_component() {
   NAME="strix-halo-monitor-$1"
   case "$1" in
@@ -62,6 +62,7 @@ if [[ "$ACTION" == status ]]; then
       echo "$component: unavailable"; FAILED=1
     fi
   done
+  "$ROOT/bin/npu-exporter.py" status || FAILED=1
   echo "Dashboard: $DASHBOARD"
   exit "$FAILED"
 fi
@@ -77,6 +78,7 @@ if [[ "$ACTION" == stop ]]; then
       else FAILED=1; fi
     fi
   done
+  "$ROOT/bin/npu-exporter.py" stop || FAILED=1
   if [[ "$FAILED" == 0 ]]; then echo 'Monitoring stopped. Persistent volumes are retained.'
   else echo 'Monitoring stop incomplete. Inspect the errors above.' >&2; fi
   exit "$FAILED"
@@ -93,6 +95,7 @@ NAME=strix-halo-monitor-prometheus
 if podman volume exists "$NAME"; then owned volume "$NAME"
 else podman volume create --label "$LABEL=true" "$NAME" >/dev/null; fi
 
+NPU_STARTED=false
 STARTED=()
 READY=false
 cleanup() {
@@ -100,6 +103,7 @@ cleanup() {
   trap - EXIT
   if [[ "$READY" != true ]]; then
     echo 'Monitoring startup failed. Stopping only containers started by this invocation.' >&2
+    if [[ "$NPU_STARTED" == true ]]; then "$ROOT/bin/npu-exporter.py" stop || echo "NPU collector cleanup failed" >&2; fi
     for cid in "${STARTED[@]}"; do
       podman stop --ignore --time 10 "$cid" || echo "Cleanup failed for container $cid" >&2
     done
@@ -150,5 +154,9 @@ done
 for cid in "${STARTED[@]}"; do
   [[ "$(podman container inspect --format '{{.State.Running}}' "$cid")" == true ]] || exit 1
 done
+if ! "$ROOT/bin/npu-exporter.py" status >/dev/null 2>&1; then
+  "$ROOT/bin/npu-exporter.py" start 9>&-
+  NPU_STARTED=true
+fi
 READY=true
 echo "Monitoring ready. Dashboard: $DASHBOARD"

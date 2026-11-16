@@ -1,6 +1,6 @@
 # 01: Desktop shell and agent debugging
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: None
 
@@ -14,12 +14,14 @@ Build only in rootless Podman, using rechecked stable pins. Do not install host 
 
 ## Acceptance criteria
 
-- [ ] The release app opens the bundled page in one WebView and coexists with Den without sharing identity or storage.
-- [ ] A second launch focuses the existing app; F11 and normal/maximized/fullscreen restoration work across real restarts.
-- [ ] The Wayland app ID matches the desktop-entry/icon identity; prepare the assets without switching the default launcher yet.
-- [ ] Plain launch exposes no inspector; explicit inspection supports view discovery, evaluation, screenshots, console and network access through the adapted repository helper.
-- [ ] Build/test/run commands, pins, runtime logs and known untested desktop behavior are documented.
+- [x] The release app opens the bundled page in one WebView and coexists with Den without sharing identity or storage.
+- [x] A second launch focuses the existing app; F11 and normal/maximized/fullscreen restoration work across real restarts.
+- [x] The Wayland app ID matches the desktop-entry/icon identity; prepare the assets without switching the default launcher yet.
+- [x] Plain launch exposes no inspector; explicit inspection supports view discovery, evaluation, screenshots, console and network access through the adapted repository helper.
+- [x] Build/test/run commands, pins, runtime logs and known untested desktop behavior are documented.
 
 ## Comments
 
 2026-11-17: Recorded at the user’s request for subsequent implementation. No implementation or runtime validation has started.
+
+2026-11-17: Implemented the standalone release shell, independent local.strix-halo.inference identity and cache profile, F11/window persistence, focus-only instance socket, native logs and opt-in WebKit inspector. Release rendering, six native window restarts, inspector operations and Wayland app-ID trace passed. The unstable Tauri feature is removed. Both real desktop binaries also ran simultaneously with fixture backends and independent scratch storage; inspector discovery showed the expected separate views, and both closed cleanly. See [desktop validation](../../../docs/desktop-validation.md) and [operations/debugging](../../../docs/desktop.md).

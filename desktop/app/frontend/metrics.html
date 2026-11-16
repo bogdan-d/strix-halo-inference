@@ -1,0 +1,7 @@
+<button id="metrics" aria-describedby="metric-gpu metric-ram metric-temperature metric-power" aria-label="Show metric history graphs" aria-pressed="false">
+<span id="metric-gpu" title="GPU utilization across all applications">GPU <b>—</b><svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true"><path class="baseline" d="M0 17H100"/><path class="history" data-metric="gpu"/></svg></span>
+<span id="metric-ram" title="System RAM usage">RAM* <b>—</b><svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true"><path class="baseline" d="M0 17H100"/><path class="history" data-metric="ram"/></svg></span>
+<span id="metric-temperature" title="CPU (k10temp Tctl) / GPU (AMDGPU edge). Graph: CPU orange dashed, GPU turquoise; shared temperature scale.">Temp <b>— / —</b><svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true"><path class="baseline" d="M0 17H100"/><path class="history cpu-temperature" data-metric="cpu_temperature"/><path class="history" data-metric="gpu_temperature"/></svg></span>
+<span id="metric-power" title="APU package power, including CPU; not wall power">APU <b>—</b><svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true"><path class="baseline" d="M0 17H100"/><path class="history" data-metric="power"/></svg></span>
+
+</button>

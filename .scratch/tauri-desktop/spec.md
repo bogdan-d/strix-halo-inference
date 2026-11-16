@@ -1,6 +1,6 @@
 # Porting Den's desktop app to strix-halo-inference
 
-Planned on 2026-11-17 from source inspection of this repository and the sibling Den desktop app. Implementation has not started. No builds, engine starts, generation requests, collector reads or host changes were performed for the analysis. Preserve existing NPU history and streamed logs. This spec is self-contained; the original Den research note is not required.
+Planned on 2026-11-17 from source inspection of this repository and the sibling Den desktop app. Implementation was authorized afterward and completed in this checkout; see the resolved tickets and [validation record](../../docs/desktop-validation.md). No builds, engine starts, generation requests, collector reads or host changes were performed during the original analysis. Preserve existing NPU history and streamed logs. This spec is self-contained; the original Den research note is not required.
 
 Source baselines: inference main at f9c4517; Den main at e7749d8. Den reference files are in the sibling strix-halo-den checkout and are not runtime dependencies. Recheck code and dependency versions before implementation.
 

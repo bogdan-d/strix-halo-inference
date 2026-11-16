@@ -18,6 +18,8 @@ with tempfile.TemporaryDirectory(prefix="strix-monitor-") as directory:
     calls = temp / "calls"
     shutil.copy(ROOT / "bin/monitor.sh", temp / "bin/monitor.sh")
     shutil.copy(ROOT / "config/monitoring/pins.env", temp / "config/monitoring/pins.env")
+    (temp / "bin/npu-exporter.py").write_text('#!/bin/sh\nprintf "%s\\n" "$1" >> "$NPU_CALLS"\n[ "$1" != status ] || exit 1\n[ "$1" != start ] || [ -z "$NPU_FAILS" ]\n')
+    (temp / "bin/npu-exporter.py").chmod(0o755)
     podman = commands / "podman"
     podman.write_text('''#!/usr/bin/env python3
 import json, os, sys
@@ -40,7 +42,7 @@ elif a[0] == "run":
     curl = commands / "curl"
     curl.write_text("#!/bin/sh\nexit 0\n")
     curl.chmod(0o755)
-    env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls))
+    env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", CALLS=str(calls), NPU_CALLS=str(temp / "npu-calls"))
 
     def run(*args, **overrides):
         calls.write_text("")
@@ -62,6 +64,8 @@ elif a[0] == "run":
     assert not any(a[:2] == ["volume", "rm"] for a in recorded)
     result, recorded = run("start", EXITED="1")
     assert result.returncode == 1 and len([a for a in recorded if a[0] == "stop"]) == 3
+    result, recorded = run("start", NPU_FAILS="1")
+    assert result.returncode == 1 and len([a for a in recorded if a[0] == "stop"]) == 3, result
     result, recorded = run("start")
     assert result.returncode == 0, result
     launched = [a for a in recorded if a[0] == "run"]

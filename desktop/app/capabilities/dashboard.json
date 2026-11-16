@@ -1,0 +1,16 @@
+{
+  "identifier": "dashboard",
+  "description": "Only the bundled dashboard may control engines.",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:window:allow-close",
+    "allow-dashboard-state",
+    "allow-dashboard-action",
+    "allow-logs-start",
+    "allow-logs-stop",
+    "allow-system-metrics"
+  ]
+}

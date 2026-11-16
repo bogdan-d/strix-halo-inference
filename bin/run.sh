@@ -123,6 +123,8 @@ exec 9>"$CACHE_ROOT/start.lock"
 flock -n 9 || { echo 'Another engine start is in progress.' >&2; exit 1; }
 ACTIVE="$(podman ps --filter label=io.strix-halo-inference.managed=true --format '{{.Names}}')"
 [[ -z "$ACTIVE" ]] || { echo "Stop the active engine first: $ACTIVE" >&2; exit 1; }
+COMFY="$(podman ps --filter name=^strix-halo-den-comfyui$ --format '{{.Names}}')"
+[[ -z "$COMFY" ]] || { echo "Stop ComfyUI in Den before starting inference: $COMFY" >&2; exit 1; }
 CONTEXT="${CONTEXT:-262144}"
 MIN_CONTEXT=1024
 [[ "$ENGINE" != strixite ]] || MIN_CONTEXT=4096
