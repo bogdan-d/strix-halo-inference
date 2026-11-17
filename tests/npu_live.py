@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""One real request per Halogen NPU route: decision, System One, text and image embeddings, streaming guard."""
+"""One real request per Halogen NPU route: decision, System One, text and image embeddings, streaming guard.
+
+The prompts are fixed so results stay comparable across releases. Change them only together with a new
+baseline in docs/engine-updates.md. Usage: python tests/npu_live.py [CHECK ...], default: decision, systemone,
+systemone-d3, text, image (the dashboard's small set plus d3-lite).
+"""
 import base64
 import json
 import math
@@ -43,14 +48,17 @@ def decision(model: str) -> None:
     assert "yes" in choice["message"]["content"], answer
 
 
-def systemone() -> None:
+def systemone(model: str) -> None:
     answer, seconds = post("/v1/systemone", {
+        "model": model,
         "state": "Customer: I was charged twice and nobody answers my emails.",
         "questions": {"team": {"type": "choice", "instructions": "Which team should handle this",
                                "criteria": {"billing": "Payment issues", "technical": "Bugs", "other": None}},
                       "refund": {"type": "noul", "instructions": "Does the customer request a refund?"}}})
-    print(f"systemone: {json.dumps(answer)[:300]} in {seconds:.2f} s")
-    assert answer["answers"]["team"]["choice"] == "billing", answer
+    team, refund = answer["answers"]["team"], answer["answers"]["refund"]
+    odds = {k: round(v, 3) for k, v in team["probabilities"].items()}
+    print(f"systemone {model}: team {team['choice']} {odds}, refund {refund['noul']:.3f} in {seconds:.2f} s")
+    assert team["choice"] == "billing", answer
 
 
 def embeddings(model: str) -> None:
@@ -93,8 +101,8 @@ def guard() -> None:
     assert any(event.get("event") == "end" for event in events), events
 
 
-for name in sys.argv[1:]:
-    {"decision": lambda: decision("decider-0.8b"), "decision-4b": lambda: decision("decider-4b"), "systemone": systemone,
+for name in sys.argv[1:] or ["decision", "systemone", "systemone-d3", "text", "image"]:
+    {"decision": lambda: decision("decider-0.8b"), "decision-4b": lambda: decision("decider-4b"), "systemone": lambda: systemone("decider-0.8b"), "systemone-d3": lambda: systemone("d3-lite"),
      "text": lambda: embeddings("embeddinggemma-2"), "image": lambda: image_embeddings("embeddinggemma-2"),
      "wemm-text": lambda: embeddings("wemm-embedding-4b"), "wemm-image": lambda: image_embeddings("wemm-embedding-4b"),
      "guard": guard}[name]()
