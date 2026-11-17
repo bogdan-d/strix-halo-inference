@@ -7,15 +7,15 @@
   "compaction": {
     "modelOverrides": {
       "halogen/halogen-qwen3.8-flash-next": {
-        "reserveTokens": 16384,
+        "reserveTokens": 32768,
         "keepRecentTokens": 32768
       },
       "gufo/qwen3.8-flash-next": {
-        "reserveTokens": 16384,
+        "reserveTokens": 32768,
         "keepRecentTokens": 32768
       },
       "strixite/qwen3.8-flash-next": {
-        "reserveTokens": 16384,
+        "reserveTokens": 32768,
         "keepRecentTokens": 32768
       }
     }

@@ -128,7 +128,7 @@ This is the model publisher's recommended coding profile, not a locally benchmar
 | Repetition penalty | `1.0` | `1.0` |
 | Frequency penalty | `0.0`, neutral engine default | `0.0`, neutral engine default |
 | Preserve thinking | `true` | `true` |
-| Total completion limit | `16384` | `16384` |
+| Total completion limit | `32768` | `32768` |
 
 `reasoning: true` lets Pi receive and replay the servers' `reasoning_content` as thinking blocks. `preserve_thinking: true` keeps that reasoning in subsequent rendered turns, which Qwen recommends for agent continuity and prompt-cache reuse. Thinking consumes context and completion tokens even when its display is hidden.
 
@@ -138,9 +138,9 @@ Keep `xhigh` for substantial coding tasks. Use `--thinking medium` or `--thinkin
 
 In the [local routine-coding comparison](thinking-comparison.md), `medium` was faster in all eight pairs and both levels passed the fixed checks. Try it for small, well-specified edits with good checks. The sample covers only two short synthetic tasks, not difficult debugging or long-context coding. The defaults remain `xhigh`, and `low` was not tested.
 
-The 16,384-token completion limit is an operational starting point for reasoning plus tool calls or final text. It is not 16K of reasoning followed by another 16K of output. Halogen reserves answer room when closing an overlong reasoning block. Gufo has no separate numeric thinking budget or guaranteed answer-room transition, so an unusually long reasoning phase can hit the total limit without an answer. Do not configure a Halogen-style thinking-budget field for Gufo. These profiles do not impose a separate numeric thinking cap on either engine.
+The 32,768-token completion limit, raised from 16,384 on November 17, covers reasoning plus tool calls or final text. It is not 32K of reasoning followed by another 32K of output. Pi sets it per model, so the same limit applies at every thinking level, `xhigh` and `medium` alike. It matches Halogen's default per-request generation limit (`HALOGEN_MAX_TOK`, 32768); Gufo sets no default limit, and Strixite leaves its answer room of 15% of the limit inside it, so Strixite's 32,768-token thinking cap cannot trigger on Pi requests. Halogen reserves answer room when closing an overlong reasoning block. Gufo has no separate numeric thinking budget or guaranteed answer-room transition, so an unusually long reasoning phase can hit the total limit without an answer. Do not configure a Halogen-style thinking-budget field for Gufo. These profiles do not impose a separate numeric thinking cap on either engine.
 
-All three models advertise `contextWindow: 262144`, matching the launcher's full native 256K allocation. The compaction overrides reserve 16,384 tokens and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 245,760 tokens, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 16K completion cap limits one response, not the conversation's context capacity.
+All three models advertise `contextWindow: 262144`, matching the launcher's full native 256K allocation. The compaction overrides reserve 32,768 tokens, matching the completion limit, and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 229,376 tokens, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 32K completion cap limits one response, not the conversation's context capacity.
 
 If you previously installed the 32K profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
 

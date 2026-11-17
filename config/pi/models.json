@@ -12,7 +12,7 @@
           "input": ["text"],
           "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
           "contextWindow": 262144,
-          "maxTokens": 16384,
+          "maxTokens": 32768,
           "thinkingLevelMap": {
             "off": "none",
             "minimal": null,
@@ -59,7 +59,7 @@
           "input": ["text"],
           "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
           "contextWindow": 262144,
-          "maxTokens": 16384,
+          "maxTokens": 32768,
           "thinkingLevelMap": {
             "off": "none",
             "minimal": null,
@@ -114,7 +114,7 @@
             "cacheWrite": 0
           },
           "contextWindow": 262144,
-          "maxTokens": 16384,
+          "maxTokens": 32768,
           "thinkingLevelMap": {
             "off": "none",
             "minimal": null,

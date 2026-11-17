@@ -137,7 +137,7 @@ def main() -> None:
         (agent / "models.json").write_text(json.dumps(profile))
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False},
             "enableInstallTelemetry": False, "enableAnalytics": False, "shellPath": "/bin/bash",
-            "compaction": {"reserveTokens": 16384, "keepRecentTokens": 32768}}))
+            "compaction": {"reserveTokens": 32768, "keepRecentTokens": 32768}}))
         shutil.copy(ROOT / "tests/strixite_guard.ts", agent / "guard.ts")
         probe = base / "preflight"
         probe.mkdir()

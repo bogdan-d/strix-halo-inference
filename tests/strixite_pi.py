@@ -54,7 +54,7 @@ def main():
             (temp / "agent/models.json").write_text(json.dumps({"providers": {"strixite": provider}}))
             (temp / "agent/settings.json").write_text(json.dumps({"retry": {"enabled": False},
                 "enableInstallTelemetry": False, "enableAnalytics": False,
-                "shellPath": "/bin/bash", "compaction": {"reserveTokens": 16384, "keepRecentTokens": 32768}}))
+                "shellPath": "/bin/bash", "compaction": {"reserveTokens": 32768, "keepRecentTokens": 32768}}))
             shutil.copy(ROOT / "tests/strixite_guard.ts", temp / "agent/guard.ts")
             sandbox = sandbox_command(temp / "project", temp / "agent")
             assert verify_sandbox(temp / "project", temp / "agent") == "1.1.0"
