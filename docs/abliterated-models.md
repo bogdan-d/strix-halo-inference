@@ -37,7 +37,7 @@ huihui's v2 GGUF repository ships a 3.56 GB patch file and a Python script that 
 
 ### Gufo: huihui patch on UD 3.1 IQ4_XS
 
-The optional `flash_next_iq` module now loads the smaller Unsloth UD 3.1 quant in stock Gufo 0.34.0. Select `iq4-xs` for stock or `iq4-xs-abliterated` for the locally patched copy. Both use the existing shared MTP head and report 72.64 GiB allocation at native 256K with one session, about 16.49 GiB below Q4_K_XL. The abliterated profile passed short conversation, streamed tools, cancellation and five exact identifiers, and answered all five probes its stock control refused. These probes classify refusal behavior, not accuracy or completeness of the answers. See [the full trial record](engine-updates.md#november-15-gufo-iq4-xs-extension-trial) for coding checks, speed, provenance and limits.
+The optional `flash_next_iq` module now loads the smaller Unsloth UD 3.1 quant in stock Gufo 0.34.0 and, rebuilt, 0.35.0. Select `iq4-xs` for stock or `iq4-xs-abliterated` for the locally patched copy. Both use the existing shared MTP head and report 72.64 GiB allocation at native 256K with one session, about 16.49 GiB below Q4_K_XL. The abliterated profile passed short conversation, streamed tools, cancellation and five exact identifiers, and answered all five probes its stock control refused. These probes classify refusal behavior, not accuracy or completeness of the answers. See [the full trial record](engine-updates.md#november-15-gufo-iq4-xs-extension-trial) for coding checks, speed, provenance and limits.
 
 The same pinned huihui script replaced 84 Q8_0 tensors and 12 Q6_K attention-output tensors. The verifier checked all 1,224 tensors: exactly 96 changed, every target changed, all other tensor bytes and metadata matched. The patched metadata-only first shard gained six zero alignment bytes; shards 3 and 4 are byte-identical to stock. `gguf-py` from llama.cpp revision `18b74fa41dcac1f55ae1371fe58153f7225941f6` supplies the Q2_0 support missing from PyPI 0.19.0. Patching ran without network or home access, with read-only inputs and only the output directory writable. Output hashes are in [the patched manifest](../config/weights/gufo-iq4-xs-abliterated.tsv).
 
@@ -61,7 +61,7 @@ A gated source needs `HF_TOKEN` (see the README) with access to public gated rep
 
 ## What each engine reads
 
-**Gufo 0.34.0 without the optional IQ extension** loads Flash-Next experts only as Q4_K, Q5_K, Q6_K, Q5_1 or Q8_0 and the n-gram table only as IQ4_NL, Q8_0 or BF16 (see [smaller quants](gufo-extensions.md#smaller-flash-next-quants)). Header scans on November 15:
+**Gufo 0.34.0 and 0.35.0 without the optional IQ extension** loads Flash-Next experts only as Q4_K, Q5_K, Q6_K, Q5_1 or Q8_0 and the n-gram table only as IQ4_NL, Q8_0 or BF16 (see [smaller quants](gufo-extensions.md#smaller-flash-next-quants)). Header scans on November 15:
 
 | Repository | Size | Loads | Notes |
 |---|---|---|---|

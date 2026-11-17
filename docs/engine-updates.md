@@ -1,5 +1,57 @@
 # Engine updates
 
+## November 17 update
+
+`bin/update.py` pulled Halogen 0.20.6, Gufo 0.35.0 and Strixite 0.7.1 by digest and atomically updated their image and version pins. Launch settings, Gufo and Strixite model revisions, live Pi files and host settings are unchanged. `bin/npu-manifest.sh` against the 0.20.6 image produced no change. Halogen's new draft head was added to every Halogen weight profile, the `flash_next_iq` module was rebuilt for the new Gufo image, and all engines passed the [local checks](#november-17-local-checks). Afterwards the superseded Halogen 0.20.4, Gufo 0.34.0 and Strixite 0.7.0 images were removed by digest without force (no container used them; Podman's image store fell from 36.37 GB to 28.98 GB), the 42 MB `flash_next_iq` build for the removed Gufo image was deleted, and `bin/cache.sh all clear` emptied all prompt caches.
+
+| Engine | Previous | Current | Current image digest |
+|---|---|---|---|
+| Halogen | 0.20.4 | 0.20.6 | `sha256:f68892a56d8a1182645042574d702374bff402bb986ec4d49304cbe89483dbaf` |
+| Gufo | 0.34.0 | 0.35.0 | `sha256:99e9b5471b7a9b007c686c2aa795afaf966744d64e753cb009c89541f9e9c2b6` |
+| Strixite | 0.7.0 | 0.7.1 | `sha256:bf2f840bfee7c781e0a576f96542c6495f8b10ba17fc96da5600662d22e4d4cf` |
+
+The images advertise revisions Halogen `109f0b78e221`, Gufo `0260e1162f8713caee4d3f4ff77e017de7165f9c` and Strixite `dd3c5e0`, not compared with public source.
+
+### Halogen draft head
+
+0.20.6's entrypoint loads `qwen38-flash-next-drafter-r2.hgn` as `HALOGEN_CK_OVERLAY` when it sits beside any `qwen38-flash-next-*.hgn` checkpoint, which covers the stock v2 and both Quat3rnion files, and sets the cost-based draft gates. Without it the checkpoint's own head drafts. It downloads the file only with `HALOGEN_DOWNLOAD` and a writable models volume, which this repo does not use, so the file is pinned instead: 1,523,568,192 bytes, SHA-256 `07a7b5b358cb02737ecf85043db0d30b4938aed06ae6311772ea4e40b939696b`, from `peonist-ai/halogen-qwen3.8-flash-next` revision `e3b33d6422216419d46434c2d9a64d82a9654d08`, in the stock and both abliterated manifests. The abliterated directory holds a reflink copy. All three profiles verified. The launcher needs no change; `env SPECULATIVE=off` still turns drafting off. The overlay replaces the checkpoint's own 36 head tensors, so resident weights stay 62.1 GiB on v2. The repository also gained `qwen38-flash-next-drafter-r2-ht4.hgn` on November 17, labelled for the next server release; 0.20.6 does not read it and it is not provisioned.
+
+### What changed upstream
+
+- **Halogen 0.20.5** decodes faster with several requests at once and stores saved conversations in less memory; at temperature 0 a reply can occasionally differ from 0.20.4 (`HALOGEN_DN_STATE=fp32` restores the old state precision). Prompt caches saved by an earlier version are rebuilt. Hindi, Thai and other Indic-script prompts now tokenize as the model was trained. The image's NPU runtime moves to XRT 2.27, LFM3 on the NPU reads long prompts about twice as fast, and `HALOGEN_AGENT_GUARD=watch` no longer loads the hold model. Fixes cover `#### 18`-style final answer lines (#259), negative numbers in pretty-printed JSON arrays under structured output (#258), a 404 for unloaded Halogen model names (#257), Claude Code's `tool_addition`/`tool_removal` blocks (#261), `anyOf` schemas of up to 32 tool branches (#263), a kept-state wait (#265) and a stalled NPU engine, which now restarts after `HALOGEN_NPU_KILL_S`. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.5/CHANGELOG.md).
+- **Halogen 0.20.6** adds the draft head above (publisher: about 4% faster single-request decode, answers unchanged), reads images about four times faster, processes ht43 prompts 1 to 2% faster, adds a `:qad` LFM3-1.7B NPU format and an opt-in `HALOGEN_CONC_MODE` for 4 to 16 concurrent requests, which makes a single request 7 to 9% slower and is not used here. It fixes recomputation of shared long prompts ending just past a 32,768-token boundary, and a rare reply computed from another conversation's context when several conversations ran at once and context memory was full; this launcher's single slot makes the latter unlikely to apply. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/CHANGELOG.md).
+- **Gufo 0.35.0** parses multipart form bodies per RFC 7578, marked breaking, and requires a text scheduling profile inside each model runner, removing the legacy prefill budget; neither affects this launcher's flags. It runs EmbeddingGemma 2, Qwen3-ASR and Qwen3-TTS on the XDNA NPU with `--npu` (catalogued in [engine models](engine-models.md#gufo-0350)), adds an A1111 image API and Qwen-Image guidance features, drafts Flash-Next MTP proposals from a Q4_K copy of the head prefix, fixes compacted MTP rows reaching the norm buffer, and improves cache retention and disk recovery. The extension API is now 0.3.20, still series 0.3. The Flash-Next `weights.cpp` loader is byte-identical to 0.34.0's, so its quantization limits are unchanged. [Release notes](https://github.com/gufo-org/gufo/releases/tag/v0.35.0).
+- **Strixite 0.7.1** is a stability release with unchanged weights. Several long slots no longer get refused K/V room the cache could free (#42); a stream that fails after starting now ends with an `event: error` frame and `finish_reason: "error"` instead of `[DONE]` (#43); a hang at the end of very long prefills is avoided at under 0.5% long-context decode cost (#31); MTP rollback with `mtp-draft` 11 or higher is exact (#37). The default `thinking-cap` is now 32,768 tokens (#47); the launcher does not override it. [Release notes](https://github.com/shawnshekari/strixite/releases/tag/v0.7.1).
+
+### November 17 local checks
+
+Prompt caches were cleared before the checks. Each engine and profile was started alone at native 262144 context with MTP on, then stopped. MemAvailable was 116.7 GiB before the first start and 119.0 to 119.5 GiB after each stop, with Unevictable 116 KiB. `tests/update.sh`, `python tests/run.py`, `tests/models.sh` and `git diff --check` passed. The v0.20.6 fabric-clock helper has the same SHA-256 as the installed one.
+
+| Check | Halogen 0.20.6 | Gufo 0.35.0 | Strixite 0.7.1 |
+|---|---|---|---|
+| Ready and `tests/live.py` or `tests/strixite_live.py` | Pass on `default`, `abliterated-ht43` and `abliterated-r2`, 4 fragments each | Pass on `default`, `iq4-xs` and `iq4-xs-abliterated`, 4 fragments each | Pass, 22 fragments, slot released 0.25 s after disconnect |
+| Allowlisted names on `/metrics` | 33 of 33 | 17 of 17 | 33 of 33 |
+| Memory at start | 78.4 GiB in all on v2 and r2, 70.0 GiB on ht43, drafter included | MemAvailable about 28.5 GiB serving Q4_K_XL, 43.9 GiB serving IQ4_XS | GPU buffers 79.3 GiB, MemAvailable 32.2 GiB after loading |
+
+Decode rates from one temperature-0 request each, thinking off, 600 tokens at most. These are single samples, not benchmarks; no run without the new Halogen head was made for comparison.
+
+| Engine and profile | Prose, tok/s (drafts accepted) | Code, tok/s (drafts accepted) |
+|---|---|---|
+| Halogen `default` | 67.4 (350 of 466) | 99.0 (478 of 548) |
+| Halogen `abliterated-ht43` | 70.5 (355 of 448) | 101.1 (477 of 542) |
+| Halogen `abliterated-r2` | 67.7 (341 of 458) | 92.6 (465 of 553) |
+| Gufo `default` | 47.4 (315 of 520) | 75.3 (475 of 593) |
+| Gufo `iq4-xs` | 48.7 (336 of 559) | 71.4 (475 of 581) |
+| Gufo `iq4-xs-abliterated` | 48.2 (326 of 565) | 70.5 (476 of 592) |
+| Strixite | 57.1 | 84.9 |
+
+- **Halogen draft head.** Every profile logged `draft head qwen38-flash-next-drafter-r2.hgn` and loaded its 36 tensors, 1.42 GiB, as the overlay.
+- **Halogen NPU.** Halogen started with `d3-lite`, `decider-0.8b` and `embeddinggemma-2` on the image's XRT 2.27.0. A spam decision from `decider-0.8b` answered `yes` at 0.992 in 0.20 s. On the double-charge complaint with the `routes.py` wording, `decider-0.8b` chose `billing` at 0.994 with a refund probability of 0.129, and `d3-lite` chose `billing` at 0.687 with 0.796. With the upstream guide's wording `d3-lite` chose `technical` at 0.47 over `billing` at 0.44. The November 14 prompt was not recorded exactly, so these are not a confirmed regression from its 0.86 and 0.98. Text embeddings scored 0.869 related and 0.604 unrelated, an image embedding matched `red` 0.719 over `blue` 0.622. Flash's live test passed beside them. After stop the fabric clock was back on `auto` and the kernel log had no `amdxdna` or `amdgpu` messages. `routes.py systemone` now needs a `model` field when two decision models are loaded and returned 422 without it.
+- **Gufo extension.** `flash_next_iq` 0.2.0 at the approved revision rebuilt in the new image under the same no-network, read-only, rootless settings and reports `[installed, ready]`. Its compiler warnings are the same 195 in the same 10 categories as the 0.34.0 build. Gufo cannot load the old build, because the store is keyed by image digest.
+- **Logs.** Halogen warned at each start that the host had only 265 to 419 contiguous free 2 MiB blocks, where November 14 logged no such warning with 324; startup still completed in 17 to 27 s. Gufo and Strixite logged no warnings. Strixite reported its new `thinking-cap` of 32,768 from the bundled configuration.
+
+Not exercised: the Gufo `abliterated` Q4_K_XL profile, Pi sessions, image input, deep prefill and long context, Halogen text to speech, `HALOGEN_CONC_MODE`, Gufo's NPU modes, Strixite's error-frame path, power draw and a decode comparison with the checkpoint's own Halogen head.
+
 ## November 15: Gufo IQ4_XS extension trial
 
 Ticket 05 adds `iq4-xs` and `iq4-xs-abliterated` beside the existing Q4_K_XL profiles. Both new profiles run on the unchanged Gufo 0.34.0 image with the optional `flash_next_iq` module, one session, native 262144 context and MTP enabled. They allocate 72.64 GiB against Q4_K_XL’s 89.12 GiB, a 16.49 GiB reduction (about 18.5%). The default remains Q4_K_XL. Select the new profiles in the dashboard or with:

@@ -1,10 +1,10 @@
 # Models each engine supports
 
-All three engines are configured here for Qwen3.8-Flash-Next only. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 9, 2026, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in `config/*-files.tsv`, and only those the [update record](engine-updates.md) names have been run here.
+All three engines are configured here for Qwen3.8-Flash-Next only. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 9, 2026, and rechecked for the release changes of November 17, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in `config/*-files.tsv`, and only those the [update record](engine-updates.md) names have been run here.
 
 Abliterated Flash-Next builds for each engine, with picks and compatibility notes, are collected in [abliterated builds](abliterated-models.md).
 
-## Halogen 0.20.4
+## Halogen 0.20.6
 
 Halogen runs one model on the GPU, Flash-Next, and small models on the NPU beside it, on the same port. The launcher passes NPU models with `NPU_MODELS`; see the [README](../README.md#npu-models).
 
@@ -13,14 +13,16 @@ Halogen runs one model on the GPU, Flash-Next, and small models on the NPU besid
 | Variant | Status here |
 |---|---|
 | Native v2 `.hgn` checkpoint, 62.1 GiB, plus the FP8 n-gram table, 47.7 GiB | Provisioned and used |
+| Draft head `qwen38-flash-next-drafter-r2.hgn`, 1.42 GiB, new in 0.20.6 | Provisioned beside every Halogen checkpoint and used whenever MTP is on; the checkpoint's own head drafts without it |
+| Draft head `qwen38-flash-next-drafter-r2-ht4.hgn`, 4-bit projections | Published November 17 for the next server release; not read by 0.20.6, not provisioned |
 | Vision tower `qwen38-flash-next-vision.hgn` | Provisioned, opt-in with `VISION=on` |
-| GGUF of the same model, read directly: unsloth `UD-IQ4_XS` and `UD-Q4_K_XL`, bartowski `IQ4_XS`, mradermacher `i1-IQ4_XS`, `Q4_K_M`/`Q4_K_S`, ggml-org `IQ4_NL` | Not configured; the launcher selects only the `.hgn` package. Gufo's `UD-Q4_K_XL` shards are already on disk. [GGUF guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.4/docs/gguf.md) |
+| GGUF of the same model, read directly: unsloth `UD-IQ4_XS` and `UD-Q4_K_XL`, bartowski `IQ4_XS`, mradermacher `i1-IQ4_XS`, `Q4_K_M`/`Q4_K_S`, ggml-org `IQ4_NL` | Not configured; the launcher selects only the `.hgn` package. Gufo's `UD-Q4_K_XL` shards are already on disk. [GGUF guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/docs/gguf.md) |
 
-A separate preview image, `0.18.14-flint-preview`, serves RecursiveSI's Flint, a 40B mixture-of-experts model, instead of Flash-Next. It is not pinned or used here. [Flint preview](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.4/README.md#flint-preview).
+A separate preview image, `0.18.14-flint-preview`, serves RecursiveSI's Flint, a 40B mixture-of-experts model, instead of Flash-Next. It is not pinned or used here. [Flint preview](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/README.md#flint-preview).
 
 ### NPU models
 
-Each named model is fetched from its own `peonist-ai/halogen-npu-*` repository. `HALOGEN_DOWNLOAD` stays unset here, so only models whose files are in `config/npu-files.tsv` can start. [NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.4/docs/NPU.md).
+Each named model is fetched from its own `peonist-ai/halogen-npu-*` repository. `HALOGEN_DOWNLOAD` stays unset here, so only models whose files are in `config/npu-files.tsv` can start. [NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/docs/NPU.md).
 
 | Model | Base model | Use, route | Provisioned |
 |---|---|---|---|
@@ -49,28 +51,30 @@ These load from a path under `/models`, converted at first start. On our read-on
 | Checkpoint | Use |
 |---|---|
 | Fine-tunes of Qwen3.5-0.8B, Qwen3-Embedding-0.6B, Qwen3-Reranker-0.6B or Qwen3Guard-Gen-0.6B, and Qwen3-0.6B sequence classifiers | Decisions, embeddings, reranking, moderation, `/classify` |
-| LiquidAI LFM3-1.7B or a fine-tune | Chat completions |
+| LiquidAI LFM3-1.7B or a fine-tune | Chat completions; 0.20.6 adds a `:qad` format for Liquid's `LFM3-1.7B-QAD-Q4_0.gguf`, about 48 tokens a second after a 1,024-token prompt |
 | LiquidAI d1-2B | Decisions over text, pictures and video, on `/v1/systemone` |
 | LiquidAI LFM3-VL-2B or a fine-tune, new in 0.18.23 | Chat with pictures and video |
 | LiquidAI LFM3-Audio-2B or a fine-tune, new in 0.18.23 | Speech in, speech out, `/v1/audio/transcriptions` and `/v1/audio/speech` |
 | LiquidAI LFM3-Omni-2B, new in 0.18.23 | Pictures, video with sound, speech in, and text or speech out, on one model id |
-| `ATH-MaaS/OvisOCR3`, Apache 2.0, new in 0.20.0 | Document pages to Markdown, with tables as HTML and formulas as LaTeX, served as `OvisOCR3` on the chat routes; one or two pictures a request, about 20 seconds a typical page. The image ships only its NPU programs, and the launcher's `NPU_MODELS` takes model ids, not the `/models/OvisOCR3` path it needs. [Guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.4/docs/NPU.md#your-own-ovisocr3) |
+| `ATH-MaaS/OvisOCR3`, Apache 2.0, new in 0.20.0 | Document pages to Markdown, with tables as HTML and formulas as LaTeX, served as `OvisOCR3` on the chat routes; one or two pictures a request, about 20 seconds a typical page. The image ships only its NPU programs, and the launcher's `NPU_MODELS` takes model ids, not the `/models/OvisOCR3` path it needs. [Guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/docs/NPU.md#your-own-ovisocr3) |
 
-## Gufo 0.34.0
+## Gufo 0.35.0
 
-Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.34.0/docs/models/README.md). Smaller Flash-Next quants, measured memory by context and MTP, and community extensions are collected in [Gufo memory, smaller quants and extensions](gufo-extensions.md).
+Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts|video|decision` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.35.0/docs/models/README.md). Smaller Flash-Next quants, measured memory by context and MTP, and community extensions are collected in [Gufo memory, smaller quants and extensions](gufo-extensions.md).
 
 | Model | Weights | Use | Provisioned |
 |---|---|---|---|
 | Qwen3.8 Flash-Next | unsloth `UD-Q4_K_XL` GGUF, four shards; optional shared Q8_0 MTP head and BF16 vision projector | Text and images | Yes, text with MTP; projector not downloaded |
 | Qwen3.8 27B | unsloth `UD-Q4_K_XL` (16.35 GiB) or `UD-Q8_K_XL` (29.30 GiB) GGUF; optional z-lab DFlash2 draft | Dense text and images | No |
 | DeepSeek V4 Flash | antirez `deepseek-v4-gguf`, mixed IQ2/Q2/Q8, 80.76 GiB | Text, with optional DSpark speculation | No |
-| EmbeddingGemma 2 | `google/embeddinggemma-2`, BF16 | Text, image, video and audio embeddings on `/v1/embeddings` | No |
-| Qwen-Image-2.1 and 2.1 Turbo | BF16 safetensors, about 33 GB | Image generation and editing; non-commercial Qwen Research License | No |
-| Qwen3-ASR 1.7B | BF16 safetensors | Speech to text; 0.6B unsupported | No |
-| Qwen3-TTS 12Hz 1.7B, CustomVoice, VoiceDesign or Base | BF16 safetensors | Speech from preset voices, a voice description or reference audio; 0.6B unsupported | No |
+| EmbeddingGemma 2 | `google/embeddinggemma-2`, BF16 | Text, image, video and audio embeddings on `/v1/embeddings`; `--npu` embeds text on the NPU, new in 0.35.0 | No |
+| Qwen-Image-2.1 and 2.1 Turbo | BF16 safetensors, about 33 GB | Image generation and editing, with true CFG, image to image and an A1111 (`sdapi`) route since 0.35.0; non-commercial Qwen Research License | No |
+| Qwen3-ASR 1.7B | BF16 safetensors | Speech to text; 0.6B unsupported. `--npu`, new in 0.35.0, runs it on the NPU with the GPU off at about half the GPU's speed, about 1.3 s for 10 s of audio | No |
+| Qwen3-TTS 12Hz 1.7B, CustomVoice, VoiceDesign or Base | BF16 safetensors | Speech from preset voices, a voice description or reference audio; 0.6B unsupported. `--npu`, new in 0.35.0, runs every variant on the NPU and CPU with the GPU off at about 1.4x real time | No |
 | MiniMax H3 FL2VA | `MiniMaxAI/MiniMax-H3` safetensors | Text to video with sound, as MP4 | No |
 
-## Strixite 0.7.0
+Gufo's NPU modes load XRT on first use from `/dev/accel/accel0`, which the launcher already passes to every engine; only `serve llm` is wired up here. Upstream recommends keeping the NPU out of runtime suspend and warns that heavy GPU and NPU work at once can hang some Strix Halo hosts ([amd/xdna-driver#1605](https://github.com/amd/xdna-driver/issues/1605)). [Install notes](https://github.com/gufo-org/gufo/blob/v0.35.0/docs/install.md).
 
-Strixite runs only Qwen3.8-Flash-Next, from its own `wemoh/Qwen3.8-Flash-Next-strixw` weights: the converted model, its n-gram table and a vision tower, all provisioned. Upstream plans no other models or platforms. [README](https://github.com/shawnshekari/strixite/blob/v0.7.0/README.md).
+## Strixite 0.7.1
+
+Strixite runs only Qwen3.8-Flash-Next, from its own `wemoh/Qwen3.8-Flash-Next-strixw` weights: the converted model, its n-gram table and a vision tower, all provisioned. Upstream plans no other models or platforms. [README](https://github.com/shawnshekari/strixite/blob/v0.7.1/README.md).
