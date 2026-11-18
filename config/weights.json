@@ -27,12 +27,6 @@
       "manifest": "gufo-files.tsv",
       "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf"
     },
-    "abliterated": {
-      "label": "Abliterated \u00b7 UD 3.1 Q4_K_XL",
-      "model": "huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patched-unsloth-UD-Q4_K_XL-d9620119/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
-      "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
-      "manifest": "weights/gufo-abliterated.tsv"
-    },
     "iq4-xs": {
       "label": "Stock \u00b7 UD 3.1 IQ4_XS",
       "model": "unsloth/Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf",
@@ -40,11 +34,17 @@
       "manifest": "weights/gufo-iq4-xs.tsv",
       "extension": "flash_next_iq"
     },
-    "iq4-xs-abliterated": {
-      "label": "Abliterated \u00b7 UD 3.1 IQ4_XS",
-      "model": "huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated-v2-GGUF/patched-unsloth-UD-IQ4_XS-d9620119/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf",
+    "lora": {
+      "label": "Huihui v2 LoRA merge \u00b7 UD-Q4_K_XL",
+      "model": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-Q4_K_XL-d9620119/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
       "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
-      "manifest": "weights/gufo-iq4-xs-abliterated.tsv",
+      "manifest": "weights/gufo-lora.tsv"
+    },
+    "iq4-xs-lora": {
+      "label": "Huihui v2 LoRA merge \u00b7 UD-IQ4_XS",
+      "model": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-IQ4_XS-d9620119/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf",
+      "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
+      "manifest": "weights/gufo-iq4-xs-lora.tsv",
       "extension": "flash_next_iq"
     }
   },

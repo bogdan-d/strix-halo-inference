@@ -78,7 +78,7 @@ else:
         status, body, _ = request("GET", "/state")
         current = json.loads(body)
         weights = current.pop("weights")
-        assert [entry["id"] for entry in weights["gufo"]] == ["default", "abliterated", "iq4-xs", "iq4-xs-abliterated"]
+        assert [entry["id"] for entry in weights["gufo"]] == ["default", "iq4-xs", "lora", "iq4-xs-lora"]
         assert not weights["gufo"][-1]["available"]
         caches = current.pop("caches")
         assert caches["halogen"] >= 8192 and caches["gufo"] == caches["strixite"] == 0, caches
@@ -103,7 +103,7 @@ else:
             status, _, recorded = request(method, path, Origin=origin)
             assert status == 404 and not recorded, (method, path, status, recorded)
         for path, expected in (("/engine/halogen/start", ["run.sh", "halogen", "start"]),
-                               ("/engine/gufo/start/abliterated", ["run.sh", "gufo", "start", "--weights", "abliterated"]),
+                               ("/engine/gufo/start/lora", ["run.sh", "gufo", "start", "--weights", "lora"]),
                                ("/engine/halogen/start-npu/default", ["run.sh", "halogen", "start", "--weights", "default", "NPU_MODELS=decider-0.8b"]),
                                ("/engine/halogen/start-npu", ["run.sh", "halogen", "start", "NPU_MODELS=decider-0.8b"]),
                                ("/engine/strixite/stop", ["run.sh", "strixite", "stop"]),

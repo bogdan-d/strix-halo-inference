@@ -1,5 +1,7 @@
 # Abliterated Flash-Next builds
 
+For current Gufo provisioning, use the [Huihui v2 LoRA profiles](weight-profiles.md#gufo-huihui-v2-lora-profiles).
+
 Notes from November 15, 2026. The huihui patch on Gufo and Quat3rnion r2 and HT43 on Halogen have been provisioned and tested here; other candidates remain untested locally. Local results are linked below. Other numbers come from model cards and GGUF headers read with HTTP range requests; author measurements are their claims, not local results. Abliteration can reduce refusals; it does not establish the accuracy of the resulting answers.
 
 ## Picks
