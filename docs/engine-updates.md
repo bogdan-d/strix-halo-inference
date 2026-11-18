@@ -1,5 +1,21 @@
 # Engine updates
 
+## November 18 Halogen update
+
+Halogen 0.20.7 is pinned to image digest `sha256:773073448dc9ff4a8c6b6c278802e254fd5f1546764e27531aeb3b77cb13482e`, advertised revision `509080d0e1a5`. All three Halogen weight manifests pin `qwen38-flash-next-drafter-r2-ht4.hgn` from model revision `05ec74b75cd68c4d6486d15825f2fc73b2ffe304`. The 1,488,276,864-byte file has SHA-256 `f9aa330800cc921fe20f4cf997d660f519c67b0052af0c8078b6b648972b07e6`. The abliterated profiles share a reflink of the stock head. Full manifest verification passed for each profile. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.7/CHANGELOG.md#0207)
+
+Stock v2, HT43 and abliterated r2 each loaded all 54 overlay tensors (1.39 GiB), enabled the new default concurrency mode with the existing single slot, and accepted MTP drafts on real generation. Each passed native-256K readiness, smoke, multi-turn conversation, named and streamed tools, disconnect and generation after cancellation, all 33 allowlisted metrics and the post-stop memory-release check. The stock run also passed the NPU decision, routing and text/image embedding suite with d3-lite, decider-0.8b and embeddinggemma-2. The image-derived NPU manifest and the installed fabric-clock helper still match the release. The clock returned to auto on shutdown.
+
+| Profile | Prose decode (tok/s) | Code decode (tok/s) |
+|---|---:|---:|
+| default | 65.9 | 88.1 |
+| abliterated-ht43 | 71.2 | 92.5 |
+| abliterated-r2 | 68.3 | 102.2 |
+
+Each sample used temperature zero, thinking off and a 600-token cap. These are short single-request observations. The update's speedup over 0.20.6, multi-slot throughput and near-capacity prefill were not measured.
+
+All three starts warned about low contiguous memory (309–330 free 2 MiB blocks). Two also warned about pre-existing host RAM use (11.3 and 14.8 GiB), and the stock start warned about 4.1 GiB of pre-existing GTT use. These conditions can slow startup and long-prompt prefill. All profiles finished the short checks and released memory. The offline update, launcher and model checks passed. The superseded 0.20.6 image was removed by digest. All three engine prompt caches were cleared, and all engines were stopped.
+
 ## November 17 update
 
 `bin/update.py` pulled Halogen 0.20.6, Gufo 0.35.0 and Strixite 0.7.1 by digest and atomically updated their image and version pins. Launch settings, Gufo and Strixite model revisions, live Pi files and host settings are unchanged. `bin/npu-manifest.sh` against the 0.20.6 image produced no change. Halogen's new draft head was added to every Halogen weight profile, the `flash_next_iq` module was rebuilt for the new Gufo image, and all engines passed the [local checks](#november-17-local-checks). Afterwards the superseded Halogen 0.20.4, Gufo 0.34.0 and Strixite 0.7.0 images were removed by digest without force (no container used them; Podman's image store fell from 36.37 GB to 28.98 GB), the 42 MB `flash_next_iq` build for the removed Gufo image was deleted, and `bin/cache.sh all clear` emptied all prompt caches.

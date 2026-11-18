@@ -4,7 +4,7 @@ All three engines are configured here for Qwen3.8-Flash-Next only. This page lis
 
 Abliterated Flash-Next builds for each engine, with picks and compatibility notes, are collected in [abliterated builds](abliterated-models.md).
 
-## Halogen 0.20.6
+## Halogen 0.20.7
 
 Halogen runs one model on the GPU, Flash-Next, and small models on the NPU beside it, on the same port. The launcher passes NPU models with `NPU_MODELS`; see the [README](../README.md#npu-models).
 
@@ -13,16 +13,16 @@ Halogen runs one model on the GPU, Flash-Next, and small models on the NPU besid
 | Variant | Status here |
 |---|---|
 | Native v2 `.hgn` checkpoint, 62.1 GiB, plus the FP8 n-gram table, 47.7 GiB | Provisioned and used |
-| Draft head `qwen38-flash-next-drafter-r2.hgn`, 1.42 GiB, new in 0.20.6 | Provisioned beside every Halogen checkpoint and used whenever MTP is on; the checkpoint's own head drafts without it |
-| Draft head `qwen38-flash-next-drafter-r2-ht4.hgn`, 4-bit projections | Published November 17 for the next server release; not read by 0.20.6, not provisioned |
+| Draft head `qwen38-flash-next-drafter-r2.hgn`, 1.42 GiB, new in 0.20.6 | Fallback overlay if the HT4 file is absent |
+| Draft head `qwen38-flash-next-drafter-r2-ht4.hgn`, 4-bit projections | Pinned and provisioned beside all three checkpoints. Halogen 0.20.7 selects this 1.39 GiB overlay automatically with MTP on |
 | Vision tower `qwen38-flash-next-vision.hgn` | Provisioned, opt-in with `VISION=on` |
-| GGUF of the same model, read directly: unsloth `UD-IQ4_XS` and `UD-Q4_K_XL`, bartowski `IQ4_XS`, mradermacher `i1-IQ4_XS`, `Q4_K_M`/`Q4_K_S`, ggml-org `IQ4_NL` | Not configured; the launcher selects only the `.hgn` package. Gufo's `UD-Q4_K_XL` shards are already on disk. [GGUF guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/docs/gguf.md) |
+| GGUF of the same model, read directly: unsloth `UD-IQ4_XS` and `UD-Q4_K_XL`, bartowski `IQ4_XS`, mradermacher `i1-IQ4_XS`, `Q4_K_M`/`Q4_K_S`, ggml-org `IQ4_NL` | Not configured; the launcher selects only the `.hgn` package. Gufo's `UD-Q4_K_XL` shards are already on disk. [GGUF guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.7/docs/gguf.md) |
 
-A separate preview image, `0.18.14-flint-preview`, serves RecursiveSI's Flint, a 40B mixture-of-experts model, instead of Flash-Next. It is not pinned or used here. [Flint preview](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/README.md#flint-preview).
+A separate preview image, `0.18.14-flint-preview`, serves RecursiveSI's Flint, a 40B mixture-of-experts model, instead of Flash-Next. It is not pinned or used here. [Flint preview](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.7/README.md#flint-preview).
 
 ### NPU models
 
-Each named model is fetched from its own `peonist-ai/halogen-npu-*` repository. `HALOGEN_DOWNLOAD` stays unset here, so only models whose files are in `config/npu-files.tsv` can start. [NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/docs/NPU.md).
+Each named model is fetched from its own `peonist-ai/halogen-npu-*` repository. `HALOGEN_DOWNLOAD` stays unset here, so only models whose files are in `config/npu-files.tsv` can start. [NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.7/docs/NPU.md).
 
 | Model | Base model | Use, route | Provisioned |
 |---|---|---|---|
@@ -56,7 +56,7 @@ These load from a path under `/models`, converted at first start. On our read-on
 | LiquidAI LFM3-VL-2B or a fine-tune, new in 0.18.23 | Chat with pictures and video |
 | LiquidAI LFM3-Audio-2B or a fine-tune, new in 0.18.23 | Speech in, speech out, `/v1/audio/transcriptions` and `/v1/audio/speech` |
 | LiquidAI LFM3-Omni-2B, new in 0.18.23 | Pictures, video with sound, speech in, and text or speech out, on one model id |
-| `ATH-MaaS/OvisOCR3`, Apache 2.0, new in 0.20.0 | Document pages to Markdown, with tables as HTML and formulas as LaTeX, served as `OvisOCR3` on the chat routes; one or two pictures a request, about 20 seconds a typical page. The image ships only its NPU programs, and the launcher's `NPU_MODELS` takes model ids, not the `/models/OvisOCR3` path it needs. [Guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.6/docs/NPU.md#your-own-ovisocr3) |
+| `ATH-MaaS/OvisOCR3`, Apache 2.0, new in 0.20.0 | Document pages to Markdown, with tables as HTML and formulas as LaTeX, served as `OvisOCR3` on the chat routes; one or two pictures a request, about 20 seconds a typical page. The image ships only its NPU programs, and the launcher's `NPU_MODELS` takes model ids, not the `/models/OvisOCR3` path it needs. [Guide](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.7/docs/NPU.md#your-own-ovisocr3) |
 
 ## Gufo 0.35.0
 
