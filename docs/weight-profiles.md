@@ -1,6 +1,6 @@
 # Weight profiles
 
-The CLI and dashboard share `config/weights.json`. Every engine has a `default`; other keys are explicit choices such as Gufo's `lora` and Halogen's `abliterated-r2`. Halogen's validated lower-memory `abliterated-ht43` profile shares r2's companion directory but has a separate prompt cache; see [trial results](engine-updates.md#november-15-ht43-abliterated-trial). Halogen r2 carries its own MTP head and reuses pinned stock n-gram, tokenizer and vision companions through reflink copies. A profile selects model files and their manifest, not arbitrary launch flags. The one exception to the image pins is a Gufo profile with an `adapter`, which runs the local fork image. Image pins, GPU permissions, context, sampling and API model names remain engine settings.
+The CLI and dashboard share `config/weights.json`. Every engine has a `default`; other keys are explicit choices such as Gufo's `lora` and Halogen's `abliterated-r2`. Halogen's validated lower-memory `abliterated-ht43` profile shares r2's companion directory but has a separate prompt cache; see [trial results](engine-updates.md#november-15-ht43-abliterated-trial). Halogen r2 carries its own MTP head and reuses pinned stock n-gram, tokenizer and vision companions through reflink copies. A profile selects model files and their manifest, not arbitrary launch flags. The one exception to the image pins is a Gufo profile with an `adapter` and no `extension`, which runs the local fork image. Image pins, GPU permissions, context, sampling and API model names remain engine settings.
 
 ```bash
 bin/run.sh gufo weights
@@ -24,7 +24,7 @@ Add an entry under its engine in `config/weights.json`. Profile names use lowerc
 }
 ```
 
-- Gufo's `model` is the first GGUF shard and `mtp` is its matching draft head. Include every shard and the head in the manifest. An optional `adapter` names a GGUF LoRA merged at load by the [local fork image](#lora-merged-at-load); include it in the manifest too.
+- Gufo's `model` is the first GGUF shard and `mtp` is its matching draft head. Include every shard and the head in the manifest. An optional `adapter` names a GGUF LoRA merged at load, by the IQ extension when the profile also names an `extension` and otherwise by the [local fork image](#lora-merged-at-load); include it in the manifest too.
 - Halogen's `model` is the checkpoint file. Its n-gram companion, `tokenizer/` and optional `qwen38-flash-next-vision.hgn` live beside it. Include the required companions in the manifest.
 - Strixite's `model` is the complete model directory, including its n-gram table, tokenizer, MTP and vision files. Include the whole selected package in the manifest.
 
@@ -32,7 +32,7 @@ A manifest has tab-separated columns: SHA-256, byte size and destination path. B
 
 For downloadable alternative profiles, add three columns to each row: source Hugging Face repository, immutable revision and source file path. This allows a local destination to differ from its upstream path. Pin all downloaded files, including shared companions, then use `bin/models.sh download ENGINE PROFILE`. Existing files are checked and never deliberately overwritten. Download sources without an explicit source-file column retain the NPU convention of dropping the destination's first path component; new profiles should supply the explicit sixth column.
 
-Locally generated files have only the first three columns. A missing local file fails with “Provision this profile first”; the downloader cannot recreate a patch. Record its source revision, patch hashes and exact generation command in the update record, and hash the output into its manifest. Gufo’s `iq4-xs-lora` profile uses the [Huihui v2 LoRA provisioning helper](#iq4-xs-lora-reflinked-merge).
+Locally generated files have only the first three columns. A missing local file fails with “Provision this profile first”; the downloader cannot recreate a patch. Record its source revision, patch hashes and exact generation command in the update record, and hash the output into its manifest.
 
 Restart the dashboard helper after changing the catalog, and refresh the page. Missing or incomplete profiles stay visible but cannot be started. After provisioning, run full verification, health, a real generation and the engine's live lifecycle test before treating the profile as validated.
 
@@ -40,11 +40,11 @@ A profile does not add engine compatibility. In particular, Gufo 0.35.0's stock 
 
 ## Gufo Huihui v2 LoRA profiles
 
-The `lora` (UD-Q4_K_XL) and `iq4-xs-lora` profiles apply the [2.3 MB Huihui v2 adapter](https://huggingface.co/nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/tree/dee8e0177e4e61efdaa3fb7128c40d6ab7a085d4), a llama.cpp GGUF LoRA with 96 rank-one updates. `lora` merges it while the stock weights load. `iq4-xs-lora` still serves a merged copy made in advance. The two profiles have separate prompt caches. Switch by stopping and starting Gufo. One adapter applies to every request; per-request switching is not implemented.
+The `lora` (UD-Q4_K_XL) and `iq4-xs-lora` profiles apply the [2.3 MB Huihui v2 adapter](https://huggingface.co/nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/tree/dee8e0177e4e61efdaa3fb7128c40d6ab7a085d4), a llama.cpp GGUF LoRA with 96 rank-one updates. Both merge it while the stock weights load, so neither needs a merged copy of the checkpoint. The two profiles have separate prompt caches. Switch by stopping and starting Gufo. One adapter applies to every request; per-request switching is not implemented.
 
 ### `lora`: merged at load
 
-The profile's `adapter` key names the adapter file. Its manifest lists the four stock UD-Q4_K_XL shards, the shared MTP head and the adapter, each with a pinned source, so `bin/models.sh download gufo lora` provisions it and nothing is merged on disk. For a profile with an `adapter`, the launcher runs the local fork image `GUFO_FORK_IMAGE` instead of `GUFO_IMAGE` and adds `--lora /models/ADAPTER`.
+The profile's `adapter` key names the adapter file. Its manifest lists the four stock UD-Q4_K_XL shards, the shared MTP head and the adapter, each with a pinned source, so `bin/models.sh download gufo lora` provisions it and nothing is merged on disk. For a profile with an `adapter` and no `extension`, the launcher runs the local fork image `GUFO_FORK_IMAGE` instead of `GUFO_IMAGE`. Every adapter profile gets `--lora /models/ADAPTER`.
 
 Stock Gufo 0.35.0 cannot load an adapter for this model ([feature request](https://github.com/gufo-org/gufo/issues/1247)). The fork adds it for the built-in UD-Q4_K_XL provider: each target tensor is dequantized, the update is added in float32 and the result is stored as Q8_0 again, so speed and memory match the stock model. The MTP head stays stock. The disk prompt cache is keyed by the adapter's SHA-256 and scale, so stock and adapter state never mix.
 
@@ -65,16 +65,22 @@ On November 21 the fork image (Gufo 0.35.0 at `452c7c0`, digest in `config/pins.
 
 Before wiring, the loader's output was compared with the merged copy this profile served until November 21: all 96 target tensors, 885,719,040 bytes, with no differing byte. With the same binary at temperature zero, three prompts gave identical text from the stock weights plus adapter and from the merged copy. The November 18 results below were measured on that merged copy and carry over to the same weights; they were not repeated on the fork image.
 
-### `iq4-xs-lora`: reflinked merge
+### `iq4-xs-lora`: merged at load by the IQ extension
 
-Provisioning reflinks the four installed stock UD-IQ4_XS shards, merges the 96 updates offline, requantizes the edited tensors in their original formats, verifies the output hashes and shares all untouched extents with stock. It requires reflinks on the model filesystem and fails if cloning is unavailable. The helper downloads and verifies the pinned adapter if missing and refuses to overwrite an existing output directory. It uses llama.cpp’s reference Q6_K quantizer and requires the existing Gufo IQ extension for inference. Building the quantizer dependency from source requires a C/C++ toolchain.
+The profile names the stock UD-IQ4_XS shards, the shared MTP head, the adapter and `"extension": "flash_next_iq"`. It runs the pinned upstream image; the module at `GUFO_IQ_REVISION` does the merge. That revision is `3f8a1a5` (version 0.3.0) on branch `feat/lora` of [bogdan-d/flash-next-iq-gufo-extension](https://github.com/bogdan-d/flash-next-iq-gufo-extension/tree/feat/lora), upstream `9ce08cef` plus the loader ported from the Gufo fork. `iq4-xs` uses the same module. Install it as described in [Gufo extensions](gufo-extensions.md#iq4_xs-profiles-on-this-host), then:
 
 ```bash
-uv run --with llama-cpp-python==0.3.37 bin/gufo-lora.py UD-IQ4_XS
+bin/models.sh download gufo iq4-xs-lora
 bin/run.sh gufo start --weights iq4-xs-lora --wait
 ```
 
-On this Btrfs host the merged IQ4_XS directory used 810.98 MiB exclusively on November 18, and the Q4_K_XL merged copy that `lora` served until November 21, deleted that day, used 852.57 MiB, versus 103.69 GiB and 87.24 GiB for the older fully materialized Huihui patch outputs. Use `btrfs filesystem du -s DIRECTORY` to distinguish exclusive and shared storage. A normal copy or backup to another filesystem may materialize all shards. The merged tensors approximate the original patch because the adapter was extracted from Q5 and both local formats requantize the update. The two original patched copies were deleted after validation and their profiles retired.
+Every merged tensor is stored as Q8_0. In UD-IQ4_XS that leaves the 84 `ssm_out` and `ffn_down_shexp` targets in their stock format and turns the 12 Q6_K `attn_output` tensors into Q8_0 tensors of the same shape, 43.6 MiB more device memory in total. The cache identity and MTP behavior are the same as for `lora`.
+
+Compared on November 21 with the merged copy this profile served until then, which re-encoded those 12 tensors as Q6_K: the 84 Q8_0 targets match byte for byte (685,178,880 bytes), and for the 12 converted tensors the error against the exact float32 merge is 1.2e-4 RMS, against 3.0e-4 for the merged copy, with every value inside Q8_0's rounding bound. On one tensor, `blk.23.attn_output`, the largest single error is higher than the merged copy's (5.4e-3 against 4.6e-3). The weights therefore differ slightly from the copy the November 18 results below were measured on, and greedy text diverged from it after 9 to 439 characters on three prompts.
+
+On November 21 the profile passed `bin/models.sh verify gufo iq4-xs-lora`, native-262144 readiness with MTP, the smoke request and `tests/live.py` (conversation recall, named and streamed tool calls, disconnect slot release, generation after cancellation). The startup log reported 96 tensors merged in 0.88 s and 74,405 MiB of GPU allocation, 24 MiB above stock `iq4-xs` on the same module, which passed the same checks. One 345-token prose reply decoded at 52.3 tokens/s with 212 of 323 drafts accepted. At 32768 context without MTP the extension's own tests measured prefill and decode within 2% of stock and load time within 0.4 s, and the adapter build answered a prompt stock refused. The November 18 refusal probes and Pi coding trials were not repeated. More than one session was not tested. These are single exploratory samples.
+
+The merged IQ4_XS directory `nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-IQ4_XS-d9620119`, 810.98 MiB exclusive on this Btrfs host, is no longer used by any profile. It stays on disk as the comparison reference for the extension's `tests/lora_oracle.cpp`. The offline merge script `bin/gufo-lora.py` was removed; commit `55a47e5` has it.
 
 ### November 18 results on the merged copies
 

@@ -4,10 +4,12 @@
 
 The `lora` profile now serves the stock UD-Q4_K_XL shards with the Huihui v2 adapter merged while they load, instead of a merged copy on disk. Stock Gufo 0.35.0 has no adapter loading for this model, so the profile runs a local build of the Gufo fork at `452c7c0da851a152377e39718ed681890a29e5f1` (upstream `c3018d64` plus one commit), image `localhost/strix-halo-inference/gufo-fork` at digest `sha256:9b112ab4d5705c7b7bb38849dfd7ce6ac1e1929dc282cb3cacb2b8fa784d8d84`. `default`, `iq4-xs` and `iq4-xs-lora` still run the pinned upstream image. [Build, behavior and results](weight-profiles.md#lora-merged-at-load)
 
+`iq4-xs-lora` made the same move through the IQ extension: `GUFO_IQ_REVISION` is now `3f8a1a53362896672d2b6981c9027e8372bd30d3` (version 0.3.0, a fork of the extension that merges adapters at load), installed into the pinned image, and the profile serves the stock UD-IQ4_XS shards plus the adapter. Its 12 Q6_K `attn_output` tensors are stored as Q8_0 after the merge, so its weights differ slightly from the earlier merged copy. Both IQ profiles passed verification, readiness, smoke and `tests/live.py` on the new module. [Details and results](weight-profiles.md#iq4-xs-lora-merged-at-load-by-the-iq-extension)
+
 - **Equivalence:** the loader's 96 merged tensors match the previous merged copy byte for byte (885,719,040 bytes), and three prompts at temperature zero gave identical text from both on the same binary.
 - **Launcher checks:** `bin/models.sh verify gufo lora`, native-262144 readiness with MTP, the smoke request and `tests/live.py` passed on the fork image, and memory was released after stopping.
-- **Not repeated:** the November 18 refusal probes and Pi coding trials. The fork image was not tested with the `default` profile, which does not use it.
-- **Deleted:** the merged directory `nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-Q4_K_XL-d9620119`, 852.57 MiB exclusive, after the byte comparison. No profile used it. `bin/gufo-lora.py` at commit `55a47e5` can recreate it from the stock shards if a reference is needed again.
+- **Not repeated:** the November 18 refusal probes and Pi coding trials, on either adapter profile. The fork image was not tested with the `default` profile, which does not use it.
+- **Deleted:** the merged directory `nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-Q4_K_XL-d9620119`, 852.57 MiB exclusive, after the byte comparison. No profile used it. `bin/gufo-lora.py` at commit `55a47e5` can recreate it from the stock shards if a reference is needed again. The merged IQ4_XS directory is kept as a comparison reference, and the script itself was removed.
 
 ## November 18 Halogen update
 

@@ -94,9 +94,10 @@ fi
 
 SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" launch "$PROFILE")"
 mapfile -t WEIGHT_PATHS <<<"$SELECTION"
-# A profile naming a LoRA adapter runs the local fork build, which merges the adapter into the stock weights at load.
+# A LoRA adapter is merged into the stock weights at load: by the IQ extension when the profile uses it, otherwise
+# by the local fork build, since the pinned image's built-in provider cannot.
 ADAPTER="${WEIGHT_PATHS[3]:-}"
-if [[ -n "$ADAPTER" ]]; then
+if [[ -n "$ADAPTER" && -z "${WEIGHT_PATHS[2]:-}" ]]; then
   IMAGE="$GUFO_FORK_IMAGE"
   podman image exists "$IMAGE" || { echo "Local Gufo fork image missing: $IMAGE. Build it with bin/gufo-fork.sh (docs/weight-profiles.md)." >&2; exit 1; }
 fi
