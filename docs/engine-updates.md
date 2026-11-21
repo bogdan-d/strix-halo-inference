@@ -1,5 +1,15 @@
 # Engine updates
 
+## November 22: Gufo LoRA loaders release the pages they read
+
+Loading with an adapter left about 0.7 to 0.8 GiB more resident memory in the Gufo process than loading stock: the merge reads each target tensor through the mapped GGUF file, and those file pages stayed mapped. They were reclaimable page cache, and GPU memory was unaffected. Both loaders now release each tensor's pages after merging it.
+
+- **`lora`:** `GUFO_FORK_REVISION` is `d77c890f311d03db81785362925a8cd0e7ad628b` (the November 21 commit plus this fix), image digest `sha256:a31e87d7065220374e79fbf38b26f93f609fd0fbcaa3537adea32823291d6a5c`, rebuilt with `bin/gufo-fork.sh`.
+- **`iq4-xs` and `iq4-xs-lora`:** `GUFO_IQ_REVISION` is `d7794c444b33efef4a93e23dcba96365e9fb5b92` (version 0.3.0 plus this fix), installed into the pinned image.
+- **Measured at 32768 context without MTP, stock against adapter:** fork image 2,790 against 2,797 to 2,804 MiB of resident memory (3,482 to 3,581 MiB before the fix); extension 2,744 against 2,752 MiB (3,436 to 3,554 MiB before). Greedy text with the adapter is unchanged in both.
+- **Validation:** `lora`, `iq4-xs-lora` and `iq4-xs` each passed `bin/models.sh verify`, native-262144 readiness with MTP, the smoke request, `tests/live.py` and the stop with memory release. Single runs.
+- **Removed:** the previous fork image (`452c7c0`) and the previous module store (`3f8a1a5`), which no profile used any more.
+
 ## November 21: Gufo LoRA merged at load
 
 The `lora` profile now serves the stock UD-Q4_K_XL shards with the Huihui v2 adapter merged while they load, instead of a merged copy on disk. Stock Gufo 0.35.0 has no adapter loading for this model, so the profile runs a local build of the Gufo fork at `452c7c0da851a152377e39718ed681890a29e5f1` (upstream `c3018d64` plus one commit), image `localhost/strix-halo-inference/gufo-fork` at digest `sha256:9b112ab4d5705c7b7bb38849dfd7ce6ac1e1929dc282cb3cacb2b8fa784d8d84`. `default`, `iq4-xs` and `iq4-xs-lora` still run the pinned upstream image. [Build, behavior and results](weight-profiles.md#lora-merged-at-load)
