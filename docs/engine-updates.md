@@ -1,5 +1,14 @@
 # Engine updates
 
+## November 21: Gufo LoRA merged at load
+
+The `lora` profile now serves the stock UD-Q4_K_XL shards with the Huihui v2 adapter merged while they load, instead of a merged copy on disk. Stock Gufo 0.35.0 has no adapter loading for this model, so the profile runs a local build of the Gufo fork at `452c7c0da851a152377e39718ed681890a29e5f1` (upstream `c3018d64` plus one commit), image `localhost/strix-halo-inference/gufo-fork` at digest `sha256:9b112ab4d5705c7b7bb38849dfd7ce6ac1e1929dc282cb3cacb2b8fa784d8d84`. `default`, `iq4-xs` and `iq4-xs-lora` still run the pinned upstream image. [Build, behavior and results](weight-profiles.md#lora-merged-at-load)
+
+- **Equivalence:** the loader's 96 merged tensors match the previous merged copy byte for byte (885,719,040 bytes), and three prompts at temperature zero gave identical text from both on the same binary.
+- **Launcher checks:** `bin/models.sh verify gufo lora`, native-262144 readiness with MTP, the smoke request and `tests/live.py` passed on the fork image, and memory was released after stopping.
+- **Not repeated:** the November 18 refusal probes and Pi coding trials. The fork image was not tested with the `default` profile, which does not use it.
+- **Deleted:** the merged directory `nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-Q4_K_XL-d9620119`, 852.57 MiB exclusive, after the byte comparison. No profile used it. `bin/gufo-lora.py` at commit `55a47e5` can recreate it from the stock shards if a reference is needed again.
+
 ## November 18 Halogen update
 
 Halogen 0.20.7 is pinned to image digest `sha256:773073448dc9ff4a8c6b6c278802e254fd5f1546764e27531aeb3b77cb13482e`, advertised revision `509080d0e1a5`. All three Halogen weight manifests pin `qwen38-flash-next-drafter-r2-ht4.hgn` from model revision `05ec74b75cd68c4d6486d15825f2fc73b2ffe304`. The 1,488,276,864-byte file has SHA-256 `f9aa330800cc921fe20f4cf997d660f519c67b0052af0c8078b6b648972b07e6`. The abliterated profiles share a reflink of the stock head. Full manifest verification passed for each profile. [Tagged changelog](https://github.com/peonist-ai/halogen-flash-server/blob/v0.20.7/CHANGELOG.md#0207)

@@ -35,9 +35,10 @@
       "extension": "flash_next_iq"
     },
     "lora": {
-      "label": "Huihui v2 LoRA merge \u00b7 UD-Q4_K_XL",
-      "model": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/UD-Q4_K_XL-d9620119/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+      "label": "Huihui v2 LoRA \u00b7 UD-Q4_K_XL",
+      "model": "unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
       "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
+      "adapter": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/HUIHUI-V2-Qwen3.8-Flash-Next-LoRA-F32.gguf",
       "manifest": "weights/gufo-lora.tsv"
     },
     "iq4-xs-lora": {

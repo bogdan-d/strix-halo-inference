@@ -94,6 +94,12 @@ fi
 
 SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" launch "$PROFILE")"
 mapfile -t WEIGHT_PATHS <<<"$SELECTION"
+# A profile naming a LoRA adapter runs the local fork build, which merges the adapter into the stock weights at load.
+ADAPTER="${WEIGHT_PATHS[3]:-}"
+if [[ -n "$ADAPTER" ]]; then
+  IMAGE="$GUFO_FORK_IMAGE"
+  podman image exists "$IMAGE" || { echo "Local Gufo fork image missing: $IMAGE. Build it with bin/gufo-fork.sh (docs/weight-profiles.md)." >&2; exit 1; }
+fi
 if [[ "$ENGINE" == gufo && -n "${GUFO_MODEL:-}" && "$PROFILE" != default ]]; then
   echo 'Choose either --weights/WEIGHTS or GUFO_MODEL, not both.' >&2; exit 2
 fi
@@ -182,6 +188,7 @@ elif [[ "$ENGINE" == gufo ]]; then
   else
     ARGS+=(--speculative off)
   fi
+  [[ -z "$ADAPTER" ]] || ARGS+=(--lora "/models/$ADAPTER")
 else
   ARGS+=(--stop-timeout 90 --env "STRIX_MODELS_DIR=/models/${WEIGHT_PATHS[0]}" "$IMAGE"
     --host 0.0.0.0 --port "$PORT" --model-id qwen3.8-flash-next

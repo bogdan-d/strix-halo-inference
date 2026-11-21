@@ -3,7 +3,9 @@
 # requires-python = ">=3.11"
 # dependencies = ["gguf==0.19.0", "numpy==2.5.4"]
 # ///
-"""Build Gufo-readable shards from stock reflinks and the pinned Huihui v2 LoRA."""
+"""Build Gufo-readable UD-IQ4_XS shards from stock reflinks and the pinned Huihui v2 LoRA.
+
+UD-Q4_K_XL needs no merged copy: the `lora` weight profile merges the adapter at load."""
 import argparse
 import ctypes
 import hashlib
@@ -97,7 +99,7 @@ def fetch_adapter(models):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("quant", choices=["UD-Q4_K_XL", "UD-IQ4_XS"])
+    parser.add_argument("quant", choices=["UD-IQ4_XS"])
     quant = parser.parse_args().quant
     models = Path(os.environ.get("MODELS_DIR", "/home/bogdan/models")).resolve()
     adapter = fetch_adapter(models)
@@ -113,8 +115,7 @@ def main():
         staging.mkdir()
         subprocess.run(["cp", "--reflink=always", "--", *shards, staging], check=True)
         merge(sorted(staging.glob("*.gguf")), gguf.GGUFReader(adapter))
-        profile = "lora" if quant == "UD-Q4_K_XL" else "iq4-xs-lora"
-        manifest = Path(__file__).resolve().parents[1] / f"config/weights/gufo-{profile}.tsv"
+        manifest = Path(__file__).resolve().parents[1] / "config/weights/gufo-iq4-xs-lora.tsv"
         for row in manifest.read_text().splitlines():
             digest, _, filename, *_ = row.split("\t")
             target = models / filename

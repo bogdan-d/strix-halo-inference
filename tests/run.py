@@ -32,6 +32,8 @@ with open(os.environ["CALLS"], "a") as output:
     output.write(json.dumps(sys.argv[1:]) + "\\n")
 if sys.argv[1:3] == ["container", "exists"] and os.environ.get("MISSING"):
     sys.exit(1)
+if sys.argv[1:3] == ["image", "exists"] and os.environ.get("MISSING_IMAGE"):
+    sys.exit(1)
 if sys.argv[1] == "info":
     print("true" if "Rootless" in sys.argv[-1] else "runc")
 elif sys.argv[1] == "run":
@@ -260,6 +262,19 @@ else:
     assert not any("/extensions" in arg or "GUFO_EXTENSIONS_DIR" in arg for arg in launch)
     pins = temp / "config/pins.env"
     original_pins = pins.read_text()
+    # A profile naming an adapter serves the stock weights from the local fork image and passes the adapter.
+    fork = next(line.split("=", 1)[1] for line in original_pins.splitlines() if line.startswith("GUFO_FORK_IMAGE="))
+    assert fork not in launch and "--lora" not in launch
+    calls.unlink()
+    assert run("gufo", "start", "--weights", "lora").returncode == 0
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert fork in launch and not any("gufo-runtime" in arg for arg in launch)
+    assert launch[launch.index("--model") + 1].startswith("/models/unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/")
+    assert launch[launch.index("--lora") + 1] == "/models/nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/HUIHUI-V2-Qwen3.8-Flash-Next-LoRA-F32.gguf"
+    calls.unlink()
+    result = run("gufo", "start", "--weights", "lora", MISSING_IMAGE="1")
+    assert result.returncode == 1 and "bin/gufo-fork.sh" in result.stderr, result
+    assert not any(call[0] == "run" for call in recorded())
     pins.write_text(original_pins.replace("GUFO_IMAGE=", "OLD_GUFO_IMAGE=") + "\nGUFO_IMAGE=example@sha256:" + "f" * 64 + "\n")
     calls.unlink()
     result = run("gufo", "start", "--weights", "iq4-xs")

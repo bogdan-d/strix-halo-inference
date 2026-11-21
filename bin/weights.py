@@ -23,13 +23,15 @@ def profiles(engine: str) -> dict:
     for name, entry in entries.items():
         if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', name):
             raise ValueError(f'Invalid weight profile: {name}')
-        for key in ('model', 'manifest', 'directory', 'mtp'):
+        for key in ('model', 'manifest', 'directory', 'mtp', 'adapter'):
             if entry.get(key):
                 relative(entry[key])
         if not entry.get('model') or not entry.get('manifest'):
             raise ValueError(f'Incomplete weight profile: {name}')
         if entry.get('extension') and (engine != 'gufo' or entry['extension'] != 'flash_next_iq'):
             raise ValueError(f'Unsupported extension for {engine}/{name}')
+        if entry.get('adapter') and engine != 'gufo':
+            raise ValueError(f'Unsupported adapter for {engine}/{name}')
     return entries
 
 
@@ -86,6 +88,7 @@ if __name__ == '__main__':
                 for key in ('model', 'mtp'):
                     print(entry.get(key, ''))
                 print(extension_store(entry) or '')
+                print(entry.get('adapter', ''))
             elif action == 'extension':
                 print(extension_store(entry) or '')
             elif action == 'manifest':
