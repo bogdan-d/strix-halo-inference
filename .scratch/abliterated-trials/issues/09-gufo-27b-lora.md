@@ -1,6 +1,6 @@
 # 09: Add load-time LoRA support for Qwen3.8 27B in Gufo
 
-Status: ready-for-agent
+Status: needs-info
 
 Gufo can now merge a llama.cpp GGUF LoRA at load for Qwen3.8 Flash-Next ([gufo-org/gufo#1320](https://github.com/gufo-org/gufo/pull/1320), ticket [08](08-gufo-native-lora.md)). Do the same for Gufo's Qwen3.8 27B provider (`qwen27-q4`, in the fork at `src/models/qwen/`), and prove it with an abliterated adapter. Neither the 27B weights nor an adapter for it are on this host, so the work starts with downloads.
 
@@ -44,3 +44,35 @@ Checked on November 21 from the Gufo fork at `452c7c0d`, the Hugging Face API an
 - Nothing is installed on the host. Build and test in the containers under `/var/mnt/xdata/code/strix-halo/gufo-build/`.
 - One heavy GPU workload at a time; stop each server and confirm memory release.
 - Weights stay in `/home/bogdan/models`, mounted read-only for inference.
+
+## Comments
+
+November 22: tasks 1, 2, 3, 5 and 6 are done for UD-Q8_K_XL; the change is uncommitted on local branch `feat/qwen27-lora` in the Gufo fork (from `452c7c0d`). Task 4 is reported below and waits for the user's choice. Scripts, logs and merged copies are under `/var/mnt/xdata/code/strix-halo/gufo-build/` (`qwen27/`, `logs/q27-*`).
+
+- **Downloads:** adapter (GGUF and safetensors), DFlash2 drafter, UD-Q8_K_XL and UD-Q4_K_XL, each from its pinned revision and SHA-256 verified; manifest in `gufo-build/qwen27/models.tsv`.
+- **Implementation:** the reader, Q8_0 encoder and cache identity moved to a shared library `src/families/qwen/lora/` that Flash-Next now uses too. Factors may be F32, F16 or BF16. The 27B loader overwrites the 128 targets in place after the stock upload, so no device memory is added. `--lora` and `--lora-scale` work on serve, bench, prompt and chat; the CPU path refuses an adapter.
+- **Verification:** CPU tests pass. The production merge equals an independent Python merge for all 128 tensors (8,199,864,320 bytes) at scales 1 and 0.5. On the GPU, stock plus `--lora` gives the same greedy output as the offline-merged file loaded as a plain model, in AR and DFlash2. Disk-cache entries stay separate for stock, adapter and scale 0.5. Cancellation and a tool call work with the adapter.
+- **Measured (balanced profile, one session, 32k context, DFlash2):** the merge adds about 2.2 s to the load and no device memory (38,363 MiB with and without). Stock refuses the lock-picking prompt and the adapter answers it. Draft acceptance was 34 %, 93 % and 30 % with the adapter against 39 %, 75 % and 39 % for stock.
+- **Review:** the main agent and an independent reviewer read the change. Fixed afterwards: a target whose bytes another tensor shares is refused, a model opened from memory is refused with an adapter, and weight regions are released on every failure path.
+- **Not exercised on this host:** the registered host-clone placement and the Windows deferred upload; only the direct device copy ran.
+- **Finding:** in a llama.cpp qwen35 adapter, `ssm_out` `lora_a` columns follow llama.cpp's reordered value-head layout, which matches the base GGUF, so no permutation is needed when merging.
+
+### Task 4: UD-Q4_K_XL options
+
+The update is small against 4-bit steps: its RMS is 0.05 to 0.15 of a quantization step in the Q4 file's formats, against 0.16 to 0.30 in Q8_0 (`logs/q27-retention.log`).
+
+| Option | Device memory (DFlash2) | AR decode | What it needs |
+|---|---:|---:|---|
+| Stock UD-Q4_K_XL, no adapter | 24,623 MiB | 12.2 tok/s | reference |
+| Merged targets stored as Q8_0 | 27,547 MiB | 10.5 tok/s | loader lays out 128 larger tensors; no kernel change |
+| Re-encode in the source formats | as stock | as stock | K and IQ encoders; adds rounding noise several times the update's size, or keeps only 7 to 25 % of it on the existing grid |
+| Low-rank side path at inference | about 12 to 25 MiB more | not measured | new kernel work on decode, verification and prefill routes |
+| UD-Q8_K_XL with the adapter | 38,363 MiB | 7.2 tok/s | done |
+
+The Q8_0 row was measured with a Q4 copy whose targets were re-encoded offline (`qwen27/q4_q8_targets.py`), loaded as a plain model: it runs on the existing kernels, answers the lock-picking prompt, and with DFlash2 decodes 27, 53 and 23 tok/s on the three prompts against 32, 65 and 32 for stock Q4.
+
+### Task 7: launcher
+
+`bin/run.sh` still serves only Flash-Next through Gufo. A 27B profile would need the fork image, the weights and drafter in the model manifest, `--speculative dflash2 --dflash-model`, `--lora` for the adapter, and the usual tests. Not started.
+
+November 22, later: the Flash-Next merge left the patched tensors' file pages mapped in the process, about 0.7 to 0.8 GiB of extra RSS with an adapter (reclaimable page cache, not a leak; device memory was unaffected). Fixed by releasing each target's mapped pages after its merge, uncommitted, in the Gufo fork (`src/models/qwen38_flash_next/kernels/rocm/device_model.cpp`) and in the IQ4_XS extension fork (`src/kernels/rocm/device_model.cpp`). Measured RSS at load, stock against adapter: Gufo fork 2,790 against 2,797 to 2,804 MiB (was 3,482 to 3,581); extension 2,744 against 2,752 MiB (was 3,436 to 3,554). Greedy outputs are unchanged in both. Both fixes were then committed and pushed as follow-ups to the open pull requests (`d77c890f` on `feat/flash-next-lora`, `d7794c4` on the extension's `feat/lora`), the fork image and the module were rebuilt, and `lora`, `iq4-xs-lora` and `iq4-xs` passed the usual checks ([update record](../../../docs/engine-updates.md#november-22-gufo-lora-loaders-release-the-pages-they-read)). The pin and doc changes in this repository are not committed. `feat/qwen27-lora` now sits on `d77c890f`.
