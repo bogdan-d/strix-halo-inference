@@ -1,6 +1,6 @@
 # 09: Add load-time LoRA support for Qwen3.8 27B in Gufo
 
-Status: needs-info
+Status: ready-for-agent
 
 Gufo can now merge a llama.cpp GGUF LoRA at load for Qwen3.8 Flash-Next ([gufo-org/gufo#1320](https://github.com/gufo-org/gufo/pull/1320), ticket [08](08-gufo-native-lora.md)). Do the same for Gufo's Qwen3.8 27B provider (`qwen27-q4`, in the fork at `src/models/qwen/`), and prove it with an abliterated adapter. Neither the 27B weights nor an adapter for it are on this host, so the work starts with downloads.
 
@@ -76,3 +76,5 @@ The Q8_0 row was measured with a Q4 copy whose targets were re-encoded offline (
 `bin/run.sh` still serves only Flash-Next through Gufo. A 27B profile would need the fork image, the weights and drafter in the model manifest, `--speculative dflash2 --dflash-model`, `--lora` for the adapter, and the usual tests. Not started.
 
 November 22, later: the Flash-Next merge left the patched tensors' file pages mapped in the process, about 0.7 to 0.8 GiB of extra RSS with an adapter (reclaimable page cache, not a leak; device memory was unaffected). Fixed by releasing each target's mapped pages after its merge, uncommitted, in the Gufo fork (`src/models/qwen38_flash_next/kernels/rocm/device_model.cpp`) and in the IQ4_XS extension fork (`src/kernels/rocm/device_model.cpp`). Measured RSS at load, stock against adapter: Gufo fork 2,790 against 2,797 to 2,804 MiB (was 3,482 to 3,581); extension 2,744 against 2,752 MiB (was 3,436 to 3,554). Greedy outputs are unchanged in both. Both fixes were then committed and pushed as follow-ups to the open pull requests (`d77c890f` on `feat/flash-next-lora`, `d7794c4` on the extension's `feat/lora`), the fork image and the module were rebuilt, and `lora`, `iq4-xs-lora` and `iq4-xs` passed the usual checks ([update record](../../../docs/engine-updates.md#november-22-gufo-lora-loaders-release-the-pages-they-read)). The pin and doc changes in this repository are not committed. `feat/qwen27-lora` now sits on `d77c890f`.
+
+November 22, decision: the user chose to store merged targets as Q8_0 for UD-Q4_K_XL. The other two routes, a low-rank side path at inference and an offline quantization of merged full-precision weights, are filed as ticket [10](10-gufo-27b-q4-adapter-routes.md).
