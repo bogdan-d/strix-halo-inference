@@ -1,5 +1,9 @@
 # Engine updates
 
+## November 22 — IQ4_XS partial cache replay
+
+The local launcher pins the IQ extension to `5e262be` for `iq4-xs` and `iq4-xs-lora`. A cache hit leaving a short suffix could change temperature-zero replies on the previous module. The fix keeps Q6_K prefill arithmetic consistent across suffix lengths. All three test prompts matched fresh generation after a disk restart at 32K with MTP off on `iq4-xs`, and at 256K with MTP on for both IQ profiles. Both profiles also passed generation, tools and cancellation checks. [Fork commit](https://github.com/bogdan-d/flash-next-iq-gufo-extension/commit/5e262be42bc51202610899bfe32c22aad4b573b7) · [Investigation and test results](../.scratch/gufo-cache-restore/issues/01-partial-restore-changes-greedy-output.md#2026-11-22--fix-and-launcher-validation)
+
 ## November 22: Qwen3.8 27B on Gufo
 
 Gufo’s [`27b-heretic` profile](weight-profiles.md#gufo-qwen38-27b) serves `qwen3.8-27b` with the UD-Q4_K_XL target, Heretic GGUF adapter and DFlash2. The fork image is pinned at commit `89dd58f3` and digest `sha256:9ae48f785f53f2a9e9446fa4b0240d3a71d65d5243a6e43bc80f17cc981a9590`. Pi advertises the profile's initial 131,072-token context limit.

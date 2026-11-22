@@ -78,7 +78,7 @@ Before wiring, the loader's output was compared with the merged copy this profil
 
 ### `iq4-xs-lora`: merged at load by the IQ extension
 
-The profile names the stock UD-IQ4_XS shards, the shared MTP head, the adapter and `"extension": "flash_next_iq"`. It runs the pinned upstream image; the module at `GUFO_IQ_REVISION` does the merge. That revision is `d7794c4` (version 0.3.0) on branch `feat/lora` of [bogdan-d/flash-next-iq-gufo-extension](https://github.com/bogdan-d/flash-next-iq-gufo-extension/tree/feat/lora), upstream `9ce08cef` plus the loader ported from the Gufo fork and [the release of the pages a merge reads](engine-updates.md#november-22-gufo-lora-loaders-release-the-pages-they-read). `iq4-xs` uses the same module. Install it as described in [Gufo extensions](gufo-extensions.md#iq4_xs-profiles-on-this-host), then:
+The profile names the stock UD-IQ4_XS shards, the shared MTP head, the adapter and `"extension": "flash_next_iq"`. Both IQ profiles load the module at `GUFO_IQ_REVISION` into the pinned upstream image. The fork's [pinned revision](https://github.com/bogdan-d/flash-next-iq-gufo-extension/commit/5e262be42bc51202610899bfe32c22aad4b573b7) includes load-time adapter merging, the [release of the pages a merge reads](engine-updates.md#november-22-gufo-lora-loaders-release-the-pages-they-read), and the [short-prefill cache replay fix](gufo-extensions.md#iq4_xs-profiles-on-this-host). After installing the module, start the adapter profile with the commands below.
 
 ```bash
 bin/models.sh download gufo iq4-xs-lora
