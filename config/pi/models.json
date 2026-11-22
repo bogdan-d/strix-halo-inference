@@ -91,6 +91,46 @@
           "samplingParamsByThinkingLevel": {
             "off": {"temperature": 0.7, "top_p": 0.8, "presence_penalty": 1.5}
           }
+        },
+        {
+          "id": "qwen3.8-27b",
+          "name": "Qwen3.8 27B (Gufo)",
+          "reasoning": true,
+          "input": ["text"],
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+          "contextWindow": 131072,
+          "maxTokens": 32768,
+          "thinkingLevelMap": {
+            "off": "none",
+            "minimal": null,
+            "low": "low",
+            "medium": "medium",
+            "high": null,
+            "xhigh": "xhigh",
+            "max": null
+          },
+          "compat": {
+            "supportsStore": false,
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": true,
+            "supportsUsageInStreaming": true,
+            "supportsLongCacheRetention": false,
+            "maxTokensField": "max_tokens",
+            "thinkingFormat": "openai"
+          },
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 20,
+            "min_p": 0.0,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0,
+            "repetition_penalty": 1.0,
+            "chat_template_kwargs": {"preserve_thinking": true}
+          },
+          "samplingParamsByThinkingLevel": {
+            "off": {"temperature": 0.7, "top_p": 0.8, "presence_penalty": 1.5}
+          }
         }
       ]
     },

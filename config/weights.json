@@ -48,6 +48,15 @@
       "adapter": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/HUIHUI-V2-Qwen3.8-Flash-Next-LoRA-F32.gguf",
       "manifest": "weights/gufo-iq4-xs-lora.tsv",
       "extension": "flash_next_iq"
+    },
+    "27b-heretic": {
+      "label": "Qwen3.8 27B Heretic LoRA \u00b7 UD-Q4_K_XL",
+      "served_model": "qwen3.8-27b",
+      "context": 131072,
+      "model": "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf",
+      "dflash": "z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf",
+      "adapter": "nchapman/Qwen3.8-27B-Heretic-LoRA/Qwen3.8-27B-Heretic-LoRA.gguf",
+      "manifest": "weights/gufo-27b-heretic.tsv"
     }
   },
   "strixite": {

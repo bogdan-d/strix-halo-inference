@@ -1,6 +1,6 @@
 # Weight profiles
 
-The CLI and dashboard share `config/weights.json`. Every engine has a `default`; other keys are explicit choices such as Gufo's `lora` and Halogen's `abliterated-r2`. Halogen's validated lower-memory `abliterated-ht43` profile shares r2's companion directory but has a separate prompt cache; see [trial results](engine-updates.md#november-15-ht43-abliterated-trial). Halogen r2 carries its own MTP head and reuses pinned stock n-gram, tokenizer and vision companions through reflink copies. A profile selects model files and their manifest, not arbitrary launch flags. The one exception to the image pins is a Gufo profile with an `adapter` and no `extension`, which runs the local fork image. Image pins, GPU permissions, context, sampling and API model names remain engine settings.
+The CLI and dashboard share `config/weights.json`. Every engine has a `default`; other keys are explicit choices such as Gufo's `lora` and Halogen's `abliterated-r2`. Halogen's validated lower-memory `abliterated-ht43` profile shares r2's companion directory but has a separate prompt cache; see [trial results](engine-updates.md#november-15-ht43-abliterated-trial). Halogen r2 carries its own MTP head and reuses pinned stock n-gram, tokenizer and vision companions through reflink copies. A profile selects model files and their manifest, not arbitrary launch flags. The one exception to the image pins is a Gufo profile with an `adapter` and no `extension`, which runs the local fork image. Gufo profiles can select their served model ID, context limit and drafting method.
 
 ```bash
 bin/run.sh gufo weights
@@ -24,7 +24,7 @@ Add an entry under its engine in `config/weights.json`. Profile names use lowerc
 }
 ```
 
-- Gufo's `model` is the first GGUF shard and `mtp` is its matching draft head. Include every shard and the head in the manifest. An optional `adapter` names a GGUF LoRA merged at load, by the IQ extension when the profile also names an `extension` and otherwise by the [local fork image](#lora-merged-at-load); include it in the manifest too.
+- Gufo's `model` is the target GGUF or its first shard. Set `mtp` for a Flash-Next MTP head or `dflash` for a 27B DFlash2 drafter. Include all target files and the selected drafter in the manifest. The optional `served_model` and `context` select the API model ID and the default and maximum context in tokens. An optional `adapter` names a GGUF LoRA merged at load, by the IQ extension when the profile also names an `extension` and otherwise by the [local fork image](#lora-merged-at-load); include it in the manifest too.
 - Halogen's `model` is the checkpoint file. Its n-gram companion, `tokenizer/` and optional `qwen38-flash-next-vision.hgn` live beside it. Include the required companions in the manifest.
 - Strixite's `model` is the complete model directory, including its n-gram table, tokenizer, MTP and vision files. Include the whole selected package in the manifest.
 
@@ -37,6 +37,17 @@ Locally generated files have only the first three columns. A missing local file 
 Restart the dashboard helper after changing the catalog, and refresh the page. Missing or incomplete profiles stay visible but cannot be started. After provisioning, run full verification, health, a real generation and the engine's live lifecycle test before treating the profile as validated.
 
 A profile does not add engine compatibility. In particular, Gufo 0.35.0's stock Flash-Next loader, unchanged from 0.34.0, does not support the smaller IQ quantizations: see [Gufo extensions](gufo-extensions.md) before adding them. The `iq4-xs` and `iq4-xs-lora` profiles declare `"extension": "flash_next_iq"`; they require the separately installed, image-specific native module before they become available. Ordinary Gufo profiles do not mount the extension store. See the extension guide for provisioning and validation status.
+
+## Gufo Qwen3.8 27B
+
+Select `27b-heretic` in the dashboard or start it from the CLI. It serves `qwen3.8-27b` with one session and 131,072 tokens of context. Its [manifest](../config/weights/gufo-27b-heretic.tsv) pins the UD-Q4_K_XL target, Q4_K_M DFlash2 drafter and Heretic GGUF adapter (17.52 GiB total). The fork image merges the adapter during load. Use `SPECULATIVE=off` for autoregressive decoding or `CONTEXT=32768` for a smaller window. This profile accepts text input.
+
+```bash
+bin/gufo-fork.sh
+bin/models.sh download gufo 27b-heretic
+bin/run.sh gufo start --weights 27b-heretic --wait
+pi --provider gufo --model qwen3.8-27b --thinking xhigh
+```
 
 ## Gufo Huihui v2 LoRA profiles
 
@@ -55,7 +66,7 @@ bin/gufo-fork.sh
 bin/run.sh gufo start --weights lora --wait
 ```
 
-- **Source:** the fork checkout at `../gufo`, or `GUFO_FORK_SOURCE`. The script builds the committed tree at `GUFO_FORK_REVISION`, never the working copy. That commit is on branch `feat/flash-next-lora` of [bogdan-d/gufo](https://github.com/bogdan-d/gufo/tree/feat/flash-next-lora).
+- **Source:** the fork checkout at `../gufo`, or `GUFO_FORK_SOURCE`. The script builds the committed tree at `GUFO_FORK_REVISION`, never the working copy. That commit is on branch `feat/qwen27-lora` of [bogdan-d/gufo](https://github.com/bogdan-d/gufo/tree/feat/qwen27-lora).
 - **Image definition:** [gufo-org/toolboxes](https://github.com/gufo-org/toolboxes) at `GUFO_FORK_TOOLBOXES_REVISION`, the definition behind `GUFO_IMAGE`, with the engine input replaced by the fork. User, layout and extension SDK therefore match the upstream runtime image.
 - **Build container:** the pinned `GUFO_FORK_NIX_IMAGE`, rootless, with network access. Nix runs without its sandbox there and accepts the fork flake's binary caches, `cache.nixos.org` and `gufo.cachix.org`. The toolchain is kept in the Podman volume `gufo-build-nix` (8.4 GiB on November 21), or `GUFO_FORK_NIX_VOLUME`.
 - **Result:** `localhost/strix-halo-inference/gufo-fork`, tagged with the short revision. The script checks the image's engine-revision label and its digest against `GUFO_FORK_IMAGE`, and prints the reference to pin when they differ. With the toolchain cached, the build took about three minutes on November 21.

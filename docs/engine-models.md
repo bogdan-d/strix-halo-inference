@@ -1,6 +1,6 @@
 # Models each engine supports
 
-All three engines are configured here for Qwen3.8-Flash-Next only. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 9, 2026, and rechecked for the release changes of November 17, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in `config/*-files.tsv`, and only those the [update record](engine-updates.md) names have been run here.
+All three engines serve Qwen3.8 Flash-Next. Gufo also serves Qwen3.8 27B through the `27b-heretic` profile. This page lists the other models each engine can serve at the pinned release, from upstream documentation checked November 9, 2026, and rechecked for the release changes of November 17, and marks which ones this repo provisions. Upstream support is a publisher claim; only models marked as provisioned have files listed in the model manifests under `config/`, and only those the [update record](engine-updates.md) names have been run here.
 
 Abliterated Flash-Next builds for each engine, with picks and compatibility notes, are collected in [abliterated builds](abliterated-models.md).
 
@@ -60,12 +60,12 @@ These load from a path under `/models`, converted at first start. On our read-on
 
 ## Gufo 0.35.0
 
-Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts|video|decision` picks the kind, and the launcher here starts only `serve llm` with Flash-Next. [Model index](https://github.com/gufo-org/gufo/blob/v0.35.0/docs/models/README.md). Smaller Flash-Next quants, measured memory by context and MTP, and community extensions are collected in [Gufo memory, smaller quants and extensions](gufo-extensions.md).
+Gufo serves one model per process. `gufo serve llm|embedding|image|asr|tts|video|decision` picks the kind, and the launcher here starts `serve llm` with Flash-Next or Qwen3.8 27B. [Model index](https://github.com/gufo-org/gufo/blob/v0.35.0/docs/models/README.md). Smaller Flash-Next quants, measured memory by context and MTP, and community extensions are collected in [Gufo memory, smaller quants and extensions](gufo-extensions.md).
 
 | Model | Weights | Use | Provisioned |
 |---|---|---|---|
 | Qwen3.8 Flash-Next | unsloth `UD-Q4_K_XL` GGUF, four shards; optional shared Q8_0 MTP head and BF16 vision projector | Text and images | Yes, text with MTP; projector not downloaded |
-| Qwen3.8 27B | unsloth `UD-Q4_K_XL` (16.35 GiB) or `UD-Q8_K_XL` (29.30 GiB) GGUF; optional z-lab DFlash2 draft | Dense text and images | No |
+| Qwen3.8 27B | unsloth `UD-Q4_K_XL` (16.45 GiB) or `UD-Q8_K_XL` (29.30 GiB) GGUF; optional z-lab DFlash2 draft | Dense text and images | `27b-heretic` serves text with UD-Q4_K_XL, the Heretic adapter and DFlash2 at 128K |
 | DeepSeek V4 Flash | antirez `deepseek-v4-gguf`, mixed IQ2/Q2/Q8, 80.76 GiB | Text, with optional DSpark speculation | No |
 | EmbeddingGemma 2 | `google/embeddinggemma-2`, BF16 | Text, image, video and audio embeddings on `/v1/embeddings`; `--npu` embeds text on the NPU, new in 0.35.0 | No |
 | Qwen-Image-2.1 and 2.1 Turbo | BF16 safetensors, about 33 GB | Image generation and editing, with true CFG, image to image and an A1111 (`sdapi`) route since 0.35.0; non-commercial Qwen Research License | No |

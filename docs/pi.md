@@ -1,10 +1,10 @@
-# Use Qwen3.8 Flash Next with Pi
+# Use local Qwen3.8 models with Pi
 
 Use Pi on the host with any engine's local OpenAI Chat Completions endpoint. No chat UI, proxy, provider extension or new Pi package is needed. The configs were checked with Pi 1.1.0, Halogen 0.17.5, Gufo 0.11.0 and Strixite 0.2.3. Strixite's remaining long-context and unrestricted real-project validation limits are in [the trial guide](strixite.md).
 
 ## Install the configs
 
-The checked-in [models.json](../config/pi/models.json) registers all three providers at the full native 262,144-token context. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. Updating this repository does not modify that live directory. A project `.pi/models.json` is not a supported alternative.
+The checked-in [models.json](../config/pi/models.json) registers Flash-Next on all three providers at 262,144 tokens and Gufo's Qwen3.8 27B at 131,072 tokens. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. Updating this repository does not modify that live directory. A project `.pi/models.json` is not a supported alternative.
 
 Run the following from this checkout in Bash. If your shell is Fish, enter `bash` first. Existing files are backed up before changes. Matching Halogen, Gufo and Strixite entries are updated to the checked-in profile, while unrelated entries are preserved. Set `PI_CODING_AGENT_DIR` first if you use a different agent directory.
 
@@ -49,7 +49,7 @@ Check registration without starting an inference engine:
 pi --offline --list-models qwen3.8
 ```
 
-You should see `halogen/halogen-qwen3.8-flash-next`, `gufo/qwen3.8-flash-next` and `strixite/qwen3.8-flash-next`. The literal API key `local` is a non-secret placeholder that makes these providers selectable. None of these endpoints requires authentication.
+You should see `halogen/halogen-qwen3.8-flash-next`, `gufo/qwen3.8-flash-next`, `gufo/qwen3.8-27b` and `strixite/qwen3.8-flash-next`. The literal API key `local` is a non-secret placeholder that makes these providers selectable. None of these endpoints requires authentication.
 
 ## Start coding with Halogen
 
@@ -96,9 +96,9 @@ From the target project:
 pi --provider gufo --model qwen3.8-flash-next --thinking xhigh
 ```
 
-Choose weights in the dashboard before starting the engine, or pass `--weights PROFILE` to the launcher. Pi’s provider and API model names stay the same across weight profiles; `/model` selects the engine, not its checkpoint. Finish or cancel the current request before stopping the engine to change weights. See [weight profiles](weight-profiles.md) for the available variants and validation status.
+Choose weights in the dashboard before starting the engine, or pass `--weights PROFILE` to the launcher. For Qwen3.8 27B, start `bin/run.sh gufo start --weights 27b-heretic --wait` and select `gufo/qwen3.8-27b` in Pi or run `pi --provider gufo --model qwen3.8-27b --thinking xhigh`. Finish or cancel the current request before stopping the engine to change weights. See [weight profiles](weight-profiles.md) for the available variants and validation status.
 
-Do not run the engines together. The launchers enforce this restriction. Each uses one active inference slot with MTP enabled. Do not launch parallel coding agents against the same engine for the initial comparison. Pi does not start or stop the containers for you.
+Do not run the engines together. The launchers enforce this restriction. Each uses one active inference slot. Flash-Next uses MTP and 27B uses DFlash2 by default. Do not launch parallel coding agents against the same engine for the initial comparison. Pi does not start or stop the containers for you.
 
 ## Select Strixite
 
@@ -138,11 +138,11 @@ Keep `xhigh` for substantial coding tasks. Use `--thinking medium` or `--thinkin
 
 In the [local routine-coding comparison](thinking-comparison.md), `medium` was faster in all eight pairs and both levels passed the fixed checks. Try it for small, well-specified edits with good checks. The sample covers only two short synthetic tasks, not difficult debugging or long-context coding. The defaults remain `xhigh`, and `low` was not tested.
 
-The 32,768-token completion limit, raised from 16,384 on November 17, covers reasoning plus tool calls or final text. It is not 32K of reasoning followed by another 32K of output. Pi sets it per model, so the same limit applies at every thinking level, `xhigh` and `medium` alike. It matches Halogen's default per-request generation limit (`HALOGEN_MAX_TOK`, 32768); Gufo sets no default limit, and Strixite leaves its answer room of 15% of the limit inside it, so Strixite's 32,768-token thinking cap cannot trigger on Pi requests. Halogen reserves answer room when closing an overlong reasoning block. Gufo has no separate numeric thinking budget or guaranteed answer-room transition, so an unusually long reasoning phase can hit the total limit without an answer. Do not configure a Halogen-style thinking-budget field for Gufo. These profiles do not impose a separate numeric thinking cap on either engine.
+The 32,768-token completion limit, raised from 16,384 on November 17, covers reasoning plus tool calls or final text. It is not 32K of reasoning followed by another 32K of output. Pi sets it per model, so the same limit applies at every thinking level, `xhigh` and `medium` alike. It matches Halogen's default per-request generation limit (`HALOGEN_MAX_TOK`, 32768); Gufo sets no default limit, and Strixite leaves its answer room of 15% of the limit inside it, so Strixite's 32,768-token thinking cap cannot trigger on Pi requests. Halogen reserves answer room when closing an overlong reasoning block. The [Gufo server](https://github.com/gufo-org/gufo/blob/v0.35.0/docs/server.md#reasoning-controls) accepts `reasoning_budget_tokens`. Pi leaves it unset, so an unusually long reasoning phase can reach the completion limit. These profiles do not impose a separate numeric thinking cap on either engine.
 
-All three models advertise `contextWindow: 262144`, matching the launcher's full native 256K allocation. The compaction overrides reserve 32,768 tokens, matching the completion limit, and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 229,376 tokens, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 32K completion cap limits one response, not the conversation's context capacity.
+The Flash-Next profiles advertise 262,144 tokens. Gufo's 27B profile advertises 131,072, matching the launcher's initial 128K limit. The compaction overrides reserve 32,768 tokens, matching the completion limit, and retain approximately 32,768 recent tokens. Automatic compaction starts when estimated context exceeds 229,376 tokens for Flash-Next or 98,304 for 27B, leaving room for the configured completion. System instructions, tool declarations, tool results and preserved thinking count toward that context. The 32K completion cap limits one response, not the conversation's context capacity.
 
-If you previously installed the 32K profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
+If you previously installed the 32K Flash-Next profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
 
 If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. The Strixite profile lists `image` input, so Pi sends pasted or attached images to it; this needs Strixite's default `VISION=on`. The Halogen profile stays text only because Halogen's images are opt-in (`env VISION=on`); add `image` to its `input` only if you always start it that way. Gufo stays text only.
 
@@ -154,7 +154,7 @@ The October 29 engine update leaves these Pi profiles unchanged. Gufo 0.27.0 add
 
 - **Connection refused:** the selected container is stopped, crashed or listening on the other engine's port. Check `bin/run.sh ENGINE status` and `bin/run.sh ENGINE logs` from this checkout.
 - **Provider missing:** check the actual agent directory and the merge result. Open `/model` to reload providers, or restart Pi. There is no `/login` step for these local endpoints.
-- **Empty answer or length limit:** reasoning may have consumed the completion budget. Try a fresh session with a lower effort, inspect server logs and avoid assuming Gufo supports a separate thinking cap.
+- **Empty answer or length limit:** reasoning may have consumed the completion budget. Try a fresh session with a lower effort, inspect server logs and check the requested completion limit.
 - **Context overflow:** use `/compact` or a new session and verify Pi's context metadata matches the launcher. Switching from a much larger remote-model session can bring too much history into the local model.
 - **Unexpected extensions or too much startup context:** first use the minimal read-only command above. Reintroduce your normal resources after confirming the provider connection.
 - **Schema response fails on Halogen:** its JSON-schema constrained output currently requires greedy sampling. Ordinary Pi function-tool requests work with this sampled coding profile, but an extension requesting `response_format` may need different settings.

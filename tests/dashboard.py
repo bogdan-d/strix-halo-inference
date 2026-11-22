@@ -78,8 +78,8 @@ else:
         status, body, _ = request("GET", "/state")
         current = json.loads(body)
         weights = current.pop("weights")
-        assert [entry["id"] for entry in weights["gufo"]] == ["default", "iq4-xs", "lora", "iq4-xs-lora"]
-        assert not weights["gufo"][-1]["available"]
+        assert [entry["id"] for entry in weights["gufo"]] == ["default", "iq4-xs", "lora", "iq4-xs-lora", "27b-heretic"]
+        assert all(not entry["available"] for entry in weights["gufo"] if entry["id"] in ("iq4-xs-lora", "27b-heretic"))
         caches = current.pop("caches")
         assert caches["halogen"] >= 8192 and caches["gufo"] == caches["strixite"] == 0, caches
         assert status == 200 and current == {

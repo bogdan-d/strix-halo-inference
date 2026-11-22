@@ -23,7 +23,7 @@ def profiles(engine: str) -> dict:
     for name, entry in entries.items():
         if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', name):
             raise ValueError(f'Invalid weight profile: {name}')
-        for key in ('model', 'manifest', 'directory', 'mtp', 'adapter'):
+        for key in ('model', 'manifest', 'directory', 'mtp', 'dflash', 'adapter'):
             if entry.get(key):
                 relative(entry[key])
         if not entry.get('model') or not entry.get('manifest'):
@@ -32,6 +32,13 @@ def profiles(engine: str) -> dict:
             raise ValueError(f'Unsupported extension for {engine}/{name}')
         if entry.get('adapter') and engine != 'gufo':
             raise ValueError(f'Unsupported adapter for {engine}/{name}')
+        if entry.get('dflash') and (engine != 'gufo' or entry.get('mtp')):
+            raise ValueError(f'dflash requires a Gufo profile without an MTP head: {name}')
+        if 'served_model' in entry and (engine != 'gufo' or not isinstance(entry['served_model'], str)
+                                        or not re.fullmatch(r'[a-z0-9][a-z0-9.-]*', entry['served_model'])):
+            raise ValueError(f'Invalid served model ID for {engine}/{name}')
+        if 'context' in entry and not (type(entry['context']) is int and 1024 <= entry['context'] <= 262144):
+            raise ValueError(f'Invalid context window for {engine}/{name}')
     return entries
 
 
@@ -89,6 +96,9 @@ if __name__ == '__main__':
                     print(entry.get(key, ''))
                 print(extension_store(entry) or '')
                 print(entry.get('adapter', ''))
+                print(entry.get('dflash', ''))
+                print(entry.get('served_model', 'halogen-qwen3.8-flash-next' if engine == 'halogen' else 'qwen3.8-flash-next'))
+                print(entry.get('context', 262144))
             elif action == 'extension':
                 print(extension_store(entry) or '')
             elif action == 'manifest':

@@ -271,6 +271,26 @@ else:
     assert fork in launch and not any("gufo-runtime" in arg for arg in launch)
     assert launch[launch.index("--model") + 1].startswith("/models/unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/")
     assert launch[launch.index("--lora") + 1] == "/models/nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/HUIHUI-V2-Qwen3.8-Flash-Next-LoRA-F32.gguf"
+    calls.unlink()
+    result = run("gufo", "start", "--weights", "27b-heretic", "--wait", CONTEXT="")
+    assert result.returncode == 0 and "pi --provider gufo --model qwen3.8-27b --thinking xhigh" in result.stdout, result
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert fork in launch and "--mtp-model" not in launch
+    for flag, value in (("--context", "131072"), ("--served-model-name", "qwen3.8-27b"), ("--speculative", "dflash2"),
+                        ("--dflash-model", "/models/z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf"),
+                        ("--model", "/models/unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf"),
+                        ("--lora", "/models/nchapman/Qwen3.8-27B-Heretic-LoRA/Qwen3.8-27B-Heretic-LoRA.gguf")):
+        assert launch[launch.index(flag) + 1] == value, launch
+    calls.unlink()
+    result = run("gufo", "start", "--weights", "27b-heretic", CONTEXT="32768", SPECULATIVE="off")
+    assert result.returncode == 0, result
+    launch = next(call for call in recorded() if call[0] == "run")
+    assert launch[launch.index("--speculative") + 1] == "off" and launch[launch.index("--context") + 1] == "32768"
+    assert "--mtp-model" not in launch and "--dflash-model" not in launch
+    calls.unlink()
+    result = run("gufo", "start", "--weights", "27b-heretic", CONTEXT="131073")
+    assert result.returncode == 2 and "1024..131072" in result.stderr, result
+    assert not any(call[0] == "run" for call in recorded())
     # With the IQ extension the adapter is the module's job: pinned image, extension store and --lora together.
     calls.unlink()
     assert run("gufo", "start", "--weights", "iq4-xs-lora").returncode == 0

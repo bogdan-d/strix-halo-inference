@@ -97,6 +97,9 @@ mapfile -t WEIGHT_PATHS <<<"$SELECTION"
 # A LoRA adapter is merged into the stock weights at load: by the IQ extension when the profile uses it, otherwise
 # by the local fork build, since the pinned image's built-in provider cannot.
 ADAPTER="${WEIGHT_PATHS[3]:-}"
+DFLASH_MODEL="${WEIGHT_PATHS[4]}"
+SERVED_MODEL="${WEIGHT_PATHS[5]}"
+MAX_CONTEXT="${WEIGHT_PATHS[6]}"
 if [[ -n "$ADAPTER" && -z "${WEIGHT_PATHS[2]:-}" ]]; then
   IMAGE="$GUFO_FORK_IMAGE"
   podman image exists "$IMAGE" || { echo "Local Gufo fork image missing: $IMAGE. Build it with bin/gufo-fork.sh (docs/weight-profiles.md)." >&2; exit 1; }
@@ -132,10 +135,10 @@ ACTIVE="$(podman ps --filter label=io.strix-halo-inference.managed=true --format
 [[ -z "$ACTIVE" ]] || { echo "Stop the active engine first: $ACTIVE" >&2; exit 1; }
 COMFY="$(podman ps --filter name=^strix-halo-den-comfyui$ --format '{{.Names}}')"
 [[ -z "$COMFY" ]] || { echo "Stop ComfyUI in Den before starting inference: $COMFY" >&2; exit 1; }
-CONTEXT="${CONTEXT:-262144}"
+CONTEXT="${CONTEXT:-$MAX_CONTEXT}"
 MIN_CONTEXT=1024
 [[ "$ENGINE" != strixite ]] || MIN_CONTEXT=4096
-[[ "$CONTEXT" =~ ^[0-9]+$ && "$CONTEXT" -ge "$MIN_CONTEXT" && "$CONTEXT" -le 262144 ]] || { echo "CONTEXT must be $MIN_CONTEXT..262144." >&2; exit 2; }
+[[ "$CONTEXT" =~ ^[0-9]+$ && "$CONTEXT" -ge "$MIN_CONTEXT" && "$CONTEXT" -le "$MAX_CONTEXT" ]] || { echo "CONTEXT must be $MIN_CONTEXT..$MAX_CONTEXT." >&2; exit 2; }
 SPECULATIVE="${SPECULATIVE:-on}"
 case "$SPECULATIVE" in on|off) ;; *) echo 'SPECULATIVE must be on or off.' >&2; exit 2 ;; esac
 # 8-bit attention cache on Halogen and Strixite: about 0.6 of the 16-bit cache's memory. Gufo has no such setting.
@@ -181,18 +184,21 @@ elif [[ "$ENGINE" == gufo ]]; then
   fi
   ARGS+=("--userns=keep-id:uid=1000,gid=1000" "$IMAGE" gufo serve --host 0.0.0.0 --port "$PORT" --sessions 1 llm
     --model "/models/$GUFO_MODEL"
-    --served-model-name qwen3.8-flash-next --context "$CONTEXT"
+    --served-model-name "$SERVED_MODEL" --context "$CONTEXT"
     --cache-ram-bytes 2147483648 --cache-disk /cache
     --cache-disk-bytes 17179869184)
-  if [[ "$SPECULATIVE" == on ]]; then
-    ARGS+=(--speculative mtp --mtp-model "/models/${WEIGHT_PATHS[1]}")
-  else
+  if [[ "$SPECULATIVE" == off ]]; then
     ARGS+=(--speculative off)
+  elif [[ -n "$DFLASH_MODEL" ]]; then
+    ARGS+=(--speculative dflash2 --dflash-model "/models/$DFLASH_MODEL")
+  else
+    [[ -n "${WEIGHT_PATHS[1]}" ]] || { echo "Gufo profile $PROFILE needs a draft model or SPECULATIVE=off." >&2; exit 2; }
+    ARGS+=(--speculative mtp --mtp-model "/models/${WEIGHT_PATHS[1]}")
   fi
   [[ -z "$ADAPTER" ]] || ARGS+=(--lora "/models/$ADAPTER")
 else
   ARGS+=(--stop-timeout 90 --env "STRIX_MODELS_DIR=/models/${WEIGHT_PATHS[0]}" "$IMAGE"
-    --host 0.0.0.0 --port "$PORT" --model-id qwen3.8-flash-next
+    --host 0.0.0.0 --port "$PORT" --model-id "$SERVED_MODEL"
     --capacity "$CONTEXT" --rope-yarn-factor 1 --mtp "$SPECULATIVE"
     --prompt-cache-dir /cache --prompt-cache-gib 16 --prompt-cache-ram-margin-gib 8
     --low-memory fail --think-nudge off --vision "$VISION" --total-slots "$SLOTS")
@@ -219,8 +225,7 @@ if [[ "$WAIT" == true ]]; then
     PROBE=$((REMAINING < 5 ? REMAINING : 5))
     if curl --fail --silent --max-time "$PROBE" "$BASE$HEALTH" >/dev/null; then
       echo "$ENGINE ready at $BASE/v1"
-      if [[ "$ENGINE" == halogen ]]; then MODEL=halogen-qwen3.8-flash-next; else MODEL=qwen3.8-flash-next; fi
-      echo "With the installed Pi profile: pi --provider $ENGINE --model $MODEL --thinking xhigh"
+      echo "With the installed Pi profile: pi --provider $ENGINE --model $SERVED_MODEL --thinking xhigh"
       [[ "$ENGINE" != strixite ]] || echo 'Normal Pi tools are not sandboxed. See docs/strixite.md for the guarded coding-test boundary.'
       exit
     fi

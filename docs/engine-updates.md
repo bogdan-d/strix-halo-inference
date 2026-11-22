@@ -1,5 +1,13 @@
 # Engine updates
 
+## November 22: Qwen3.8 27B on Gufo
+
+Gufo’s [`27b-heretic` profile](weight-profiles.md#gufo-qwen38-27b) serves `qwen3.8-27b` with the UD-Q4_K_XL target, Heretic GGUF adapter and DFlash2. The fork image is pinned at commit `89dd58f3` and digest `sha256:9ae48f785f53f2a9e9446fa4b0240d3a71d65d5243a6e43bc80f17cc981a9590`. Pi advertises the profile's initial 131,072-token context limit.
+
+Both `27b-heretic` (128K, DFlash2) and Flash-Next `lora` (256K, MTP) passed full file verification, readiness, real generation, conversation recall, forced and streamed tool calls, slot release on disconnect, and a follow-up generation. On this host's balanced power profile, Gufo reported 29,275 MiB of GPU device memory at startup for 27B and 85,847 MiB for Flash-Next. The 27B loader merged 128 tensors in 4.8 seconds. A tool-free Pi request with xhigh thinking returned `ready` through the new model ID. Validation used short prompts.
+
+Both stops passed the host RAM and GTT release check. GTT returned to about 1 GiB after each run. Host-wide swap use rose by 2.1 GiB during Flash-Next validation. The rootless runc launcher gave its usual supplementary-groups notice on both starts, and both engines accessed the GPU with the existing permissions.
+
 ## November 22: Gufo LoRA loaders release the pages they read
 
 Loading with an adapter left about 0.7 to 0.8 GiB more resident memory in the Gufo process than loading stock: the merge reads each target tensor through the mapped GGUF file, and those file pages stayed mapped. They were reclaimable page cache, and GPU memory was unaffected. Both loaders now release each tensor's pages after merging it.
