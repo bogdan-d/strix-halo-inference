@@ -6,8 +6,8 @@
 /** @typedef {{metric: Record<string, string>, value: [number, string], values: [number, string][]}} Sample */
 /** @typedef {{start: number, end: number, step: number, instantWindow: string, rangeWindow: string}} Context */
 /** @typedef {{el: HTMLElement, refresh: (context: Context) => Promise<unknown>}} Mounted */
-/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping"|"clearing", since: number, weights: string|null}} Engine */
-/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string, caches: Record<string, number>, weights: Record<string, {id: string, label: string, available: boolean}[]>}} State */
+/** @typedef {{state: "stopped"|"starting"|"ready"|"stopping"|"clearing", since: number, weights: string|null, vision: string|null, pi_model: string|null}} Engine */
+/** @typedef {{monitoring: "off"|"on"|"partial"|"starting"|"stopping", engines: Record<string, Engine>, logs: string[], npu_models: string, caches: Record<string, number>, weights: Record<string, {id: string, label: string, available: boolean, vision_available: boolean, vision_download: string|null}[]>}} State */
 
 // True when bin/dashboard.py serves this page. It also runs the commands behind the buttons; opened as a file, the page only reads.
 const HELPER = location.protocol !== "file:";
@@ -321,6 +321,8 @@ const follow = /** @type {HTMLInputElement} */ (byId("follow"));
 
 // Monitoring is known to be down, so its absence is a state to show rather than a query error.
 const offline = () => state !== undefined && state.monitoring !== "on" && state.monitoring !== "partial";
+/** @type {Map<string, boolean>} Image input selections for this page session. */
+const visionChoices = new Map();
 const active = () => Object.entries(state?.engines ?? {}).find(([, engine]) => engine.state !== "stopped");
 
 /** @param {string} id @param {string} text @param {() => void} clicked */
@@ -344,8 +346,9 @@ function render() {
     const status = byId(`status-${el.dataset.id}`), profile = byId(`profile-${el.dataset.id}`);
     status.textContent = shown ?? "unknown";
     status.className = `chip ${engine?.state === "ready" ? "ok" : ""}`;
-    profile.hidden = !engine || engine.state === "stopped";
-    profile.textContent = `Running weights: ${engine?.weights ?? "unknown"}`;
+    profile.hidden = !engine?.weights;
+    profile.textContent = `Running weights: ${engine?.weights} · Vision: ${engine?.vision ?? "unknown"}`
+      + (el.dataset.id === "gufo" ? ` · Pi model: ${engine?.pi_model ?? "unknown"}` : "");
     el.textContent = "Start";
     el.setAttribute("aria-label", `Start ${name}`);
     // One engine at a time: starting another needs an explicit stop first.
@@ -367,6 +370,12 @@ function render() {
     }
     select.disabled = !state || !!running;
     const chosen = entries.find(entry => entry.id === select.value);
+    const vision = /** @type {HTMLInputElement} */ (byId(`vision-${engine.job}`));
+    const hint = byId(`vision-hint-${engine.job}`);
+    vision.checked = !!chosen?.vision_available && (visionChoices.get(`${engine.job}/${chosen.id}`) ?? engine.job === "strixite");
+    vision.disabled = !!running || !chosen?.available || !chosen.vision_available;
+    hint.hidden = !chosen || chosen.vision_available;
+    hint.textContent = chosen?.vision_download ? `Install vision files: ${chosen.vision_download}` : "Vision unavailable for this profile.";
     const start = /** @type {HTMLButtonElement} */ (byId("engines").querySelector(`.engine-start[data-id="${engine.job}"]`));
     start.disabled ||= !chosen?.available;
   }
@@ -502,6 +511,16 @@ if (HELPER) {
     select.setAttribute("aria-label", `${engine.name} weights`);
     select.addEventListener("change", () => { localStorage.setItem(`strix.weights.${engine.job}`, select.value); render(); });
     label.append(select);
+    const vision = document.createElement("input");
+    vision.type = "checkbox";
+    vision.id = `vision-${engine.job}`;
+    vision.setAttribute("aria-label", `${engine.name} image input`);
+    vision.addEventListener("change", () => visionChoices.set(`${engine.job}/${select.value}`, vision.checked));
+    const hint = h("small", "vision-hint");
+    hint.id = `vision-hint-${engine.job}`;
+    vision.setAttribute("aria-describedby", hint.id);
+    const visionLabel = h("label", "vision-label", vision, "Image input");
+    const selection = () => `${select.value}/${vision.checked ? "on" : "off"}`;
     const status = h("span", "chip", "unknown");
     status.id = `status-${engine.job}`;
     const profile = h("p", "running-profile");
@@ -509,19 +528,19 @@ if (HELPER) {
     profile.hidden = true;
     const start = button(engine.job, "Start", async () => {
       // Open the log at once, so a failed start is visible.
-      if (await act(`/engine/${engine.job}/start/${selectedWeights(engine.job)}`)) tail(engine.job);
+      if (await act(`/engine/${engine.job}/start/${selection()}`)) tail(engine.job);
     });
     start.className = "engine-start";
     const actions = h("div", "engine-actions", start);
     if (engine.job === "halogen") {
       const npu = button("halogen-npu", "Start with NPU", async () => {
-        if (await act(`/engine/halogen/start-npu/${selectedWeights("halogen")}`)) tail("halogen");
+        if (await act(`/engine/halogen/start-npu/${selection()}`)) tail("halogen");
       });
       npu.id = "npu";
       actions.append(npu);
     }
     byId("engines").append(h("div", "engine-control",
-      h("div", "engine-heading", h("h3", "", engine.name), status), label, actions, profile));
+      h("div", "engine-heading", h("h3", "", engine.name), status), label, visionLabel, hint, actions, profile));
   }
   byId("helper").hidden = byId("logs").hidden = false;
   // Clearing deletes, so the first click only asks; a second click within five seconds clears.

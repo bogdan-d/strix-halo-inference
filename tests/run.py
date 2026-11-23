@@ -140,6 +140,7 @@ else:
                         ("--prompt-cache-gib", "16"), ("--prompt-cache-ram-margin-gib", "8"), ("--stop-timeout", "90"),
                         ("--vision", "on"), ("--kv-cache", "q8"), ("--total-slots", "1")):
         assert launch[launch.index(flag) + 1] == value, launch
+    assert "io.strix-halo-inference.vision=on" in launch
     assert f"{env['MODELS_DIR']}:/models:ro" in launch
     assert f"{env['CACHE_ROOT']}/strixite/default:/cache:rw" in launch
     assert "STRIX_MODELS_DIR=/models/wemoh/Qwen3.8-Flash-Next-strixw" in launch
@@ -151,6 +152,7 @@ else:
     assert result.returncode == 0, result
     launch = next(json.loads(line) for line in calls.read_text().splitlines() if json.loads(line)[0] == "run")
     assert launch[launch.index("--mtp") + 1] == "off" and launch[launch.index("--capacity") + 1] == "65536"
+    assert "io.strix-halo-inference.vision=off" in launch
     assert launch[launch.index("--vision") + 1] == "off" and launch[launch.index("--kv-cache") + 1] == "bf16"
     assert launch[launch.index("--total-slots") + 1] == "2"
     for slots in ("0", "9", "two"):
@@ -197,6 +199,7 @@ else:
     launch = next(call for call in recorded() if call[0] == "run")
     assert not any("NPU" in arg or "xrt" in arg for arg in launch), launch
     assert "HALOGEN_KV8=1" in launch
+    assert "io.strix-halo-inference.vision=off" in launch
     assert not any("VISION" in arg for arg in launch), launch
     assert not any(call[0] == "sudo" for call in recorded())
     assert (temp / "models-calls").read_text() == "check halogen\n"
@@ -220,6 +223,7 @@ else:
         launch = next(call for call in recorded() if call[0] == "run")
         assert launch[launch.index("--mmproj") + 1] == f"/models/unsloth/Qwen3.8-{family}-GGUF/vision/mmproj-BF16.gguf"
         names = [launch[i+1] for i, arg in enumerate(launch) if arg == "--served-model-name"]
+        assert "io.strix-halo-inference.vision=on" in launch and f"io.strix-halo-inference.pi-model={names[-1]}" in launch
         assert names == [f"qwen3.8-{family.lower()}", f"qwen3.8-{family.lower()}-vision"]
         assert (temp / "models-calls").read_text().splitlines()[-1] == ("check gufo --projector" if profile == "default" else f"check gufo {profile} --projector")
         calls.unlink()
@@ -309,6 +313,7 @@ else:
     assert result.returncode == 0 and "pi --provider gufo --model qwen3.8-27b --thinking xhigh" in result.stdout, result
     launch = next(call for call in recorded() if call[0] == "run")
     assert fork in launch and "--mtp-model" not in launch
+    assert "io.strix-halo-inference.pi-model=qwen3.8-27b" in launch
     for flag, value in (("--context", "131072"), ("--served-model-name", "qwen3.8-27b"), ("--speculative", "dflash2"),
                         ("--dflash-model", "/models/z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf"),
                         ("--model", "/models/unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf"),

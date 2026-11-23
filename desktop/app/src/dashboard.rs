@@ -94,7 +94,7 @@ fn command(root: &Path, program: &str, args: &[&str]) -> Command {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    for name in ["WEIGHTS", "GUFO_MODEL", "NPU_MODELS"] {
+    for name in ["WEIGHTS", "GUFO_MODEL", "NPU_MODELS", "VISION"] {
         cmd.env_remove(name);
     }
     cmd
@@ -146,6 +146,7 @@ pub enum Action {
         engine: Engine,
         profile: String,
         npu: bool,
+        vision: Option<bool>,
     },
     Stop {
         engine: Engine,
@@ -157,12 +158,13 @@ pub enum Action {
         start: bool,
     },
 }
-fn action_args(action: &Action) -> Result<(&str, &str, Vec<String>, bool), String> {
-    let (target, state, args, npu) = match action {
+fn action_args(action: &Action) -> Result<(&str, &str, Vec<String>), String> {
+    let (target, state, args) = match action {
         Action::Start {
             engine,
             profile,
             npu,
+            ..
         } => {
             if profile.is_empty()
                 || !profile
@@ -178,61 +180,45 @@ fn action_args(action: &Action) -> Result<(&str, &str, Vec<String>, bool), Strin
                 engine.name(),
                 "starting",
                 vec!["bin/run.sh", engine.name(), "start", "--weights", profile],
-                *npu,
             )
         }
         Action::Stop { engine } => (
             engine.name(),
             "stopping",
             vec!["bin/run.sh", engine.name(), "stop"],
-            false,
         ),
         Action::Clear { engine } => (
             engine.name(),
             "clearing",
             vec!["bin/cache.sh", engine.name(), "clear"],
-            false,
         ),
         Action::Monitoring { start } => (
             "monitoring",
             if *start { "starting" } else { "stopping" },
             vec!["bin/monitor.sh", if *start { "start" } else { "stop" }],
-            false,
         ),
     };
-    Ok((
-        target,
-        state,
-        args.into_iter().map(str::to_owned).collect(),
-        npu,
-    ))
+    Ok((target, state, args.into_iter().map(str::to_owned).collect()))
 }
 fn npu_models() -> String {
     std::env::var("DASHBOARD_NPU_MODELS")
         .unwrap_or_else(|_| "decider-0.8b,embeddinggemma-2,qwen3guard-stream-0.6b".into())
 }
-async fn weights(root: &Path, engine: &str) -> Result<Value, String> {
+async fn weights(root: &Path, engine: &str) -> Result<Vec<Value>, String> {
     let result = run(
-        command(root, "python3", &["-I", "bin/weights.py", engine, "list"]),
+        command(
+            root,
+            "python3",
+            &["-I", "bin/weights.py", engine, "dashboard"],
+        ),
         15,
     )
     .await?;
     if result.status != 200 {
         return Err(result.text);
     }
-    Ok(Value::Array(
-        result
-            .text
-            .lines()
-            .map(|line| {
-                let fields: Vec<_> = line.splitn(3, '\t').collect();
-                if fields.len() != 3 {
-                    return Err("Invalid weights response".into());
-                }
-                Ok(json!({"id":fields[0],"available":fields[1]=="installed","label":fields[2]}))
-            })
-            .collect::<Result<_, String>>()?,
-    ))
+    serde_json::from_str::<Vec<Value>>(&result.text)
+        .map_err(|e| format!("Invalid dashboard profiles: {e}"))
 }
 #[tauri::command]
 pub async fn dashboard_action(
@@ -241,29 +227,36 @@ pub async fn dashboard_action(
     action: Action,
 ) -> Result<CommandResult, String> {
     authorize(&webview)?;
-    let (target, state, args, npu) = action_args(&action)?;
+    let (target, state, args) = action_args(&action)?;
     let _busy = backend.acquire(target, state)?;
-    if let Action::Start {
-        engine, profile, ..
-    } = &action
-    {
-        let entries = weights(&backend.root, engine.name()).await?;
-        if !entries
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|entry| entry["id"] == *profile && entry["available"] == true)
-        {
-            return Err("Unknown or unavailable weight profile; refresh the selection".into());
-        }
-    }
     let mut cmd = command(
         &backend.root,
         "bash",
         &args.iter().map(String::as_str).collect::<Vec<_>>(),
     );
-    if npu {
-        cmd.env("NPU_MODELS", npu_models());
+    if let Action::Start {
+        engine,
+        profile,
+        vision,
+        npu,
+    } = &action
+    {
+        let entries = weights(&backend.root, engine.name()).await?;
+        let entry = entries
+            .iter()
+            .find(|entry| entry["id"] == *profile && entry["available"] == true)
+            .ok_or("Unknown or unavailable weight profile; refresh the selection")?;
+        let enabled = vision.unwrap_or(matches!(engine, Engine::Strixite));
+        if enabled && entry["vision_available"] != true {
+            return Err(format!(
+                "Vision unavailable for {profile}. {}",
+                entry["vision_download"].as_str().unwrap_or("")
+            ));
+        }
+        cmd.env("VISION", if enabled { "on" } else { "off" });
+        if *npu {
+            cmd.env("NPU_MODELS", npu_models());
+        }
     }
     eprintln!("dashboard_action: {action:?}");
     let result = run(cmd, 180).await;
@@ -309,7 +302,7 @@ async fn details(backend: &Backend) -> Result<Value, String> {
     }
     let mut entries = json!({});
     for engine in ENGINES {
-        entries[engine] = weights(&backend.root, engine).await?;
+        entries[engine] = Value::Array(weights(&backend.root, engine).await?);
     }
     let cache_root = std::env::var_os("CACHE_ROOT")
         .filter(|s| !s.is_empty())
@@ -355,7 +348,10 @@ fn state_from(
             _ if ready[i] => "ready",
             _ => "starting",
         });
-        engines[*engine] = json!({"state":state,"since":c.map(|c|c["StartedAt"].clone()).unwrap_or(json!(0)),"weights":c.map(|c|c["Labels"]["io.strix-halo-inference.weights"].as_str().unwrap_or("unknown"))});
+        engines[*engine] = json!({"state":state,"since":c.map(|c|c["StartedAt"].clone()).unwrap_or(json!(0)),
+            "weights":c.map(|c|c["Labels"]["io.strix-halo-inference.weights"].as_str().unwrap_or("unknown")),
+            "vision":c.and_then(|c|c["Labels"]["io.strix-halo-inference.vision"].as_str()),
+            "pi_model":c.and_then(|c|c["Labels"]["io.strix-halo-inference.pi-model"].as_str())});
         if c.is_some() {
             logs.push(*engine);
         }
@@ -535,20 +531,23 @@ mod tests {
         assert!(action_args(&Action::Start {
             engine: Engine::Gufo,
             profile: "../x".into(),
-            npu: false
+            npu: false,
+            vision: Some(false)
         })
         .is_err());
         assert!(action_args(&Action::Start {
             engine: Engine::Gufo,
             profile: "default".into(),
-            npu: true
+            npu: true,
+            vision: Some(true)
         })
         .is_err());
         assert_eq!(
             action_args(&Action::Start {
                 engine: Engine::Halogen,
                 profile: "default".into(),
-                npu: true
+                npu: true,
+                vision: Some(true)
             })
             .unwrap()
             .2,
@@ -564,10 +563,15 @@ mod tests {
     }
     #[test]
     fn external_state_and_partial_monitoring() {
-        let c = json!([{"Names":["strix-halo-gufo"],"State":"running","StartedAt":42,"Labels":{"io.strix-halo-inference.weights":"iq4-xs"}},{"Names":["strix-halo-monitor-exporter"],"State":"running"}]);
+        let c = json!([{"Names":["strix-halo-gufo"],"State":"running","StartedAt":42,"Labels":{"io.strix-halo-inference.weights":"iq4-xs","io.strix-halo-inference.vision":"on","io.strix-halo-inference.pi-model":"qwen3.8-flash-next-vision"}},{"Names":["strix-halo-monitor-exporter"],"State":"running"}]);
         let state = state_from(&c, &BTreeMap::new(), &[false, true, false]).unwrap();
         assert_eq!(state["engines"]["gufo"]["state"], "ready");
         assert_eq!(state["engines"]["gufo"]["weights"], "iq4-xs");
+        assert_eq!(state["engines"]["gufo"]["vision"], "on");
+        assert_eq!(
+            state["engines"]["gufo"]["pi_model"],
+            "qwen3.8-flash-next-vision"
+        );
         assert_eq!(state["monitoring"], "partial");
     }
     #[test]
@@ -578,7 +582,7 @@ mod tests {
                 "sh",
                 &[
                     "-c",
-                    "test -z \"$WEIGHTS$GUFO_MODEL$NPU_MODELS\" && echo refused; exit 1",
+                    "test -z \"$WEIGHTS$GUFO_MODEL$NPU_MODELS$VISION\" && echo refused; exit 1",
                 ],
             );
             cmd.env_remove("WEIGHTS");

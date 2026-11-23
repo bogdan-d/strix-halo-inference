@@ -187,7 +187,7 @@ fi
 ENGINE_CACHE="$CACHE_ROOT/$ENGINE/$WEIGHT_LABEL"
 mkdir -p -- "$ENGINE_CACHE"
 ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.managed=true
-  --label "io.strix-halo-inference.weights=$WEIGHT_LABEL"
+  --label "io.strix-halo-inference.weights=$WEIGHT_LABEL" --label "io.strix-halo-inference.vision=$VISION"
   "${GPU[@]}" --publish "127.0.0.1:$PORT:$PORT"
   --volume "$MODELS_DIR:/models:ro" --volume "$ENGINE_CACHE:/cache:rw")
 if [[ "$ENGINE" == halogen ]]; then
@@ -201,6 +201,7 @@ if [[ "$ENGINE" == halogen ]]; then
   [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/${WEIGHT_PATHS[7]}")
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
+  ARGS+=(--label "io.strix-halo-inference.pi-model=$PI_MODEL")
   if [[ -n "${WEIGHT_PATHS[2]:-}" ]]; then
     ARGS+=(--volume "${WEIGHT_PATHS[2]}:/extensions:ro" --env GUFO_EXTENSIONS_DIR=/extensions)
   fi

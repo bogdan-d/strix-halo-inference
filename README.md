@@ -22,7 +22,7 @@ Separate rootless Podman launchers with digest-pinned upstream images and revisi
 
 ## Desktop app
 
-Open the dashboard with `bin/desktop.sh run`, or the **Strix Halo Inference** KDE entry once installed. It bundles one WebView and a Rust control backend, with native header metrics, saved window/fullscreen state and agent inspection. Engines and optional monitoring remain explicitly started and stopped; closing the app leaves them running. The [desktop guide](docs/desktop.md) covers Podman builds, F11, logs and debugging; [shortcut setup](docs/desktop-shortcuts.md) covers the local entry. `bin/dashboard.py` remains the browser fallback.
+Open the dashboard with `bin/desktop.sh run`, or the **Strix Halo Inference** KDE entry once installed. It bundles one WebView and a Rust control backend, with native header metrics, saved window/fullscreen state and agent inspection. Choose weights and **Image input** before starting an engine. Image input defaults off for Halogen and Gufo and on for Strixite when its vision files are installed. The running Gufo card shows the Pi model ID for that launch. Engines and optional monitoring remain explicitly started and stopped; closing the app leaves them running. The [desktop guide](docs/desktop.md) covers Podman builds, F11, logs and debugging; [shortcut setup](docs/desktop-shortcuts.md) covers the local entry. `bin/dashboard.py` remains the browser fallback.
 
 ## First run
 

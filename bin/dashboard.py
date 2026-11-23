@@ -9,7 +9,7 @@ import subprocess
 import threading
 from urllib.request import ProxyHandler, build_opener
 
-from weights import profiles, available
+from weights import profiles, dashboard_profiles
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "config/monitoring/dashboard.html"
@@ -29,18 +29,25 @@ COMPONENTS = ("prometheus", "exporter", "probe")
 # The NPU model set behind the "Halogen + NPU" button. bin/run.sh validates it.
 NPU_MODELS = os.environ.get("DASHBOARD_NPU_MODELS", "decider-0.8b,embeddinggemma-2,qwen3guard-stream-0.6b")
 # The only commands a request can run. The path selects an entry; no request text reaches an argument.
-ACTIONS = {f"/engine/{engine}/{verb}": (engine, verb, [RUN, engine, verb]) for engine in ENGINES for verb in ("start", "stop")} | {
-    "/engine/halogen/start-npu": ("halogen", "start", ["env", f"NPU_MODELS={NPU_MODELS}", RUN, "halogen", "start"])} | {
+ACTIONS = {f"/engine/{engine}/stop": (engine, "stop", [RUN, engine, "stop"]) for engine in ENGINES} | {
     f"/cache/{engine}/clear": (engine, "clear", [CACHE, engine, "clear"]) for engine in ENGINES} | {
     f"/monitoring/{verb}": ("monitoring", verb, [MONITOR, verb]) for verb in ("start", "stop")}
 LOGS = {f"/logs/{engine}": [RUN, engine, "logs", "--follow"] for engine in ENGINES} | {
     f"/logs/{component}": [MONITOR, component, "logs", "--follow"] for component in COMPONENTS}
 PROFILES = {engine: profiles(engine) for engine in ENGINES}
 for engine, entries in PROFILES.items():
-    for name in entries:
-        ACTIONS[f"/engine/{engine}/start/{name}"] = (engine, "start", [RUN, engine, "start", "--weights", name])
-        if engine == "halogen":
-            ACTIONS[f"/engine/{engine}/start-npu/{name}"] = (engine, "start", ["env", f"NPU_MODELS={NPU_MODELS}", RUN, engine, "start", "--weights", name])
+    default_vision = "on" if engine == "strixite" else "off"
+    for verb in (("start", "start-npu") if engine == "halogen" else ("start",)):
+        base = f"/engine/{engine}/{verb}"
+        env = ["env", f"NPU_MODELS={NPU_MODELS}"] if verb == "start-npu" else ["env"]
+        start = [RUN, engine, "start"]
+        ACTIONS[base] = (engine, "start", [*env, f"VISION={default_vision}", *start])
+        for name, entry in entries.items():
+            args = [*start, "--weights", name]
+            path = f"{base}/{name}"
+            ACTIONS[path] = (engine, "start", [*env, f"VISION={default_vision}", *args])
+            for vision in (("off", "on") if entry.get("projector_manifest") else ("off",)):
+                ACTIONS[f"{path}/{vision}"] = (engine, "start", [*env, f"VISION={vision}", *args])
 ACTION_TIMEOUT = 180
 
 # Targets with a start, stop or cache clear in flight, so their state reads as starting, stopping or clearing meanwhile.
@@ -86,14 +93,17 @@ def state() -> dict[str, object]:
             current = "stopping"
         else:
             current = "ready" if healthy(health) else "starting"
+        labels = (container or {}).get("Labels") or {}
         engines[engine] = {"state": current, "since": container["StartedAt"] if container else 0,
-                           "weights": (container.get("Labels") or {}).get("io.strix-halo-inference.weights", "unknown") if container else None}
+                           "vision": labels.get("io.strix-halo-inference.vision"),
+                           "pi_model": labels.get("io.strix-halo-inference.pi-model"),
+                           "weights": labels.get("io.strix-halo-inference.weights", "unknown") if container else None}
     running = sum(containers.get(f"strix-halo-monitor-{component}", {}).get("State") == "running" for component in COMPONENTS)
     monitoring = busy.get("monitoring") or {0: "off", len(COMPONENTS): "on"}.get(running, "partial")
     logs = [engine for engine in ENGINES if f"strix-halo-{engine}" in containers]
     logs += [component for component in COMPONENTS if f"strix-halo-monitor-{component}" in containers]
     caches = {engine: disk_bytes(CACHE_ROOT / engine) for engine in ENGINES}
-    weights = {engine: [{"id": name, "label": entry["label"], "available": available(entry)} for name, entry in entries.items()] for engine, entries in PROFILES.items()}
+    weights = {engine: dashboard_profiles(engine, entries) for engine, entries in PROFILES.items()}
     return {"weights": weights, "monitoring": monitoring, "engines": engines, "logs": logs, "npu_models": NPU_MODELS, "caches": caches}
 
 
@@ -179,7 +189,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, timeout=ACTION_TIMEOUT,
-                                    env={key: value for key, value in os.environ.items() if key not in ("WEIGHTS", "GUFO_MODEL", "NPU_MODELS")})
+                                    env={key: value for key, value in os.environ.items() if key not in ("WEIGHTS", "GUFO_MODEL", "NPU_MODELS", "VISION")})
             self.reply(200 if result.returncode == 0 else 409, result.stdout)
         except subprocess.TimeoutExpired:
             self.reply(504, f"No result after {ACTION_TIMEOUT} seconds. Inspect the {target} status in a terminal.\n")

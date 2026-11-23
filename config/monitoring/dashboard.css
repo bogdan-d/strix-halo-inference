@@ -22,6 +22,8 @@ h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .02em; }
 h3 { margin: 0; font-size: 15px; font-weight: 650; }
 .weight-label { display: block; color: var(--muted); font-size: 12px; }
 .weight-label select { display: block; width: 100%; min-width: 0; margin-top: 4px; }
+.vision-label { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.vision-hint { color: var(--muted); overflow-wrap: anywhere; }
 .engine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .engine-start { border-color: var(--accent); }
 .running-profile { margin: 8px 0 0; color: var(--accent); font-size: 12px; overflow-wrap: anywhere; }

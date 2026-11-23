@@ -71,19 +71,40 @@ def extension_ready(entry: dict) -> bool:
         return False
 
 
-def available(entry: dict) -> bool:
+def manifest_available(manifest: str, directory: str = '') -> bool:
     """Fast presence/size check, matching models.sh check; full hashes are verified separately."""
     try:
-        rows = (ROOT / 'config' / entry['manifest']).read_text().splitlines()
-        return extension_ready(entry) and bool(rows) and all((MODELS / entry.get('directory', '') / relative(row.split('\t')[2])).stat().st_size == int(row.split('\t')[1]) for row in rows)
-    except (OSError, ValueError, IndexError):
+        rows = (ROOT / 'config' / manifest).read_text().splitlines()
+        for row in rows:
+            _, size, name, *_ = row.split('\t')
+            path = MODELS / directory / relative(name)
+            if not path.is_file() or path.stat().st_size != int(size):
+                return False
+        return bool(rows)
+    except (OSError, ValueError):
         return False
+
+
+def available(entry: dict) -> bool:
+    return manifest_available(entry['manifest'], entry.get('directory', '')) and extension_ready(entry)
+
+
+def dashboard_profiles(engine: str, entries: dict) -> list[dict]:
+    result = []
+    for name, entry in entries.items():
+        manifest = entry.get('projector_manifest')
+        result.append({'id': name, 'label': entry['label'], 'available': available(entry),
+                       'vision_available': bool(manifest and manifest_available(manifest)),
+                       'vision_download': f'bin/models.sh download {engine} {name} --projector' if manifest else None})
+    return result
 
 
 if __name__ == '__main__':
     try:
         engine, action, *args = sys.argv[1:]
-        if action == 'list':
+        if action == 'dashboard':
+            print(json.dumps(dashboard_profiles(engine, profiles(engine))))
+        elif action == 'list':
             for name, entry in profiles(engine).items():
                 print(f'{name}\t{"installed" if available(entry) else "missing"}\t{entry["label"]}')
         else:

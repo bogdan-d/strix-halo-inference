@@ -39,6 +39,10 @@ def show_configuration(engine: str, container: dict) -> None:
     print(f"Weight profile: {config.get('Labels', {}).get('io.strix-halo-inference.weights', 'unknown (older launcher)')}")
     model_path = env.get('HALOGEN_CHECKPOINT') if engine == 'halogen' else setting(args, '--model') if engine == 'gufo' else env.get('STRIX_MODELS_DIR')
     print(f"Weights: {model_path or 'unavailable'}")
+    labels = config.get("Labels") or {}
+    print(f"Configured vision: {labels.get('io.strix-halo-inference.vision', 'unknown (older launcher)')}")
+    if engine == "gufo":
+        print(f"Pi model: {labels.get('io.strix-halo-inference.pi-model', 'unknown (older launcher)')}")
     if engine == "halogen":
         context = env.get("HALOGEN_CTX")
         mtp = "off" if env.get("HALOGEN_DRAFTER_DEFAULT") == "0" else "engine default (see readiness or logs)"

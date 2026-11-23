@@ -69,4 +69,23 @@ Path(sys.argv[sys.argv.index('--output') + 1]).write_bytes(b'weights')
             assert missing.returncode and 'Missing' in missing.stderr, missing
         listing = subprocess.check_output([str(ROOT / 'bin/run.sh'), engine, 'weights'], env=env, text=True)
         assert all(row.split('\t')[1] == 'installed' for row in listing.splitlines()), listing
+        # Discover newly installed projector files without a restart. Every row must match.
+        manifest = ROOT / 'config' / catalog[engine]['default']['projector_manifest']
+
+        def selected():
+            data = subprocess.check_output(['python3', str(ROOT / 'bin/weights.py'), engine, 'dashboard'], env=env)
+            return next(row for row in json.loads(data) if row['id'] == 'default')
+
+        assert selected()['available'] and not selected()['vision_available']
+        for row in manifest.read_text().splitlines():
+            _, size, filename, *_ = row.split('\t')
+            target = root / 'models' / filename
+            target.parent.mkdir(parents=True, exist_ok=True)
+            assert not selected()['vision_available']
+            with target.open('wb') as output:
+                output.truncate(int(size))
+        assert selected()['vision_available']
+        with target.open('ab') as output:
+            output.write(b'x')
+        assert not selected()['vision_available']
 print('Profile manifest download, verification and preservation checks passed.')

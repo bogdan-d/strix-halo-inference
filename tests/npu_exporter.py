@@ -58,6 +58,8 @@ with tempfile.TemporaryDirectory(prefix='npu-exporter-', dir=root/'cache/test') 
             assert error.code == 503
         assert run('stop').returncode == 0 and run('stop').returncode == 0
         with socket.socket() as foreign:
+            # The stopped HTTP server may still have a connection in TIME_WAIT.
+            foreign.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             foreign.bind(('127.0.0.1',port));foreign.listen()
             assert run('start').returncode != 0
         # A fabricated record for an unrelated live PID must never authorize killing it.

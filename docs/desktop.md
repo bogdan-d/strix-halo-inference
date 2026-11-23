@@ -18,6 +18,8 @@ The app restores normal size, maximization and fullscreen state. Press F11 to to
 
 Closing the window leaves engines and monitoring running. Closing during a start, stop or cache operation is refused until that operation finishes. Ordinary close cancels and reaps only the app's log viewers. Start/stop remains explicit; changing a weight selection never replaces a running engine. Profile availability and cache sizes refresh every 30 seconds and after operations; live container state refreshes every two seconds.
 
+Choose **Image input** on the engine card before clicking **Start** or Halogen’s **Start with NPU**. The checkbox defaults off for Halogen and Gufo and on for Strixite when its vision files are installed. A disabled checkbox with a download command means that the selected profile needs vision files. You can start it with text input while those files are missing. Once running, the card shows the configured vision mode and, for Gufo, the Pi model ID to select.
+
 Click anywhere in the header metrics to toggle the two-minute graphs. The mode persists; history does not. Temperature is CPU / GPU. APU power includes CPU power. RAM* is kernel-accounted usage (`MemTotal - MemAvailable`); Halogen's pinned weights can still appear reclaimable, so this understates use while Halogen has them loaded. GTT overlaps RAM and is never added to it. These header readings work without monitoring; the historical dashboard charts require `bin/monitor.sh start`.
 
 ## Agent debugging

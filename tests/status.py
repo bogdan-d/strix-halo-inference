@@ -43,11 +43,12 @@ def check(engine, response=None, error=None):
     return result, output.getvalue()
 
 
-with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on"):
+with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on", VISION="off"):
     for engine, response in (("halogen", {"status": "ok"}), ("gufo", {"status": "ready"})):
         result, output = check(engine, response)
         assert result == 0, output
         assert "Weight profile: abliterated" in output
+        assert "Configured vision: unknown (older launcher)" in output
         if engine == "gufo":
             assert "Weights: /models/trial.gguf" in output
         assert "old-running-version" in output and "old-running-image" in output
@@ -56,6 +57,9 @@ with patch.dict(os.environ, CONTEXT="262144", SPECULATIVE="on"):
         assert "Engine allocation: unavailable" in output
         assert "startup log, not live" not in output
         assert "pinned weights" in output
+    container["Config"]["Labels"].update({"io.strix-halo-inference.vision": "on", "io.strix-halo-inference.pi-model": "qwen3.8-27b-vision"})
+    result, output = check("gufo", {"status": "ready"})
+    assert result == 0 and "Configured vision: on" in output and "Pi model: qwen3.8-27b-vision" in output
     for line, weights in (("62.1 GiB of weights locked in RAM, ", "weights 62.1, "),
                           ("62.9 GiB of weights locked in RAM (0.8 of them the vision tower's), ", "weights 62.9 (vision tower 0.8), ")):
         output = io.StringIO()
