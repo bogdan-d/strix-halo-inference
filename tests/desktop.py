@@ -2,6 +2,7 @@
 """Exercise real native IPC against fixed script fixtures, without running engines."""
 import json
 import os
+import shutil
 from pathlib import Path
 import socket
 import subprocess
@@ -25,7 +26,7 @@ def wait_for(test, seconds=10):
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='desktop-fixture-', dir=SCRATCH) as directory:
+    with tempfile.TemporaryDirectory(prefix='desktop-fixture-', dir=SCRATCH) as directory, socket.create_server(('127.0.0.1', 0)) as health:
         root = Path(directory)
         (root/'bin').mkdir()
         (root/'commands').mkdir()
@@ -38,7 +39,10 @@ print(json.dumps([{'id': 'default', 'available': True, 'label': 'Fixture', 'visi
                    'vision_download': f'bin/models.sh download {engine} default --projector'}]))
 """)
         (root/'commands/podman').write_text('#!/usr/bin/env python3\nfrom pathlib import Path\nprint(Path("containers.json").read_text())\n')
-        (root/'commands/curl').write_text('#!/bin/sh\nexit 0\n')
+        # Keep the real curl deadlines while directing fixture traffic to a private listener.
+        curl = shutil.which('curl')
+        assert curl
+        (root/'commands/curl').write_text(f'#!/bin/sh\nexec "{curl}" --connect-to "::127.0.0.1:{health.getsockname()[1]}" "$@"\n')
         stub = '''#!/usr/bin/env python3
 import json,os,sys,time
 from pathlib import Path
@@ -73,6 +77,21 @@ print('fixture refused');sys.exit(1)
                 view=browser.view('@main')
                 wait_for(lambda:view.evaluate('!!state'))
                 assert view.evaluate('state.engines.halogen.state')=='stopped'
+                health.settimeout(8)
+                (root/'containers.json').write_text(json.dumps([{'Names':['strix-halo-halogen'],'State':'running','StartedAt':1}]))
+                with health.accept()[0] as client:
+                    client.settimeout(3)
+                    assert client.recv(4096).startswith(b'GET /health ')
+                    time.sleep(1.3)  # Halogen can spend more than a second waiting for its engine PONG.
+                    client.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
+                wait_for(lambda:view.evaluate('document.querySelector("#status-halogen").textContent')=='ready', 3)
+                with health.accept()[0] as client:
+                    client.settimeout(3)
+                    assert client.recv(4096).startswith(b'GET /health ')
+                    client.sendall(b'HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n')
+                wait_for(lambda:view.evaluate('state?.engines.halogen.state')=='starting')
+                (root/'containers.json').write_text('[]')
+                wait_for(lambda:view.evaluate('state?.engines.halogen.state')=='stopped')
                 assert view.evaluate('document.querySelector("#metrics b").textContent')!='—'
                 assert subprocess.run([str(ROOT/'cache/desktop/target/release/inference-desktop')],env=env,capture_output=True,timeout=5).returncode==0
                 # Real command validation refuses injection before a helper can run.

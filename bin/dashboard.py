@@ -19,11 +19,11 @@ CACHE_ROOT = Path(os.environ.get("CACHE_ROOT") or Path.home() / ".cache/strix-ha
 PORT = int(os.environ.get("DASHBOARD_PORT", "9099"))
 HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 ORIGINS = {f"http://{host}" for host in HOSTS}
-# Health addresses. Keep equal to bin/run.sh.
+# Use the launcher's health addresses. Halogen waits for an engine PONG that can take over a second at idle.
 ENGINES = {
-    "halogen": "http://127.0.0.1:8731/health",
-    "gufo": "http://127.0.0.1:8080/ready",
-    "strixite": "http://127.0.0.1:5300/health",
+    "halogen": ("http://127.0.0.1:8731/health", 3),
+    "gufo": ("http://127.0.0.1:8080/ready", 1),
+    "strixite": ("http://127.0.0.1:5300/health", 1),
 }
 COMPONENTS = ("prometheus", "exporter", "probe")
 # The NPU model set behind the "Halogen + NPU" button. bin/run.sh validates it.
@@ -56,9 +56,9 @@ LOCK = threading.Lock()
 DIRECT = build_opener(ProxyHandler({}))
 
 
-def healthy(url: str) -> bool:
+def healthy(url: str, timeout: int) -> bool:
     try:
-        with DIRECT.open(url, timeout=1) as response:
+        with DIRECT.open(url, timeout=timeout) as response:
             return response.status == 200
     except OSError:
         return False
@@ -83,7 +83,7 @@ def state() -> dict[str, object]:
     with LOCK:
         busy = dict(BUSY)
     engines: dict[str, dict[str, object]] = {}
-    for engine, health in ENGINES.items():
+    for engine, (url, timeout) in ENGINES.items():
         container = containers.get(f"strix-halo-{engine}")
         if engine in busy:
             current = busy[engine]
@@ -92,7 +92,7 @@ def state() -> dict[str, object]:
         elif container["State"] != "running":
             current = "stopping"
         else:
-            current = "ready" if healthy(health) else "starting"
+            current = "ready" if healthy(url, timeout) else "starting"
         labels = (container or {}).get("Labels") or {}
         engines[engine] = {"state": current, "since": container["StartedAt"] if container else 0,
                            "vision": labels.get("io.strix-halo-inference.vision"),

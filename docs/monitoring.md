@@ -40,7 +40,7 @@ Served by the helper, the page has a compact header for logs and chart settings,
 - **Cache:** a collapsed **Prompt caches** disclosure with one button per engine and its cache size on disk. A click asks for confirmation on the button itself, and a second click within five seconds runs `bin/cache.sh <engine> clear`, which deletes that cache. The button is disabled while its engine runs or when its cache is empty.
 - **Logs:** a drawer with one tab per container that follows its log, starting from the last 100 lines. It opens on an engine's tab when that engine is started, so a failed start is visible. Scrolling up pauses following. Tabs for containers that do not exist are disabled, and a stopped container's log is gone once it is removed.
 
-Pull, update, diagnose, smoke and status stay in the terminal. A refused or failed command shows its last output line below the controls; hover over it for the full output. State comes from Podman and each engine's health address every two seconds, so engines started or stopped in a terminal show up too.
+Pull, update, diagnose, smoke and status stay in the terminal. A refused or failed command shows its last output line below the controls; hover over it for the full output. The dashboard polls Podman and the running engine’s health address two seconds after each check finishes, so engines started or stopped in a terminal show up too. Halogen’s `/health` waits for the engine to answer a ping. The card allows three seconds for that response.
 
 The helper adds the first loopback endpoint here that acts instead of only reading, so its boundary is deliberately narrow:
 

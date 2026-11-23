@@ -389,12 +389,13 @@ pub async fn dashboard_state(
     }
     let containers: Value = serde_json::from_str(&result.text).map_err(|e| e.to_string())?;
     let mut ready = [false; 3];
-    for (i, url) in [
-        "http://127.0.0.1:8731/health",
-        "http://127.0.0.1:8080/ready",
-        "http://127.0.0.1:5300/health",
+    // Halogen's /health waits for an engine PONG, which can take over a second at idle.
+    for (i, (url, seconds)) in [
+        ("http://127.0.0.1:8731/health", 3),
+        ("http://127.0.0.1:8080/ready", 1),
+        ("http://127.0.0.1:5300/health", 1),
     ]
-    .iter()
+    .into_iter()
     .enumerate()
     {
         if containers.as_array().is_some_and(|list| {
@@ -416,13 +417,13 @@ pub async fn dashboard_state(
                         "*",
                         "-fsS",
                         "--max-time",
-                        "1",
+                        &seconds.to_string(),
                         "-o",
                         "/dev/null",
                         url,
                     ],
                 ),
-                2,
+                seconds + 1,
             )
             .await
             .is_ok_and(|r| r.status == 200);
