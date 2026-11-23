@@ -1,5 +1,14 @@
 # Engine updates
 
+## November 23: Gufo 27B adapter on the side path
+
+`GUFO_FORK_REVISION` is `18503d9c023c1aae0481f858cd99ba0d38e9ae1a`, the new tip of `feat/qwen27-lora` ([gufo-org/gufo#1323](https://github.com/gufo-org/gufo/pull/1323), ready for review again). The `27b-heretic` profile now keeps the stock UD-Q4_K_XL weights and adds the adapter's low-rank update to each patched projection at inference, instead of storing the 128 merged tensors as Q8_0. Flash-Next profiles still merge at load. Image digest `sha256:1de9f539f207fae2b5c6d5d00733a3a9faa8a0a86fab9f921f5925f18ede05c6`, built with `bin/gufo-fork.sh`. Details and measurements: [ticket 10](../.scratch/abliterated-trials/issues/10-gufo-27b-q4-adapter-routes.md).
+
+- **Measured in the fork's build harness, UD-Q4_K_XL at 32768 context:** decode 98.5 % of stock (about 14 % slower with the Q8_0 merge), prompt processing 97 to 98 %, 26 MiB more GPU memory than stock (the merge took 2.9 GiB). Greedy output with DFlash2 equals output without it.
+- **Launcher checks:** `27b-heretic` (131072, DFlash2) and `lora` (262144, MTP) each passed `bin/models.sh verify`, readiness, the smoke request, `tests/live.py` and the stop with memory release. Single runs, short prompts.
+- **Startup:** Gufo reported 24,187 MiB of GPU device memory for `27b-heretic` (28,021 with the merge image) and 85,029 MiB for `lora` (85,271). The Flash-Next merge took 4.7 s.
+- **After stop:** GTT at 1,686 MiB after `27b-heretic` and 1,803 MiB after `lora`, about the level before each start (1,703 and 1,816 MiB); that baseline rose from about 0.9 GiB during the day's fork builds and benchmarks, cause not traced. Host swap use rose by 8.3 GiB during the `lora` run, against 2.8 GiB on November 22 and 23.
+
 ## November 23: Gufo fork image on the rebased LoRA branches
 
 Both fork branches were rebased onto upstream `main` at `e7e38411`, and the shared adapter library moved into the Flash-Next pull request ([gufo-org/gufo#1320](https://github.com/gufo-org/gufo/pull/1320); the 27B work is [#1323](https://github.com/gufo-org/gufo/pull/1323), now a draft). `GUFO_FORK_REVISION` is `b7b34b90f4a3c53314dd844cd8374980e50bedac`, the tip of `feat/qwen27-lora`, which contains both. Image digest `sha256:483d26354cc112f0ddbdab621b00e76d4cfc4a60c7c1e51870526a95a7e4f8bc`, rebuilt with `bin/gufo-fork.sh`. The 27B code is unchanged by the rebase; Flash-Next picks up upstream's kernel and MTP verification changes (#1321).

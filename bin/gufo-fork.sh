@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the local Gufo image that merges LoRA adapters at load (docs/weight-profiles.md). It is the upstream
+# Build the local Gufo image that applies LoRA adapters at load (docs/weight-profiles.md). It is the upstream
 # toolboxes runtime image built from the pinned fork commit, so layout, user and extension SDK match GUFO_IMAGE.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"

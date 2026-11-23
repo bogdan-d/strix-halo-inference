@@ -40,7 +40,7 @@ A profile does not add engine compatibility. In particular, Gufo 0.35.0's stock 
 
 ## Gufo Qwen3.8 27B
 
-Select `27b-heretic` in the dashboard or start it from the CLI. It serves `qwen3.8-27b` with one session and 131,072 tokens of context. Its [manifest](../config/weights/gufo-27b-heretic.tsv) pins the UD-Q4_K_XL target, Q4_K_M DFlash2 drafter and Heretic GGUF adapter (17.52 GiB total). The fork image merges the adapter during load. Use `SPECULATIVE=off` for autoregressive decoding or `CONTEXT=32768` for a smaller window. This profile accepts text input.
+Select `27b-heretic` in the dashboard or start it from the CLI. It serves `qwen3.8-27b` with one session and 131,072 tokens of context. Its [manifest](../config/weights/gufo-27b-heretic.tsv) pins the UD-Q4_K_XL target, Q4_K_M DFlash2 drafter and Heretic GGUF adapter (17.52 GiB total). The fork image applies the adapter at load without changing the stock weights: each updated projection adds the low-rank update while it runs, for 26 MiB more GPU memory and about 2 % slower decoding than the stock model. Use `SPECULATIVE=off` for autoregressive decoding or `CONTEXT=32768` for a smaller window. This profile accepts text input.
 
 ```bash
 bin/gufo-fork.sh
