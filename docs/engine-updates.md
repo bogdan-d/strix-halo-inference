@@ -1,8 +1,23 @@
 # Engine updates
 
+## November 23: Gufo LoRA fork rebased onto `e228a4c7`
+
+The two built-in LoRA profiles now use fork commit `f3f6d744b045494ebff246208571e3cc07c60475` and image digest `sha256:73d9f464f92364e142ed0bc3a4afb7f5d55f481a6253cd6a27914b55a6c7e53a`. The rebase carried all six LoRA commits forward with only generated CMake test lists adjusted. `27b-heretic` still applies its 128 updates alongside the stock weights with DFlash2 at 128K. Flash-Next `lora` still merges 96 tensors at load and uses MTP at 256K. [Fork revision](https://github.com/bogdan-d/gufo/commit/f3f6d744b045494ebff246208571e3cc07c60475)
+
+The new base includes Gufo 0.36.0 and fixes overflow in the shared state-buffer stride check. It also adds the Loom provider and an opt-in API for streaming MoE expert weights, and changes DS4's IQ2 kernels. Neither fork profile selects those paths. Flash-Next `default`, `iq4-xs` and `iq4-xs-lora` still run the separately pinned 0.35.0 image. Both IQ4_XS profiles use the existing `flash_next_iq` extension at `5e262be`. [Upstream changes](https://github.com/gufo-org/gufo/compare/e7e38411...e228a4c7)
+
+All five Gufo profiles passed weight verification, readiness, generation, recall, forced and streamed tools, cancellation and shutdown. For the two fork profiles, the previous launcher log retained startup timings only. A fresh run of each image on balanced power with separate empty disk caches gave byte-identical greedy replies to the sky and Fibonacci prompts.
+
+| Profile | Sky decode, old → new (tok/s) | Fibonacci decode, old → new (tok/s) |
+| --- | ---: | ---: |
+| `27b-heretic` | 30.15 → 30.80 (+2.1%) | 56.62 → 58.44 (+3.2%) |
+| `lora`, median of three interleaved launches each | 56.41 → 56.76 (+0.6%) | 77.38 → 77.69 (+0.4%) |
+
+Against the previous launch record, 27B startup took 10.66 s (previously 10.75 s) and Flash-Next took 59.83 s (68.98 s), including a 5.17 s adapter merge (4.65 s, 11.2% longer). From immediately before start to five seconds after stop, host swap stayed at 9 MiB for 27B and rose from 195 to 3,637 MiB for Flash-Next. GTT went from 868 to 812 MiB and from 808 to 867 MiB respectively. A first single `lora` run read 46.35 tokens/s on the sky prompt; three interleaved old/new launches did not reproduce it (slowest single request 49.66 tokens/s, on the old image, during host swapping), and MTP acceptance and all 36 replies were identical. The swap growth was seen on one run while the desktop was in use.
+
 ## November 23: Gufo 27B adapter on the side path
 
-`GUFO_FORK_REVISION` is `18503d9c023c1aae0481f858cd99ba0d38e9ae1a`, the new tip of `feat/qwen27-lora` ([gufo-org/gufo#1323](https://github.com/gufo-org/gufo/pull/1323), ready for review again). The `27b-heretic` profile now keeps the stock UD-Q4_K_XL weights and adds the adapter's low-rank update to each patched projection at inference, instead of storing the 128 merged tensors as Q8_0. Flash-Next profiles still merge at load. Image digest `sha256:1de9f539f207fae2b5c6d5d00733a3a9faa8a0a86fab9f921f5925f18ede05c6`, built with `bin/gufo-fork.sh`. Details and measurements: [ticket 10](../.scratch/abliterated-trials/issues/10-gufo-27b-q4-adapter-routes.md).
+The launcher first deployed the 27B side path at `18503d9c023c1aae0481f858cd99ba0d38e9ae1a` on `feat/qwen27-lora` ([gufo-org/gufo#1323](https://github.com/gufo-org/gufo/pull/1323)). The `27b-heretic` profile keeps the stock UD-Q4_K_XL weights and adds the adapter's low-rank update to each patched projection at inference, instead of storing the 128 merged tensors as Q8_0. Flash-Next profiles still merge at load. Image digest `sha256:1de9f539f207fae2b5c6d5d00733a3a9faa8a0a86fab9f921f5925f18ede05c6`, built with `bin/gufo-fork.sh`. Details and measurements: [ticket 10](../.scratch/abliterated-trials/issues/10-gufo-27b-q4-adapter-routes.md).
 
 - **Measured in the fork's build harness, UD-Q4_K_XL at 32768 context:** decode 98.5 % of stock (about 14 % slower with the Q8_0 merge), prompt processing 97 to 98 %, 26 MiB more GPU memory than stock (the merge took 2.9 GiB). Greedy output with DFlash2 equals output without it.
 - **Launcher checks:** `27b-heretic` (131072, DFlash2) and `lora` (262144, MTP) each passed `bin/models.sh verify`, readiness, the smoke request, `tests/live.py` and the stop with memory release. Single runs, short prompts.

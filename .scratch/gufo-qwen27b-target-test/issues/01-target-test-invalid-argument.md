@@ -1,16 +1,20 @@
 # 01: Gufo's qwen27b_target_test fails with "invalid argument" on this host
 
-Status: needs-triage
+Status: ready-for-agent
 
 Found on November 23 during the 27B LoRA side-path work (ticket [10](../../abliterated-trials/issues/10-gufo-27b-q4-adapter-routes.md)). The fork's real-weight GPU test `qwen27b_target_test` ends with `invalid argument` on UD-Q4_K_XL, for stock weights as well as with an adapter, so the LoRA work did not cause it.
 
 ## Known
 
-- Logs: `/var/mnt/xdata/code/strix-halo/gufo-build/logs/sp-target-stock.log` and `sp-target-lora.log`. Neither contains a backtrace.
-- The implementer attributed it to a HIP error in `QwenGpuArena::SaveSnapshot` at small contexts, the 2D KV-cache copy near `src/models/qwen/hip/arena.cpp:584` (fork at `0d2e2359`). An independent reviewer confirmed the stock failure but could not confirm the location without a backtrace.
-- The side-path checks avoided it by comparing without snapshots.
+- Reproduced twice on unmodified upstream main `e228a4c7fb751ba01f5fb22d11b1758a0856e392`, with stock `unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf`, on Radeon 8060S (gfx1151), using the Podman/Nix GPU test build with ROCm CLR 10.1. The default target test exits 1. Original fork logs are `sp-target-stock.log` and `sp-target-lora.log`. All log names below are relative to `/var/mnt/xdata/code/strix-halo/gufo-build/logs/`.
+- At the first 24-token prefix of the 128-token executor, `tests/models/qwen27b/target_test.cpp:581` calls `SaveSnapshot`. The first FP16 K-plane copy at `src/models/qwen/hip/arena.cpp:584` reaches `hipMemcpy2DAsync` at `src/core/hip/snapshot_transfer.hpp:52`. The API immediately returns `hipErrorInvalidValue` with dst pitch 49,152 B, src pitch 262,144 B, width 49,152 B, height 16, kind device-to-device, on the snapshot transfer stream. The producer stream synchronized successfully. See `target-upstream-default.log` and `target-upstream-hip.log.gz`.
+- The arena reserves a contiguous virtual KV range and backs it with independent 2 MiB HIP mappings. The trace shows all four mappings of the 8 MiB arena with read/write access. The first eight strided K rows fit inside the first mapping. Row nine starts in the second. A model-free probe reproduced the same error in both capture and restore with 16 rows. Eight rows passed, as did 16 rows with one `hipMalloc` allocation or with the shorter pitches for 32- and 64-token capacities. See `target-upstream-probe.log`.
+- The upstream `--prefill-only` path also fails after a successful 64-token prefill at capacity 12,288 (src pitch 25,165,824 B, dst pitch and width 131,072 B, height 16). See `target-upstream-prefill.log.gz`. The fork release CLI reproduces at capacity 4,096 with `gufo bench -p 1 -n 1 -r 1 -d 24` (src pitch 8,388,608 B). Its benchmark driver calls the same upstream snapshot code at `src/models/qwen/drivers.cpp:555`. The same release CLI completed both prefill and decode at depth zero, which skips the prefix snapshot. See `target-fork-bench-depth24.log.gz` and `target-fork-bench-depth0.log`.
+- This affects the executor snapshot API and nonzero-depth benchmarks. The ordinary FP16 Qwen serving cache transfers one layer/plane at a time in `ContinuationAdapter::TransferRows` (`src/models/qwen/continuation_adapter.cpp:866`), through a different path. No serving failure was established. Only gfx1151 and the pinned ROCm runtime were exercised.
+- A diagnostic copy override issued 1D device copies per row, split at 2 MiB boundaries on the same stream. The upstream fingerprint mode completed all 27 logit fingerprints, the fork depth-24 benchmark completed prefill and decode, and a synthetic save/restore round trip crossing a mapping boundary was byte-exact. See `target-upstream-fingerprints-control.log`, `target-fork-bench-control.log`, and `target-upstream-probe.log`. The override is a diagnostic control. Full-suite correctness and transfer performance with a production fix are open.
 
 ## Next
 
-1. Reproduce on the pinned upstream code (no fork commits) at the test's default context, and capture the failing HIP call with `AMD_LOG_LEVEL` or a debugger.
-2. If upstream reproduces, report it to gufo-org/gufo with the failing call, context size and model; otherwise find which fork commit introduces it.
+1. Change the Qwen live KV copies in both `SaveSnapshot` and `RestoreSnapshot` (arena.cpp lines 584 and 643) to handle separately mapped storage. The tested approach uses one-dimensional copies per layer/head row bounded by the live region's mapping boundaries and synchronizes after enqueueing. Preserve FP16 and FP32 strides and stream ordering.
+2. Verify a byte-exact capture/restore across mappings, including a row spanning a boundary, then run the full real-weight target test and a nonzero-depth benchmark. Keep the existing serving cache path scoped separately.
+3. Review the local upstream issue draft at `/var/mnt/xdata/code/strix-halo/gufo-build/pr/issue-target-test.md` before any publication.

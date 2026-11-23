@@ -67,7 +67,7 @@ bin/run.sh gufo start --weights lora --wait
 ```
 
 - **Source:** the fork checkout at `../gufo`, or `GUFO_FORK_SOURCE`. The script builds the committed tree at `GUFO_FORK_REVISION`, never the working copy. That commit is on branch `feat/qwen27-lora` of [bogdan-d/gufo](https://github.com/bogdan-d/gufo/tree/feat/qwen27-lora).
-- **Image definition:** [gufo-org/toolboxes](https://github.com/gufo-org/toolboxes) at `GUFO_FORK_TOOLBOXES_REVISION`, the definition behind `GUFO_IMAGE`, with the engine input replaced by the fork. User, layout and extension SDK therefore match the upstream runtime image.
+- **Image definition:** [gufo-org/toolboxes](https://github.com/gufo-org/toolboxes) at `GUFO_FORK_TOOLBOXES_REVISION`, with the engine input replaced by the fork. The fork shares the upstream image's layout and runtime user. Both IQ4_XS profiles load their extension with the separately pinned `GUFO_IMAGE`.
 - **Build container:** the pinned `GUFO_FORK_NIX_IMAGE`, rootless, with network access. Nix runs without its sandbox there and accepts the fork flake's binary caches, `cache.nixos.org` and `gufo.cachix.org`. The toolchain is kept in the Podman volume `gufo-build-nix` (8.4 GiB on November 21), or `GUFO_FORK_NIX_VOLUME`.
 - **Result:** `localhost/strix-halo-inference/gufo-fork`, tagged with the short revision. The script checks the image's engine-revision label and its digest against `GUFO_FORK_IMAGE`, and prints the reference to pin when they differ. With the toolchain cached, the build took about three minutes on November 21.
 - **Updates:** `bin/update.py` moves only the upstream pins. The fork image keeps its own engine version until the fork is rebased and rebuilt.
