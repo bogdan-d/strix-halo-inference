@@ -3,7 +3,9 @@
     "halogen/halogen-qwen3.8-flash-next": "xhigh",
     "gufo/qwen3.8-flash-next": "xhigh",
     "gufo/qwen3.8-27b": "xhigh",
-    "strixite/qwen3.8-flash-next": "xhigh"
+    "strixite/qwen3.8-flash-next": "xhigh",
+    "gufo/qwen3.8-flash-next-vision": "xhigh",
+    "gufo/qwen3.8-27b-vision": "xhigh"
   },
   "compaction": {
     "modelOverrides": {
@@ -20,6 +22,14 @@
         "keepRecentTokens": 32768
       },
       "strixite/qwen3.8-flash-next": {
+        "reserveTokens": 32768,
+        "keepRecentTokens": 32768
+      },
+      "gufo/qwen3.8-flash-next-vision": {
+        "reserveTokens": 32768,
+        "keepRecentTokens": 32768
+      },
+      "gufo/qwen3.8-27b-vision": {
         "reserveTokens": 32768,
         "keepRecentTokens": 32768
       }

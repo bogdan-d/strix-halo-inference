@@ -1,5 +1,59 @@
 # Engine updates
 
+## November 24 image input
+
+All 17 starts reached readiness and returned `ready` to a text request. All five named Gufo profiles served their base and `-vision` IDs together when vision was on. At temperature zero each Gufo profile gave the same answers with and without speculation. Both IQ4_XS profiles passed with the pinned extension and now accept `VISION=on`. Flash-Next ran at 262144 tokens and 27B at 131072. The four optional projector manifests used in these runs passed SHA-256 verification.
+
+The image checks used synthetic 224×224 RGB PNGs, first individually and then together in both orders. Draft counts are native counter increases over just those four buffered requests. AR means speculation off. For each vision-enabled run, the client disconnected after the first streamed content token and then sent another image and a text request. All 12 streams logged cancellation or client disconnect and both follow-ups succeeded. Pi 1.6.0, using the checked-in fragments in a disposable agent directory, returned `Red` for a PNG attachment through `gufo/qwen3.8-27b-vision`, `gufo/qwen3.8-flash-next-vision` and `strixite/qwen3.8-flash-next`.
+
+| Engine and profile | Vision / decode | Ready | Text | Red / blue / red–blue / blue–red | Image drafts proposed / accepted | Cancel and recover |
+| --- | --- | --- | --- | --- | --- | --- |
+| Gufo 27b-heretic | off / DFlash2 | yes | ready | HTTP 400 | — | — |
+| Gufo 27b-heretic | on / DFlash2 | yes | ready | Red / Blue / red, blue / blue, red | 24 / 4 | pass |
+| Gufo 27b-heretic | on / AR | yes | ready | Red / Blue / red, blue / blue, red | 0 / 0 | pass |
+| Gufo default | off / MTP | yes | ready | HTTP 400 | — | — |
+| Gufo default | on / MTP | yes | ready | Red / Blue / red, blue / blue, red | 8 / 4 | pass |
+| Gufo default | on / AR | yes | ready | Red / Blue / red, blue / blue, red | 0 / 0 | pass |
+| Gufo lora | off / MTP | yes | ready | HTTP 400 | — | — |
+| Gufo lora | on / MTP | yes | ready | Red / Blue / red, blue / Blue, Red | 8 / 3 | pass |
+| Gufo lora | on / AR | yes | ready | Red / Blue / red, blue / Blue, Red | 0 / 0 | pass |
+| Gufo iq4-xs | on / MTP | yes | ready | Red / Blue / red, blue / Blue, Red | 8 / 4 | pass |
+| Gufo iq4-xs | on / AR | yes | ready | Red / Blue / red, blue / Blue, Red | 0 / 0 | pass |
+| Gufo iq4-xs-lora | on / MTP | yes | ready | Red / Blue / red, blue / blue, red | 8 / 4 | pass |
+| Gufo iq4-xs-lora | on / AR | yes | ready | Red / Blue / red, blue / blue, red | 0 / 0 | pass |
+| Halogen default | off / MTP | yes | ready | HTTP 400 | — | — |
+| Halogen default | on / MTP | yes | ready | Red / Blue / red, blue / Blue, Red | 8 / 8 | pass |
+| Strixite default | on / MTP | yes | ready | Red / Blue / Red, Blue / Blue, Red | 5 / 4 | pass |
+| Strixite default | off / MTP | yes | ready | HTTP 400 | — | — |
+
+With vision off, Gufo returned HTTP 400 with code `invalid_messages` and message `model does not support image input`. Halogen returned HTTP 400 with `this server does not accept images: the engine was started without a vision tower (HALOGEN_VISION_TOWER)`. Strixite returned HTTP 400 with `content part type 'image_url' is not supported (text only; no vision)`.
+
+The four readings in each memory cell are **before start / after ready / after the first image request / five seconds after stop**. The peak includes the phase readings and samples taken every 250 ms. Swap delta is the final reading minus that run's baseline. Cache size is allocated disk usage at shutdown. Each launch used a fresh cache, published only on loopback and started with no other running Podman container. The desktop remained available for browsing. GTT and swap include other host activity. The power profile was balanced on every start. All stops released GTT to within 0.08 GiB of their respective baselines.
+
+| Engine and profile | Vision / decode | GTT (GiB) | Peak GTT (GiB) | MemAvailable (GiB) | Swap used (GiB) | Residual swap Δ (MiB) | Cache (MiB) | Gufo startup device used (GiB) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Gufo 27b-heretic | off / DFlash2 | 1.02 / 30.40 / 30.46 / 1.04 | 30.46 | 114.66 / 82.20 / 82.10 / 114.33 | 2.86 / 2.86 / 2.86 / 2.85 | -1 | 470 | 25.87 |
+| Gufo 27b-heretic | on / DFlash2 | 1.04 / 31.19 / 31.49 / 1.02 | 31.52 | 114.36 / 81.39 / 80.89 / 113.63 | 2.85 / 2.80 / 2.80 / 2.79 | -71 | 2180 | 25.36 |
+| Gufo 27b-heretic | on / AR | 1.02 / 26.98 / 29.78 / 0.99 | 29.79 | 113.65 / 85.72 / 82.59 / 113.91 | 2.79 / 2.78 / 2.78 / 2.78 | -5 | 1424 | 25.37 |
+| Gufo default | off / MTP | 0.99 / 89.77 / 90.01 / 1.00 | 90.01 | 113.93 / 24.33 / 24.17 / 115.80 | 2.78 / 3.21 / 3.29 / 3.37 | +601 | 254 | 88.77 |
+| Gufo default | on / MTP | 1.00 / 90.77 / 91.03 / 1.00 | 91.05 | 115.82 / 23.59 / 23.39 / 116.18 | 3.37 / 3.58 / 3.67 / 3.72 | +360 | 1302 | 89.77 |
+| Gufo default | on / AR | 1.00 / 87.50 / 87.64 / 1.05 | 87.64 | 116.18 / 26.74 / 26.55 / 115.74 | 3.72 / 3.69 / 3.69 / 3.69 | -31 | 1018 | 86.50 |
+| Gufo lora | off / MTP | 1.07 / 87.80 / 90.07 / 1.00 | 90.07 | 115.72 / 26.14 / 23.87 / 115.61 | 3.69 / 3.67 / 3.67 / 3.66 | -31 | 254 | 86.19 |
+| Gufo lora | on / MTP | 1.00 / 90.85 / 91.15 / 1.01 | 91.15 | 115.57 / 23.01 / 22.91 / 115.55 | 3.66 / 3.58 / 3.58 / 3.53 | -130 | 1032 | 85.74 |
+| Gufo lora | on / AR | 1.01 / 87.56 / 87.71 / 1.00 | 87.72 | 115.58 / 26.50 / 26.35 / 115.74 | 3.53 / 3.52 / 3.52 / 3.51 | -21 | 1018 | 82.89 |
+| Gufo iq4-xs | on / MTP | 1.00 / 73.65 / 74.91 / 1.01 | 74.94 | 115.78 / 40.49 / 39.19 / 115.87 | 3.51 / 3.51 / 3.51 / 3.51 | -3 | 1032 | 72.64 |
+| Gufo iq4-xs | on / AR | 1.02 / 70.53 / 71.68 / 1.04 | 71.70 | 115.85 / 43.66 / 42.45 / 115.59 | 3.51 / 3.51 / 3.51 / 3.51 | -2 | 1146 | 69.50 |
+| Gufo iq4-xs-lora | on / MTP | 1.04 / 73.67 / 74.94 / 1.03 | 74.98 | 115.60 / 40.02 / 38.63 / 114.90 | 3.51 / 3.51 / 3.51 / 3.50 | -5 | 1032 | 72.66 |
+| Gufo iq4-xs-lora | on / AR | 1.03 / 70.55 / 71.70 / 1.02 | 71.71 | 114.90 / 42.59 / 41.36 / 114.64 | 3.50 / 3.48 / 3.48 / 3.48 | -24 | 1146 | 69.52 |
+| Halogen default | off / MTP | 1.02 / 17.51 / 17.51 / 1.01 | 17.51 | 114.62 / 95.86 / 95.75 / 114.49 | 3.48 / 3.46 / 3.46 / 3.44 | -36 | <1 | — |
+| Halogen default | on / MTP | 1.01 / 17.52 / 17.55 / 1.01 | 17.55 | 114.50 / 96.38 / 96.16 / 115.53 | 3.44 / 3.43 / 3.43 / 3.41 | -38 | 235 | — |
+| Strixite default | on / MTP | 1.01 / 80.55 / 81.06 / 1.04 | 81.06 | 115.53 / 33.76 / 32.38 / 116.40 | 3.41 / 4.80 / 4.80 / 4.75 | +1371 | 230 | — |
+| Strixite default | off / MTP | 1.04 / 79.70 / 80.19 / 1.03 | 80.19 | 116.43 / 34.68 / 34.18 / 116.97 | 4.75 / 4.74 / 4.74 / 4.72 | -28 | 0 | — |
+
+Gufo's built-in loaders logged 903,984,064 projector resident bytes for Flash-Next and 927,587,264 for 27B. The IQ extension did not log a separate projector size. The last table column is Gufo's `gpu_device_used_mib` at load completion. Halogen reported 78.4 GiB total engine memory with vision off and 79.3 GiB with vision on, including 0.84 GiB of pinned tower weights. Its logs warn that other host allocations (10.6 and 10.8 GiB on these starts) reduce file cache available for the lookup table and that MemAvailable counts the locked weights as reclaimable. Strixite reported 78.5 GiB of GPU buffers with vision off and 79.3 GiB with vision on.
+
+The largest residual swap increase was 1,371 MiB on the Strixite vision run. Across the series, swap rose from 2.86 to 4.72 GiB while post-stop GTT returned to 1.03 GiB. Podman used `runc` and the launcher printed its supplementary-groups notice on each start. Device access succeeded on all 17. These measurements cover short color and ordering prompts on this host.
+
 ## November 23: Gufo LoRA fork rebased onto `e228a4c7`
 
 The two built-in LoRA profiles now use fork commit `f3f6d744b045494ebff246208571e3cc07c60475` and image digest `sha256:73d9f464f92364e142ed0bc3a4afb7f5d55f481a6253cd6a27914b55a6c7e53a`. The rebase carried all six LoRA commits forward with only generated CMake test lists adjusted. `27b-heretic` still applies its 128 updates alongside the stock weights with DFlash2 at 128K. Flash-Next `lora` still merges 96 tensors at load and uses MTP at 256K. [Fork revision](https://github.com/bogdan-d/gufo/commit/f3f6d744b045494ebff246208571e3cc07c60475)

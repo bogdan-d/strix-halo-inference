@@ -23,7 +23,7 @@ def profiles(engine: str) -> dict:
     for name, entry in entries.items():
         if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', name):
             raise ValueError(f'Invalid weight profile: {name}')
-        for key in ('model', 'manifest', 'directory', 'mtp', 'dflash', 'adapter'):
+        for key in ('model', 'manifest', 'directory', 'mtp', 'dflash', 'adapter', 'projector_manifest'):
             if entry.get(key):
                 relative(entry[key])
         if not entry.get('model') or not entry.get('manifest'):
@@ -90,6 +90,14 @@ if __name__ == '__main__':
             entry = profile(engine, args[0])
             # One field per line: Bash reads this without evaluating configuration as shell code.
             if action == 'launch':
+                projector = ''
+                if args[1:] == ['on']:
+                    if not entry.get('projector_manifest'):
+                        raise ValueError(f'VISION=on is unqualified for {engine}/{args[0]}. Use VISION=off.')
+                    # Strixite discovers both vision files under STRIX_MODELS_DIR.
+                    if engine != 'strixite':
+                        row, = (ROOT / 'config' / entry['projector_manifest']).read_text().splitlines()
+                        projector = relative(row.split('\t')[2])
                 if not extension_ready(entry):
                     raise ValueError('Gufo IQ extension missing for the pinned image. See docs/gufo-extensions.md before installing.')
                 for key in ('model', 'mtp'):
@@ -99,6 +107,12 @@ if __name__ == '__main__':
                 print(entry.get('dflash', ''))
                 print(entry.get('served_model', 'halogen-qwen3.8-flash-next' if engine == 'halogen' else 'qwen3.8-flash-next'))
                 print(entry.get('context', 262144))
+                print(projector)
+            elif action == 'projector':
+                if not entry.get('projector_manifest'):
+                    raise ValueError(f'Image input is unqualified for {engine}/{args[0]}.')
+                print('')  # Projector manifests use paths relative to the models root.
+                print(entry['projector_manifest'])
             elif action == 'extension':
                 print(extension_store(entry) or '')
             elif action == 'manifest':
@@ -106,5 +120,5 @@ if __name__ == '__main__':
                 print(entry['manifest'])
             else:
                 raise ValueError('Unknown weights action')
-    except (ValueError, KeyError, IndexError) as error:
+    except (ValueError, KeyError, IndexError, OSError) as error:
         sys.exit(str(error))

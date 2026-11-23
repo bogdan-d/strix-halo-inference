@@ -22,8 +22,17 @@ with tempfile.TemporaryDirectory(prefix="strix-halo-run-") as directory:
     shutil.copy(ROOT / "config/weights.json", temp / "config/weights.json")
     shutil.copy(ROOT / "config/pins.env", temp / "config/pins.env")
     shutil.copy(ROOT / "config/npu-files.tsv", temp / "config/npu-files.tsv")
+    (temp / "config/weights").mkdir()
+    for manifest in (ROOT / "config/weights").glob("*-projector.tsv"):
+        shutil.copy(manifest, temp / "config/weights")
     models = temp / "bin/models.sh"
-    models.write_text('#!/bin/sh\necho "$*" >> "$MODELS_CALLS"\n[ "$2" != npu ] || [ -z "$MISSING_NPU" ]\n')
+    models.write_text('''#!/bin/sh
+echo "$*" >> "$MODELS_CALLS"
+if [ -n "$CHECK_PROJECTOR" ] && { [ "$3" = --projector ] || [ "$4" = --projector ]; }; then
+    exec "$CHECK_PROJECTOR" "$@"
+fi
+[ "$2" != npu ] || [ -z "$MISSING_NPU" ]
+''')
     models.chmod(0o755)
     podman = commands / "podman"
     podman.write_text('''#!/usr/bin/env python3
@@ -138,7 +147,7 @@ else:
     assert not any("never-forward" in arg for arg in launch)
 
     calls.unlink()
-    result = run("strixite", "start", SPECULATIVE="off", CONTEXT="65536", VISION="off", KV8="off", SLOTS="2")
+    result = run("strixite", "start", SPECULATIVE="off", CONTEXT="65536", VISION="off", CHECK_PROJECTOR=str(ROOT / "bin/models.sh"), KV8="off", SLOTS="2")
     assert result.returncode == 0, result
     launch = next(json.loads(line) for line in calls.read_text().splitlines() if json.loads(line)[0] == "run")
     assert launch[launch.index("--mtp") + 1] == "off" and launch[launch.index("--capacity") + 1] == "65536"
@@ -199,9 +208,30 @@ else:
     launch = next(call for call in recorded() if call[0] == "run")
     assert "HALOGEN_VISION_TOWER=/models/peonist-ai/halogen-qwen3.8-flash-next/qwen38-flash-next-vision.hgn" in launch
     calls.unlink()
-    result = run("gufo", "start", VISION="on")
-    assert result.returncode == 2 and "VISION=on applies only to Halogen and Strixite" in result.stderr, result
+    # Exercise the real vision preflight against an empty model store, with Podman still stubbed.
+    for args, vision, selection in ((["halogen", "start", "--weights", "abliterated-r2"], "on", "halogen abliterated-r2"),
+                                    (["strixite", "start"], "", "strixite")):
+        result = run(*args, VISION=vision, CHECK_PROJECTOR=str(ROOT / "bin/models.sh"))
+        assert result.returncode != 0 and f"download {selection} --projector" in result.stderr, result
+        assert "VISION=off" in result.stderr and not any(call[0] == "run" for call in recorded())
+    for profile, family in (("default", "Flash-Next"), ("lora", "Flash-Next"), ("27b-heretic", "27B")):
+        result = run("gufo", "start", "--weights", profile, VISION="on", CONTEXT="")
+        assert result.returncode == 0, result
+        launch = next(call for call in recorded() if call[0] == "run")
+        assert launch[launch.index("--mmproj") + 1] == f"/models/unsloth/Qwen3.8-{family}-GGUF/vision/mmproj-BF16.gguf"
+        names = [launch[i+1] for i, arg in enumerate(launch) if arg == "--served-model-name"]
+        assert names == [f"qwen3.8-{family.lower()}", f"qwen3.8-{family.lower()}-vision"]
+        assert (temp / "models-calls").read_text().splitlines()[-1] == ("check gufo --projector" if profile == "default" else f"check gufo {profile} --projector")
+        calls.unlink()
+    result = run("gufo", "start", VISION="on", GUFO_MODEL="custom.gguf")
+    assert result.returncode == 2 and "Unset GUFO_MODEL" in result.stderr
+    adjacent = Path(env["MODELS_DIR"]) / "unsloth/Qwen3.8-Flash-Next-GGUF/mmproj-BF16.gguf"
+    adjacent.parent.mkdir(parents=True)
+    adjacent.touch()
+    result = run("gufo", "start", VISION="off")
+    assert result.returncode == 2 and "would auto-load" in result.stderr
     assert not any(call[0] == "run" for call in recorded())
+    adjacent.unlink()
     # A Gufo trial model replaces only the model path, and must be an existing GGUF inside the models directory.
     trial = Path(env["MODELS_DIR"]) / "trial/model-00001-of-00004.gguf"
     for model in ("/etc/passwd.gguf", "trial/../model.gguf", "trial/model-00001-of-00004.gguf", "trial"):
@@ -222,9 +252,11 @@ else:
         catalog[engine]["trial"] = {"label": "Trial", "model": "trial/checkpoint.hgn" if engine == "halogen" else "trial/weights.gguf" if engine == "gufo" else "trial/strixw",
                                     "mtp": "trial/mtp.gguf", "manifest": "trial.tsv"}
     (temp / "config/weights.json").write_text(json.dumps(catalog))
+    result = run("gufo", "start", "--weights", "trial", VISION="on")
+    assert result.returncode != 0 and "unqualified" in result.stderr, result
     for engine in ("halogen", "gufo", "strixite"):
         calls.unlink(missing_ok=True)
-        result = run(engine, "start", "--weights", "trial", "--wait")
+        result = run(engine, "start", "--weights", "trial", "--wait", VISION="off")
         assert result.returncode == 0, result
         launch = next(call for call in recorded() if call[0] == "run")
         assert "io.strix-halo-inference.weights=trial" in launch
@@ -250,8 +282,9 @@ else:
     (modules / "fixture.so").touch()
     (store / "installed.json").write_text(json.dumps({"schema": 1, "extensions": [{"name": "flash_next_iq"}]}))
     calls.unlink()
-    assert run("gufo", "start", "--weights", "iq4-xs").returncode == 0
+    assert run("gufo", "start", "--weights", "iq4-xs", VISION="on").returncode == 0
     launch = next(call for call in recorded() if call[0] == "run")
+    assert launch[launch.index("--mmproj") + 1] == "/models/unsloth/Qwen3.8-Flash-Next-GGUF/vision/mmproj-BF16.gguf"
     assert f"{store}:/extensions:ro" in launch and "GUFO_EXTENSIONS_DIR=/extensions" in launch
     assert "--userns=keep-id:uid=1000,gid=1000" in launch
     assert launch[launch.index("--mtp-model") + 1].endswith("/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf")
@@ -293,8 +326,9 @@ else:
     assert not any(call[0] == "run" for call in recorded())
     # With the IQ extension the adapter is the module's job: pinned image, extension store and --lora together.
     calls.unlink()
-    assert run("gufo", "start", "--weights", "iq4-xs-lora").returncode == 0
+    assert run("gufo", "start", "--weights", "iq4-xs-lora", VISION="on").returncode == 0
     launch = next(call for call in recorded() if call[0] == "run")
+    assert launch[launch.index("--mmproj") + 1] == "/models/unsloth/Qwen3.8-Flash-Next-GGUF/vision/mmproj-BF16.gguf"
     assert fork not in launch and any("gufo-runtime" in arg for arg in launch)
     assert f"{store}:/extensions:ro" in launch
     assert launch[launch.index("--model") + 1].startswith("/models/unsloth/Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/")

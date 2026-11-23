@@ -6,7 +6,7 @@ Use Pi on the host with any engine's local OpenAI Chat Completions endpoint. No 
 
 The checked-in [models.json](../config/pi/models.json) registers Flash-Next on all three providers at 262,144 tokens and Gufo's Qwen3.8 27B at 131,072 tokens. [settings.json](../config/pi/settings.json) adds per-model thinking and compaction settings without changing your default provider, model, tools or other models' settings. These files are fragments to merge into Pi's agent directory, normally `~/.pi/agent`. Updating this repository does not modify that live directory. A project `.pi/models.json` is not a supported alternative.
 
-Run the following from this checkout in Bash. If your shell is Fish, enter `bash` first. Existing files are backed up before changes. Matching Halogen, Gufo and Strixite entries are updated to the checked-in profile, while unrelated entries are preserved. Set `PI_CODING_AGENT_DIR` first if you use a different agent directory.
+Run the following from this checkout in Bash. If your shell is Fish, enter `bash` first. Existing files are backed up before changes. Matching Halogen, Gufo and Strixite entries are updated to the checked-in profile, while unrelated entries are preserved. Set `PI_CODING_AGENT_DIR` first if you use a different agent directory. On this host, apply the same fragments to both `~/.pi/agent` and `~/.pi-bolt-trial/agent` by repeating the merge with `PI_CODING_AGENT_DIR` set to the second directory.
 
 ```bash
 python - <<'PY'
@@ -49,7 +49,7 @@ Check registration without starting an inference engine:
 pi --offline --list-models qwen3.8
 ```
 
-You should see `halogen/halogen-qwen3.8-flash-next`, `gufo/qwen3.8-flash-next`, `gufo/qwen3.8-27b` and `strixite/qwen3.8-flash-next`. The literal API key `local` is a non-secret placeholder that makes these providers selectable. None of these endpoints requires authentication.
+You should see `halogen/halogen-qwen3.8-flash-next`, `gufo/qwen3.8-flash-next`, `gufo/qwen3.8-27b`, their two Gufo `-vision` variants and `strixite/qwen3.8-flash-next`. The literal API key `local` is a non-secret placeholder that makes these providers selectable. None of these endpoints requires authentication.
 
 ## Start coding with Halogen
 
@@ -102,7 +102,7 @@ Do not run the engines together. The launchers enforce this restriction. Each us
 
 ## Select Strixite
 
-Stop the active engine and verify memory release first, then start Strixite:
+The Strixite Pi profile accepts image attachments. Provision its vision files once with `bin/models.sh download strixite --projector`, then stop the active engine, verify memory release and start Strixite.
 
 ```bash
 bin/run.sh gufo stop
@@ -144,7 +144,9 @@ The Flash-Next profiles advertise 262,144 tokens. Gufo's 27B profile advertises 
 
 If you previously installed the 32K Flash-Next profiles, explicitly update both local providers' `contextWindow` to `262144` in your agent directory's `models.json`. Also update their `compaction.modelOverrides` entries to retain `32768` recent tokens in `settings.json`, or rerun the merge command above when you want to apply the complete checked-in profiles. Restart the engine to resize its context, open `/model` to reload model metadata and restart Pi to reload settings.
 
-If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. The Strixite profile lists `image` input, so Pi sends pasted or attached images to it; this needs Strixite's default `VISION=on`. The Halogen profile stays text only because Halogen's images are opt-in (`env VISION=on`); add `image` to its `input` only if you always start it that way. Gufo stays text only.
+If you override the launcher with a smaller `CONTEXT`, reduce the matching installed model's `contextWindow` too and choose compaction budgets that fit that smaller capacity. Do not advertise more context in Pi than the server allocated. Near-capacity prompt processing, long-context quality and throughput remain unbenchmarked on this host. The Strixite profile lists `image` input, so Pi sends pasted or attached images to it; this needs the optional vision files and Strixite's default `VISION=on`. Use only text prompts when launching with `VISION=off`. The Halogen profile stays text only because Halogen's images need its optional tower and `env VISION=on`; add `image` to its `input` only if you always start it that way.
+
+Gufo's ordinary Pi entries advertise text. On a `VISION=on` launch, Gufo also serves a second model ID for image-capable Pi sessions. Choose `gufo/qwen3.8-flash-next-vision` for any of the four named Flash-Next profiles, or `gufo/qwen3.8-27b-vision` for `27b-heretic`. Both aliases advertise `["text", "image"]` and inherit the corresponding text entry's context, sampling, thinking and compaction settings. For example, after starting the 27B profile with its projector, run `pi --provider gufo --model qwen3.8-27b-vision --thinking xhigh` and attach an image. Text-only launches omit these aliases. On November 24, 2026, Pi 1.6.0 returned `Red` for a synthetic red PNG attached through each Gufo vision alias and the Strixite entry, using a disposable agent directory and the checked-in fragments. [Launcher setup](weight-profiles.md#gufo-image-input)
 
 ## Engine features outside this profile
 

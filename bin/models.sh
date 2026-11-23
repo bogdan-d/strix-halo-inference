@@ -4,7 +4,13 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=../config/pins.env
 source "$ROOT/config/pins.env"
 
-[[ $# -ge 2 && $# -le 3 ]] || { echo "Usage: bin/models.sh download|verify|check ENGINE [PROFILE]" >&2; exit 2; }
+COMPONENT=manifest
+DOWNLOAD_ARGS="${*:2}"
+if [[ "${!#}" == --projector ]]; then
+  COMPONENT=projector
+  set -- "${@:1:$#-1}"
+fi
+[[ $# -ge 2 && $# -le 3 ]] || { echo "Usage: bin/models.sh download|verify|check ENGINE [PROFILE] [--projector]" >&2; exit 2; }
 PROFILE="${3:-default}"
 ACTION="${1:-}"
 ENGINE="${2:-}"
@@ -21,17 +27,20 @@ MODELS_DIR="${MODELS_DIR:-/home/bogdan/models}"
 MANIFEST="$ROOT/config/$ENGINE-files.tsv"
 DEST="$MODELS_DIR/$REPO"
 if [[ "$ENGINE" != npu ]]; then
-  SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" manifest "$PROFILE")"
+  SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" "$COMPONENT" "$PROFILE")"
   mapfile -t FIELDS <<<"$SELECTION"
   DEST="$MODELS_DIR/${FIELDS[0]}"
   MANIFEST="$ROOT/config/${FIELDS[1]}"
-  [[ "$PROFILE" == default ]] || REVISION=
+  [[ "$PROFILE" == default && "$COMPONENT" == manifest ]] || REVISION=
 else
+  [[ "$COMPONENT" == manifest ]] || { echo 'NPU has no vision projector.' >&2; exit 2; }
   [[ "$PROFILE" == default ]] || { echo 'NPU has no weight profiles.' >&2; exit 2; }
 fi
 [[ -s "$MANIFEST" ]] || { echo "Missing or empty manifest: $MANIFEST. Provision this profile first." >&2; exit 1; }
 # Optional Hugging Face token for gated repositories and higher rate limits: HF_TOKEN from the environment, else from the ignored .env.
-if [[ "$ACTION" == download && -z "${HF_TOKEN:-}" && -f "$ROOT/.env" ]]; then
+if [[ "$COMPONENT" == projector ]]; then
+  unset HF_TOKEN
+elif [[ "$ACTION" == download && -z "${HF_TOKEN:-}" && -f "$ROOT/.env" ]]; then
   HF_TOKEN="$(sed -n -E "s/^HF_TOKEN=[\"']?([^\"'[:space:]]*)[\"']?[[:space:]]*$/\1/p" "$ROOT/.env" | tail -n 1)"
 fi
 # The header is read from a file descriptor so the token stays out of the process list. curl sends a custom
@@ -71,7 +80,7 @@ while IFS=$'\t' read -r HASH SIZE FILE FILE_REPO FILE_REVISION SOURCE_FILE; do
     [[ ! -e "$TARGET.partial" ]] || { echo "Destination appeared during download: $TARGET. Files left untouched." >&2; exit 1; }
     VERIFIED=1
   fi
-  [[ -f "$TARGET" ]] || { echo "Missing $TARGET. Run bin/models.sh download $ENGINE" >&2; exit 1; }
+  [[ -f "$TARGET" ]] || { echo "Missing $TARGET. Run bin/models.sh download $DOWNLOAD_ARGS" >&2; exit 1; }
   [[ "$(stat -c %s -- "$TARGET")" == "$SIZE" ]] || { echo "Wrong size: $TARGET. Existing file left untouched." >&2; exit 1; }
   if [[ "$ACTION" != check ]]; then
     if [[ "$VERIFIED" == 0 ]]; then

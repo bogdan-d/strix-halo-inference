@@ -4,19 +4,22 @@
       "label": "Default \u00b7 native v2",
       "model": "peonist-ai/halogen-qwen3.8-flash-next/qwen38-flash-next-v2.hgn",
       "directory": "peonist-ai/halogen-qwen3.8-flash-next",
-      "manifest": "halogen-files.tsv"
+      "manifest": "halogen-files.tsv",
+      "projector_manifest": "weights/halogen-projector.tsv"
     },
     "abliterated-r2": {
       "label": "Abliterated \u00b7 r2 native v2",
       "model": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/qwen38-flash-next-v2-abliterated.hgn",
       "directory": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated",
-      "manifest": "weights/halogen-abliterated-r2.tsv"
+      "manifest": "weights/halogen-abliterated-r2.tsv",
+      "projector_manifest": "weights/halogen-abliterated-projector.tsv"
     },
     "abliterated-ht43": {
       "label": "Abliterated \u00b7 HT43",
       "model": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated/qwen38-flash-next-ht43-abliterated.hgn",
       "directory": "Quat3rnion/halogen-qwen3.8-flash-next-v2-abliterated",
-      "manifest": "weights/halogen-abliterated-ht43.tsv"
+      "manifest": "weights/halogen-abliterated-ht43.tsv",
+      "projector_manifest": "weights/halogen-abliterated-projector.tsv"
     }
   },
   "gufo": {
@@ -25,21 +28,24 @@
       "model": "unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
       "directory": "unsloth/Qwen3.8-Flash-Next-GGUF",
       "manifest": "gufo-files.tsv",
-      "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf"
+      "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
+      "projector_manifest": "weights/gufo-flash-next-projector.tsv"
     },
     "iq4-xs": {
       "label": "Stock \u00b7 UD 3.1 IQ4_XS",
       "model": "unsloth/Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf",
       "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
       "manifest": "weights/gufo-iq4-xs.tsv",
-      "extension": "flash_next_iq"
+      "extension": "flash_next_iq",
+      "projector_manifest": "weights/gufo-flash-next-projector.tsv"
     },
     "lora": {
       "label": "Huihui v2 LoRA \u00b7 UD-Q4_K_XL",
       "model": "unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
       "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
       "adapter": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/HUIHUI-V2-Qwen3.8-Flash-Next-LoRA-F32.gguf",
-      "manifest": "weights/gufo-lora.tsv"
+      "manifest": "weights/gufo-lora.tsv",
+      "projector_manifest": "weights/gufo-flash-next-projector.tsv"
     },
     "iq4-xs-lora": {
       "label": "Huihui v2 LoRA \u00b7 UD-IQ4_XS",
@@ -47,7 +53,8 @@
       "mtp": "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
       "adapter": "nazeshinjite/Qwen3.8-Flash-Next-Abliterated-LoRA/HUIHUI-V2-Qwen3.8-Flash-Next-LoRA-F32.gguf",
       "manifest": "weights/gufo-iq4-xs-lora.tsv",
-      "extension": "flash_next_iq"
+      "extension": "flash_next_iq",
+      "projector_manifest": "weights/gufo-flash-next-projector.tsv"
     },
     "27b-heretic": {
       "label": "Qwen3.8 27B Heretic LoRA \u00b7 UD-Q4_K_XL",
@@ -56,7 +63,8 @@
       "model": "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf",
       "dflash": "z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf",
       "adapter": "nchapman/Qwen3.8-27B-Heretic-LoRA/Qwen3.8-27B-Heretic-LoRA.gguf",
-      "manifest": "weights/gufo-27b-heretic.tsv"
+      "manifest": "weights/gufo-27b-heretic.tsv",
+      "projector_manifest": "weights/gufo-27b-projector.tsv"
     }
   },
   "strixite": {
@@ -64,7 +72,8 @@
       "label": "Default \u00b7 native strixw",
       "model": "wemoh/Qwen3.8-Flash-Next-strixw",
       "directory": "wemoh/Qwen3.8-Flash-Next-strixw",
-      "manifest": "strixite-files.tsv"
+      "manifest": "strixite-files.tsv",
+      "projector_manifest": "weights/strixite-projector.tsv"
     }
   }
 }

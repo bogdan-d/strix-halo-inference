@@ -1,6 +1,6 @@
 # Weight profiles
 
-The CLI and dashboard share `config/weights.json`. Every engine has a `default`; other keys are explicit choices such as Gufo's `lora` and Halogen's `abliterated-r2`. Halogen's validated lower-memory `abliterated-ht43` profile shares r2's companion directory but has a separate prompt cache; see [trial results](engine-updates.md#november-15-ht43-abliterated-trial). Halogen r2 carries its own MTP head and reuses pinned stock n-gram, tokenizer and vision companions through reflink copies. A profile selects model files and their manifest, not arbitrary launch flags. The one exception to the image pins is a Gufo profile with an `adapter` and no `extension`, which runs the local fork image. Gufo profiles can select their served model ID, context limit and drafting method.
+The CLI and dashboard share `config/weights.json`. Every engine has a `default`; other keys are explicit choices such as Gufo's `lora` and Halogen's `abliterated-r2`. Halogen's validated lower-memory `abliterated-ht43` profile shares r2's companion directory but has a separate prompt cache; see [trial results](engine-updates.md#november-15-ht43-abliterated-trial). Halogen r2 carries its own MTP head and reuses pinned stock n-gram, tokenizer and optional vision companions through reflink copies. A profile selects model files and their manifest, not arbitrary launch flags. The one exception to the image pins is a Gufo profile with an `adapter` and no `extension`, which runs the local fork image. Gufo profiles can select their served model ID, context limit and drafting method.
 
 ```bash
 bin/run.sh gufo weights
@@ -10,6 +10,29 @@ bin/run.sh gufo start --weights lora --wait
 ```
 
 Stop the running engine before switching. `status` reports the actual weight path and profile label from the container. A profile's writable cache is `CACHE_ROOT/ENGINE/PROFILE`; model storage stays read-only at `/models`. Cache clearing removes all profiles' prompt state for the chosen engine, including older caches directly in the engine directory. Changing a profile's weights should use a new profile name if its engine cannot guarantee cache invalidation by weight identity.
+
+For Halogen or Strixite, provision image input with `bin/models.sh download ENGINE PROFILE --projector`. The profile name defaults to `default`. Halogen’s two abliterated profiles share a tower in their checkpoint directory. Strixite uses both the encoder and its preprocessor configuration. Existing installations can verify these files in place with `bin/models.sh verify ENGINE PROFILE --projector`. Installed-profile listings check the base manifest. A vision-enabled start also checks the optional files.
+
+## Gufo image input
+
+Download the projector separately from the text weights. All four named Flash-Next profiles share the same projector download. The second command below selects the different 27B projector. Use `verify` in place of `download` to recheck SHA-256.
+
+```bash
+bin/models.sh download gufo default --projector
+bin/models.sh download gufo 27b-heretic --projector
+env VISION=on bin/run.sh gufo start --weights 27b-heretic --wait
+```
+
+| Profile | Image configuration permitted by the launcher | Evidence at the pin |
+| --- | --- | --- |
+| `default` | Stock 0.35.0, AR or MTP | [Flash-Next model guide](https://github.com/gufo-org/gufo/blob/v0.35.0/docs/models/qwen3.8-flash-next.md#images) |
+| `lora` | Fork `f3f6d744`, Huihui merge, AR or MTP | The fork opens the projector and merges the adapter into the language trunk before serving. [Loader](https://github.com/bogdan-d/gufo/blob/f3f6d744/src/models/qwen38_flash_next/engine.cpp#L129-L194), [model guide](https://github.com/bogdan-d/gufo/blob/f3f6d744/docs/models/qwen3.8-flash-next.md#lora-adapter) |
+| `27b-heretic` | Same fork, Heretic side path, AR or DFlash2 | The serving loader passes both the projector and the adapter to the target. Upstream image tests cover Q4 AR and DFlash2. [Serving loader](https://github.com/bogdan-d/gufo/blob/f3f6d744/src/models/qwen/runner.cpp#L1389-L1416), [test matrix](https://github.com/bogdan-d/gufo/blob/f3f6d744/tests/functional/impact.core.json#L30-L33) |
+| `iq4-xs`, `iq4-xs-lora` | Stock 0.35.0 with IQ extension `5e262be`, AR or MTP | Both profiles identified red, blue and both image orders and recovered from a cancelled image stream on November 24, 2026. Both stayed below 75 GiB sampled host GTT. [Local measurements](engine-updates.md#november-24-image-input) |
+
+The launcher passes `--mmproj /models/unsloth/REPO/vision/mmproj-BF16.gguf` only for `VISION=on`. The subdirectory matters because Gufo automatically opens a sidecar of that name in the target directory or its parent. A text-only start reports a conflicting file if it finds one there. An unmanaged `GUFO_MODEL` has no pinned projector pairing. [Gufo sidecar discovery](https://github.com/gufo-org/gufo/blob/v0.35.0/src/families/qwen/vision/encoder.hip#L596-L609)
+
+On November 24, 2026, the loader reported `vision_prepared resident_bytes` of 903,984,064 (862.1 MiB) for Flash-Next and 927,587,264 (884.6 MiB) for 27B. At 262,144 tokens the Flash-Next admission estimate adds about 2.50 GiB per image-capable slot for embeddings and positions. The 27B profile uses 131,072 tokens. Its embeddings cost 20 KiB per merged image token (5,120 float32 values), up to 320 MiB for one 16,384-token image. Both encoders also allocate scratch according to image size. See the [November 24 GPU runs](engine-updates.md#november-24-image-input) for measured host memory, GTT, swap and generation results. [Encoder upload and scratch](https://github.com/gufo-org/gufo/blob/v0.35.0/src/families/qwen/vision/encoder.hip#L526-L573), [Flash-Next session estimate](https://github.com/gufo-org/gufo/blob/v0.35.0/src/models/qwen38_flash_next/engine.cpp#L285-L298), [27B image limits](https://github.com/bogdan-d/gufo/blob/f3f6d744/docs/models/qwen3.8-27b.md#images)
 
 ## Register a checkpoint or quant
 
@@ -25,10 +48,10 @@ Add an entry under its engine in `config/weights.json`. Profile names use lowerc
 ```
 
 - Gufo's `model` is the target GGUF or its first shard. Set `mtp` for a Flash-Next MTP head or `dflash` for a 27B DFlash2 drafter. Include all target files and the selected drafter in the manifest. The optional `served_model` and `context` select the API model ID and the default and maximum context in tokens. An optional `adapter` names a GGUF LoRA merged at load, by the IQ extension when the profile also names an `extension` and otherwise by the [local fork image](#lora-merged-at-load); include it in the manifest too.
-- Halogen's `model` is the checkpoint file. Its n-gram companion, `tokenizer/` and optional `qwen38-flash-next-vision.hgn` live beside it. Include the required companions in the manifest.
-- Strixite's `model` is the complete model directory, including its n-gram table, tokenizer, MTP and vision files. Include the whole selected package in the manifest.
+- Halogen's `model` is the checkpoint file. Its n-gram companion, `tokenizer/` and optional `qwen38-flash-next-vision.hgn` live beside it. List the tower in the profile’s `projector_manifest` and the required companions in `manifest`.
+- Strixite's `model` is the complete model directory, including its n-gram table, tokenizer, and embedded MTP tensors. List the encoder and preprocessor configuration together in `projector_manifest`.
 
-A manifest has tab-separated columns: SHA-256, byte size and destination path. By default destinations are relative to the model root. An optional profile `directory` prefixes them; the default profiles use their repository directory and existing manifests. Preserve the default profiles' directory and manifest mapping to the pins in `config/pins.env`.
+A manifest has tab-separated columns: SHA-256, byte size and destination path. By default destinations are relative to the model root. Projector destinations are always relative to the model root. For the base manifest, an optional profile `directory` prefixes each path; the default profiles use their repository directory and existing manifests. Preserve the default profiles' directory and manifest mapping to the pins in `config/pins.env`.
 
 For downloadable alternative profiles, add three columns to each row: source Hugging Face repository, immutable revision and source file path. This allows a local destination to differ from its upstream path. Pin all downloaded files, including shared companions, then use `bin/models.sh download ENGINE PROFILE`. Existing files are checked and never deliberately overwritten. Download sources without an explicit source-file column retain the NPU convention of dropping the destination's first path component; new profiles should supply the explicit sixth column.
 

@@ -92,7 +92,16 @@ if [[ "$ACTION" == diagnose ]]; then
   exec podman run --rm --network none "${GPU[@]}" --entrypoint /bin/sh "$IMAGE" -c 'ulimit -l; rocminfo'
 fi
 
-SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" launch "$PROFILE")"
+# Strixite enables image input by default. Halogen and Gufo opt in.
+DEFAULT_VISION=off
+[[ "$ENGINE" != strixite ]] || DEFAULT_VISION=on
+VISION="${VISION:-$DEFAULT_VISION}"
+case "$VISION" in on|off) ;; *) echo 'VISION must be on or off.' >&2; exit 2 ;; esac
+if [[ "$ENGINE" == gufo && "$VISION" == on && -n "${GUFO_MODEL:-}" ]]; then
+  echo 'VISION=on requires a named Gufo weight profile with a matching projector. Unset GUFO_MODEL.' >&2
+  exit 2
+fi
+SELECTION="$(python "$ROOT/bin/weights.py" "$ENGINE" launch "$PROFILE" "$VISION")"
 mapfile -t WEIGHT_PATHS <<<"$SELECTION"
 # A LoRA adapter is merged into the stock weights at load: by the IQ extension when the profile uses it, otherwise
 # by the local fork build, since the pinned image's built-in provider cannot.
@@ -107,10 +116,14 @@ fi
 if [[ "$ENGINE" == gufo && -n "${GUFO_MODEL:-}" && "$PROFILE" != default ]]; then
   echo 'Choose either --weights/WEIGHTS or GUFO_MODEL, not both.' >&2; exit 2
 fi
-if [[ "$PROFILE" == default ]]; then
-  "$ROOT/bin/models.sh" check "$ENGINE"
-else
-  "$ROOT/bin/models.sh" check "$ENGINE" "$PROFILE"
+MODEL_ARGS=("$ENGINE")
+[[ "$PROFILE" == default ]] || MODEL_ARGS+=("$PROFILE")
+"$ROOT/bin/models.sh" check "${MODEL_ARGS[@]}"
+if [[ "$VISION" == on ]]; then
+  "$ROOT/bin/models.sh" check "${MODEL_ARGS[@]}" --projector || {
+    echo 'Use VISION=off to start with text input only.' >&2
+    exit 1
+  }
 fi
 NPU=()
 if [[ -n "$NPU_MODELS" ]]; then
@@ -144,12 +157,6 @@ case "$SPECULATIVE" in on|off) ;; *) echo 'SPECULATIVE must be on or off.' >&2; 
 # 8-bit attention cache on Halogen and Strixite: about 0.6 of the 16-bit cache's memory. Gufo has no such setting.
 KV8="${KV8:-on}"
 case "$KV8" in on|off) ;; *) echo 'KV8 must be on or off.' >&2; exit 2 ;; esac
-# Image input: on by default for Strixite, opt-in for Halogen. bin/models.sh fetches both engines' vision files.
-DEFAULT_VISION=off
-[[ "$ENGINE" != strixite ]] || DEFAULT_VISION=on
-VISION="${VISION:-$DEFAULT_VISION}"
-case "$VISION" in on|off) ;; *) echo 'VISION must be on or off.' >&2; exit 2 ;; esac
-[[ "$ENGINE" != gufo || "$VISION" == off ]] || { echo 'VISION=on applies only to Halogen and Strixite.' >&2; exit 2; }
 # Strixite conversations served at once. Each slot can grow to a full-capacity K/V state.
 SLOTS="${SLOTS:-1}"
 [[ "$SLOTS" =~ ^[1-8]$ ]] || { echo 'SLOTS must be 1..8.' >&2; exit 2; }
@@ -162,6 +169,21 @@ fi
 WEIGHT_LABEL="$PROFILE"
 [[ "$ENGINE" != gufo || -z "${GUFO_MODEL:-}" ]] || WEIGHT_LABEL=custom
 GUFO_MODEL="${GUFO_MODEL:-${WEIGHT_PATHS[0]}}"
+PI_MODEL="$SERVED_MODEL"
+if [[ "$ENGINE" == gufo ]]; then
+  if [[ "$VISION" == on ]]; then
+    PI_MODEL="$SERVED_MODEL-vision"
+  else
+    # Gufo searches beside the target and one directory above it even without --mmproj.
+    MODEL_DIR="$(dirname -- "$GUFO_MODEL")"
+    for DIR in "$MODEL_DIR" "$(dirname -- "$MODEL_DIR")"; do
+      if [[ -f "$MODELS_DIR/$DIR/mmproj-BF16.gguf" ]]; then
+        echo "VISION=off: Gufo would auto-load $MODELS_DIR/$DIR/mmproj-BF16.gguf. Move it outside the discovery path before starting." >&2
+        exit 2
+      fi
+    done
+  fi
+fi
 ENGINE_CACHE="$CACHE_ROOT/$ENGINE/$WEIGHT_LABEL"
 mkdir -p -- "$ENGINE_CACHE"
 ARGS=(podman run --detach --rm --name "$NAME" --label io.strix-halo-inference.managed=true
@@ -176,7 +198,7 @@ if [[ "$ENGINE" == halogen ]]; then
     --env HALOGEN_KV_SLOTS=1 --env HALOGEN_CACHE_DIR=/cache --env HALOGEN_CACHE_DISK_GIB=16)
   [[ "$SPECULATIVE" == on ]] || ARGS+=(--env HALOGEN_DRAFTER_DEFAULT=0 --env HALOGEN_PLD=0)
   [[ "$KV8" == off ]] || ARGS+=(--env HALOGEN_KV8=1)
-  [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/${WEIGHT_PATHS[0]%/*}/qwen38-flash-next-vision.hgn")
+  [[ "$VISION" == off ]] || ARGS+=(--env "HALOGEN_VISION_TOWER=/models/${WEIGHT_PATHS[7]}")
   ARGS+=("$IMAGE")
 elif [[ "$ENGINE" == gufo ]]; then
   if [[ -n "${WEIGHT_PATHS[2]:-}" ]]; then
@@ -187,6 +209,9 @@ elif [[ "$ENGINE" == gufo ]]; then
     --served-model-name "$SERVED_MODEL" --context "$CONTEXT"
     --cache-ram-bytes 2147483648 --cache-disk /cache
     --cache-disk-bytes 17179869184)
+  if [[ "$VISION" == on ]]; then
+    ARGS+=(--mmproj "/models/${WEIGHT_PATHS[7]}" --served-model-name "$PI_MODEL")
+  fi
   if [[ "$SPECULATIVE" == off ]]; then
     ARGS+=(--speculative off)
   elif [[ -n "$DFLASH_MODEL" ]]; then
@@ -225,7 +250,7 @@ if [[ "$WAIT" == true ]]; then
     PROBE=$((REMAINING < 5 ? REMAINING : 5))
     if curl --fail --silent --max-time "$PROBE" "$BASE$HEALTH" >/dev/null; then
       echo "$ENGINE ready at $BASE/v1"
-      echo "With the installed Pi profile: pi --provider $ENGINE --model $SERVED_MODEL --thinking xhigh"
+      echo "With the installed Pi profile: pi --provider $ENGINE --model $PI_MODEL --thinking xhigh"
       [[ "$ENGINE" != strixite ]] || echo 'Normal Pi tools are not sandboxed. See docs/strixite.md for the guarded coding-test boundary.'
       exit
     fi
