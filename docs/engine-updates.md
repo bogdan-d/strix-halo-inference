@@ -1,5 +1,15 @@
 # Engine updates
 
+## November 23: Gufo fork image on the rebased LoRA branches
+
+Both fork branches were rebased onto upstream `main` at `e7e38411`, and the shared adapter library moved into the Flash-Next pull request ([gufo-org/gufo#1320](https://github.com/gufo-org/gufo/pull/1320); the 27B work is [#1323](https://github.com/gufo-org/gufo/pull/1323), now a draft). `GUFO_FORK_REVISION` is `b7b34b90f4a3c53314dd844cd8374980e50bedac`, the tip of `feat/qwen27-lora`, which contains both. Image digest `sha256:483d26354cc112f0ddbdab621b00e76d4cfc4a60c7c1e51870526a95a7e4f8bc`, rebuilt with `bin/gufo-fork.sh`. The 27B code is unchanged by the rebase; Flash-Next picks up upstream's kernel and MTP verification changes (#1321).
+
+- **Equivalence, in the fork's build harness at 32768 context:** both adapters give the same greedy text on three prompts as before the rebase, with and without MTP or DFlash2. The Flash-Next merge still matches an offline merge byte for byte (96 tensors).
+- **Launcher checks:** `27b-heretic` (131072, DFlash2) and `lora` (262144, MTP) each passed `bin/models.sh verify`, readiness, the smoke request, `tests/live.py` and the stop with memory release. Single runs, short prompts.
+- **Startup:** Gufo reported 28,021 MiB of GPU device memory for `27b-heretic` and 85,271 MiB for `lora`, against 29,275 and 85,847 MiB on November 22. The merges took 9.3 s (128 tensors) and 4.0 s (96 tensors). Not investigated; upstream changed session-state allocation in the same range (#1333).
+- **After stop:** GTT returned to 810 MiB after `27b-heretic` and 1,078 MiB after `lora`. Host swap use rose by 2.8 GiB during the `lora` run, as on November 22.
+- **Removed:** the previous fork images (`89dd58f3` and `d77c890f`), which no profile used any more.
+
 ## November 22 — IQ4_XS partial cache replay
 
 The local launcher pins the IQ extension to `5e262be` for `iq4-xs` and `iq4-xs-lora`. A cache hit leaving a short suffix could change temperature-zero replies on the previous module. The fix keeps Q6_K prefill arithmetic consistent across suffix lengths. All three test prompts matched fresh generation after a disk restart at 32K with MTP off on `iq4-xs`, and at 256K with MTP on for both IQ profiles. Both profiles also passed generation, tools and cancellation checks. [Fork commit](https://github.com/bogdan-d/flash-next-iq-gufo-extension/commit/5e262be42bc51202610899bfe32c22aad4b573b7) · [Investigation and test results](../.scratch/gufo-cache-restore/issues/01-partial-restore-changes-greedy-output.md#2026-11-22--fix-and-launcher-validation)

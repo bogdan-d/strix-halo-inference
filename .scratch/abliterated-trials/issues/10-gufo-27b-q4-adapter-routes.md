@@ -1,6 +1,6 @@
 # 10: Maybe revisit the other two adapter routes for Qwen3.8 27B UD-Q4_K_XL
 
-Status: needs-triage
+Status: ready-for-agent
 
 **What to build:** Nothing yet. Ticket [09](09-gufo-27b-lora.md) applies the Heretic adapter to UD-Q4_K_XL by storing the 128 merged tensors as Q8_0, the route the user chose on November 22. That costs 2.9 GiB of device memory and about 14 % of AR decode speed against stock UD-Q4_K_XL (measured on an offline copy). Two other routes keep stock memory and speed. Revisit them if that cost matters, or if per-request adapter switching is wanted.
 
@@ -33,3 +33,9 @@ Merge the adapter into the BF16 weights, then quantize to the UD-Q4_K_XL layout.
 
 - Check whether upstream Gufo has gained runtime adapters since ([gufo-org/gufo#1247](https://github.com/gufo-org/gufo/issues/1247), [#1320](https://github.com/gufo-org/gufo/pull/1320)).
 - Measure the Q8_0-storage route as built in ticket 09 on real work, and decide whether 2.9 GiB and the decode cost are worth removing.
+
+## Comments
+
+November 23, decision: the user chose Route A, the low-rank side path at inference, because the 14 % AR decode loss of the Q8_0 route is not acceptable. gufo-org/gufo#1323 is considered unfinished until then; the user prefers upstream to review #1320 (Flash-Next) on its own first. The reply on #1320 is drafted but not posted, and #1323 stays ready for review for now. The next step is a plan for the side path covering the decode, batched-decode/verification and prefill routes, plus the cache identity and DFlash2 checks listed above.
+
+November 23, later: #1320 now carries the shared adapter library and both branches are rebased on upstream `e7e38411`. The reply on #1320 was posted and gufo-org/gufo#1323 is a draft until this route is tried. The launcher pins the fork image at `b7b34b90` ([update record](../../../docs/engine-updates.md#november-23-gufo-fork-image-on-the-rebased-lora-branches)).
